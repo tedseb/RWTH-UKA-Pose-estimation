@@ -1,0 +1,3 @@
+[submodule "expert_system"]
+	path = expert_system
+	url = git@git.rwth-aachen.de:trainerai/expert_system

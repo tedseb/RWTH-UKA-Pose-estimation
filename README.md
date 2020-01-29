@@ -22,11 +22,13 @@ cd core
 
 ```
 This makes sure, that the repositories holding the code for the expert system, as well as the pose estimation are cloned as well.
-We want to use dockerhub as repo for our images, but at this point in time, we have to build them locally before being able to use them. Run the following command to build them.
+We use the container registry from the RWTH Aachen gitlab instance. Pushing to it is time sensitive, but works from the RWTH network. You have to login to the registry by entering `docker login registry.git.rwth-aachen.de` and then provide your username (firstname.lastname most of the time) and the password you set (this is the password in gitlab, not the one you use with your TIM code to login!)
+If you want to locally build an image to use, run the following command:.
 
-	bash infrastructure/docker/build_docker.sh
+	# You do not have to run this command, if you want to use the working container we have!
+	bash docker/build_docker.sh
 
-This might take a while. This only has to be done once (but running it multiple times, shouldn't make a difference).
+This might take a while. 
 
 ### Start a dev session
 To start a dev session, you have to do 3 steps: Launch the container, go into it, and run the setup for your shell.
@@ -42,7 +44,8 @@ to create a session in the dev container. I guess, we will use Visual Studio Cod
 You are now ready to develop on the software. The repository is mounted in the /trainerai folder, so all changes in there will be persistent on your host system. It is probably easiest to run the source control on your host system.
 Use `source trainerai.sh` to build the project and set the environment variables. To only run the build process, you can also use `colcon build`.
 An example is shown in the infrastructure folder on how to create a ros2 component. After building it, it can be run using the `ros2 run infrastructure camera` command. I will add a launch file later, so we can use launch files to orchestrate the nodes. 
+To visualize results, we want to use rviz2 and rqt. They are both available in the environment, I will add further information for this as we progress in the work.
 ## Docker
 To allow for reproducible and shared environments, we use Docker to encapsulate the environment. At this point in time, we have 3 docker images: A **base** image which contains the requirements to run the software (i.e. all dependencies), a **dev** image, which adds development tools, such as an IDE, and a **release** image, which contains the packaged app.
-We want to push the resulting images to the RWTH registry, but as they are very big, the session times out, and we can't do so at the moment. Running it from a place with very good internet (ie university), should work though.
+I have pushed an up-to-date version 
 Currently, the release system is not implemented, but will be added at a later date.

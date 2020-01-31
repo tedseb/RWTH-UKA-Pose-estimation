@@ -41,4 +41,4 @@ RUN cd /ros2_eloquent &&\
   
 RUN echo "source /ros2_eloquent/install/local_setup.bash" >> /home/trainerai/.bashrc
 
-RUN apt update && apt install python3-opencv
+RUN apt update && apt install -y python3-opencv

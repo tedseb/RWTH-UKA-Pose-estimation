@@ -5,7 +5,7 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > pac
     sh -c 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/vscode stable main" > /etc/apt/sources.list.d/vscode.list'
     
 RUN apt-get update  && apt-get --no-install-recommends -y install \
-    code libasound2 terminator dbus-x11 htop
+    code libasound2 terminator dbus-x11 htop  mesa-utils
     
 
 COPY docker/configs/terminator /home/trainerai/.config/terminator/config

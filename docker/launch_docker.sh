@@ -1,7 +1,7 @@
 docker stop trainerAI > /dev/null
 
 docker run  -t --rm \
-    --runtime=nvidia \
+    --gpus=all \
     --name trainerAI \
     -e DISPLAY=$DISPLAY \
     -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all \

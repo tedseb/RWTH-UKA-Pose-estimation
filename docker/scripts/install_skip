@@ -1,0 +1,8 @@
+#!/bin/bash
+#Call apt-get for each package
+for pkg in "$@"
+do
+    echo "Installing $pkg"
+    DEBIAN_FRONTEND=noninteractive apt-get -my install $pkg
+done 
+echo 0

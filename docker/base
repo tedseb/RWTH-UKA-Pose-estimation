@@ -26,7 +26,9 @@ RUN python3 -m pip install -U \
   pytest \
   pytest-cov \
   pytest-runner \
-  setuptools
+  setuptools \
+  cython \
+  wheel
   
 RUN mkdir -p /ros2_eloquent/src &&\
   cd /ros2_eloquent &&\
@@ -34,6 +36,7 @@ RUN mkdir -p /ros2_eloquent/src &&\
   vcs import src < ros2.repos &&\
   rosdep init &&\
   rosdep update &&\
+  apt-get update &&\
   rosdep install --from-paths src --ignore-src --rosdistro eloquent -y --skip-keys "console_bridge fastcdr fastrtps libopensplice67 libopensplice69 rti-connext-dds-5.3.1 urdfdom_headers"
   
 RUN cd /ros2_eloquent &&\
@@ -41,4 +44,8 @@ RUN cd /ros2_eloquent &&\
   
 RUN echo "source /ros2_eloquent/install/local_setup.bash" >> /home/trainerai/.bashrc
 
+#Our own apt dependencies
 RUN apt update && apt install -y python3-opencv
+
+#Our own pip dependencies
+RUN pip3 install argparse dill fire matplotlib numba psutil requests scikit-image scipy slidingwindow tqdm tensorflow==1.14 pycocotools

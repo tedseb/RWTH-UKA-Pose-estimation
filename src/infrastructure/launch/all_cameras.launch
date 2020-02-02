@@ -1,0 +1,4 @@
+<launch>
+  <node name="camera0" pkg="infrastructure" type="CameraNode.py" />
+</launch> 
+ 

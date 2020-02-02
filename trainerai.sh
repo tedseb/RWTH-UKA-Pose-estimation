@@ -1,3 +1,2 @@
-colcon build
-source install/setup.bash
-source install/local_setup.bash
+catkin_make
+source devel/setup.bash

@@ -1,33 +1,12 @@
-from setuptools import setup
- 
-package_name = 'infrastructure'
- 
-setup(
-    name=package_name,
-    version='0.0.0',
-    packages=[],
-    py_modules=[
-        'CameraNode',
-    ],
-    install_requires=['setuptools'],
-    zip_safe=True,
-    author='user',
-    author_email="user@todo.todo",
-    maintainer='user',
-    maintainer_email="user@todo.todo",
-    keywords=['ROS', 'ROS2'],
-    classifiers=[
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python',
-        'Topic :: Software Development',
-    ],
-    description='TODO: Package description.',
-    license='Apache License, Version 2.0',
-    tests_require=['pytest'],
-    entry_points={
-        'console_scripts': [
-            'camera = CameraNode:main',
-        ],
-    },
-) 
+## ! DO NOT MANUALLY INVOKE THIS setup.py, USE CATKIN INSTEAD
+
+from distutils.core import setup
+from catkin_pkg.python_setup import generate_distutils_setup
+
+# fetch values from package.xml
+setup_args = generate_distutils_setup(
+    packages=['infrastructure'],
+    package_dir={'': ''},
+)
+
+setup(**setup_args)

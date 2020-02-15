@@ -1,0 +1,6 @@
+ 
+{
+    "workspaceFolder": "/trainerai",
+    "extensions": ["ms-python.python", "ms-iot.vscode-ros", "vscode-icons-team.vscode-icons"],
+    "remoteUser": "trainerai"
+}

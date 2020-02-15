@@ -1,4 +1,5 @@
 
+
 # TrainerAI
 
   
@@ -40,7 +41,8 @@ command. This will kill the running docker container if it exists and then launc
 
 	bash docker/into_docker.sh
 
-to create a session in the dev container. I guess, we will use Visual Studio Code for the development, which is included in the dev image, so you can launch it with the `code` command. There you can spawn additional shells to run multiple processes. You can also run `terminator -l layout` to launch 4 terminals, where roscore (this one will error out, but that is fine, it is a relic from ros1) and htop are running by default.
+to create a session in the dev container. You can use Visual Studio code to develop on the project. The latest version contains configuration files for the remote container extension. Install Visual Studio code and inside run `ext install ms-vscode-remote.vscode-remote-extensionpack` to install the extension. Note that the docker container has to be running for this to work.
+You can also run `terminator -l layout` to launch 4 terminals, where roscore and htop are running by default.
 You are now ready to develop on the software. The repository is mounted in the /trainerai folder, so all changes in there will be persistent on your host system. It is probably easiest to run the source control on your host system.
 Use `source trainerai.sh` to build the project and set the environment variables. To only run the build process, you can also use `colcon build`.
 An example is shown in the infrastructure folder on how to create a ros2 component. After building it, it can be run using the `ros2 run infrastructure camera` command. I will add a launch file later, so we can use launch files to orchestrate the nodes. 

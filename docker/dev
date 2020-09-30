@@ -4,8 +4,6 @@ FROM registry.git.rwth-aachen.de/trainerai/core/trainerai-base:latest
 RUN apt-get update  && apt-get --no-install-recommends -y install \
     libasound2 terminator dbus dbus-x11 htop mesa-utils wget pylint
 
-    
-    
 
 COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 

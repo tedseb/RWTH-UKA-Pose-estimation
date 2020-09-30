@@ -19,11 +19,11 @@
       parent = ""
       position = 0:0
       size = 1920, 1015
-      title = christian@lanius-laptop: ~/code/core
+      title = GorillaWolfMotherFucker: ~/code/core
       type = Window
     [[[child1]]]
       order = 0
-      parent = child0
+      parent = child0	
       position = 504
       ratio = 0.49900990099
       type = VPaned

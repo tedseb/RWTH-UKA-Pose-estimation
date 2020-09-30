@@ -10,6 +10,7 @@ def camera():
     cap = cv2.VideoCapture(0)
     while not rospy.is_shutdown():
         ret, frame = cap.read()
+        #rospy.loginfo("read camera")
         if not ret:
             print('cant read camera', ret)
             continue

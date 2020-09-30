@@ -1,6 +1,7 @@
 #FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu18.04 
 FROM nvidia/cudagl:10.0-devel-ubuntu18.04
 
+#RUN useradd -m trainerai && echo "trainerai:esel1212" | chpasswd && usermod -a -G video trainerai 
 RUN adduser trainerai && usermod -a -G video trainerai 
 
 # Install ros melodic from source with python3 support

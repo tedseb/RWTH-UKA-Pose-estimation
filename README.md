@@ -45,8 +45,8 @@ to create a session in the dev container. You can use Visual Studio code to deve
 You can also run `terminator -l layout` to launch 4 terminals, where roscore and htop are running by default.
 You are now ready to develop on the software. The repository is mounted in the /trainerai folder, so all changes in there will be persistent on your host system. It is probably easiest to run the source control on your host system.
 Use `source trainerai.sh` to build the project and set the environment variables. To only run the build process, you can also use `colcon build`.
-An example is shown in the infrastructure folder on how to create a ros2 component. After building it, it can be run using the `ros2 run infrastructure camera` command. I will add a launch file later, so we can use launch files to orchestrate the nodes. 
-To visualize results, we want to use rviz2 and rqt. They are both available in the environment, I will add further information for this as we progress in the work.
+An example is shown in the infrastructure folder on how to create a ros component. After building it, it can be run using the `rosrun infrastructure CameraNode.py` command. We can also use launch files, so that we can use that to orchestrate the nodes. To start all cameras use `roslaunch infrastructure all_cameras.launch`. To start the whole trainerAI system with all nodes `roslaunch launch/stack.launch`. Note: After the workspace has been built, it musst be add to the ROS environment you need to source the generated setup file under devel `. devel/setup.bash`
+To visualize results, we want to use rviz and rqt. They are both available in the environment, I will add further information for this as we progress in the work.
 ## Docker
 To allow for reproducible and shared environments, we use Docker to encapsulate the environment. At this point in time, we have 3 docker images: A **base** image which contains the requirements to run the software (i.e. all dependencies), a **dev** image, which adds development tools, such as an IDE, and a **release** image, which contains the packaged app.
 I have pushed an up-to-date version 

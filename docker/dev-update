@@ -1,0 +1,14 @@
+FROM registry.git.rwth-aachen.de/trainerai/core/trainerai-dev:latest
+
+USER root
+
+RUN echo "trainerai:esel1212" | chpasswd && usermod -aG sudo trainerai
+RUN apt update && apt-get -y install gedit iputils-ping
+
+
+COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
+# bash docker/build_docker.sh docker/dev-update --push
+
+
+USER trainerai
+WORKDIR /trainerai

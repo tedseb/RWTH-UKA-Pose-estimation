@@ -9,6 +9,37 @@ RUN apt update && apt-get -y install gedit iputils-ping
 COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 # bash docker/build_docker.sh docker/dev-update --push
 
+RUN echo ". devel/setup.bash" >>  /home/trainerai/.bashrc
+RUN xhost +local: || true
+
+RUN apt-get install curl python-software-properties || true
+RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+RUN apt-get install nodejs
+RUN npm install rosnodejs
+
+RUN sudo apt install firefox -y
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 USER trainerai
 WORKDIR /trainerai

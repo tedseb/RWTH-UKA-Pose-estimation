@@ -1,16 +1,25 @@
 const rosnodejs = require('rosnodejs');
-const std_msgs = rosnodejs.require('std_msgs');
 const pose_estimation = rosnodejs.require("pose_estimation");
 
+const { createCanvas, loadImage } = require('canvas')
+const fs = require('fs')
 const tf = require('@tensorflow/tfjs-node');
 const posenet = require('@tensorflow-models/posenet');
-const {createCanvas, Image} = require('canvas')
 const cv = require('opencv4nodejs');
-const Jimp = require('jimp');
+const { drawKeyPoints, ellipse } = require('opencv4nodejs');
+const { array } = require('@tensorflow/tfjs-data');
 
 const imageScaleFactor = 0.5;
 const outputStride = 16;
 const flipHorizontal = false;
+
+// get up to 5 poses
+const maxPoseDetections = 5;
+// minimum confidence of the root part of a pose
+const scoreThreshold = 0.0001;
+// minimum distance in pixels between the root parts of poses
+const nmsRadius = 20;
+  
 
 const loadModel = async() => {
     console.log('start');
@@ -18,7 +27,7 @@ const loadModel = async() => {
     global.net = await posenet.load({
       architecture: 'MobileNetV1',
       outputStride: 16,
-      inputResolution: 513,
+      inputResolution: { width: 224, height: 224 },
       multiplier: 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
     });
 }
@@ -28,29 +37,63 @@ tryModelIN = async(msg) => {
   if(typeof net !== 'undefined'){
     //convert from buffer to CV-mat)
     const matFromArray = new cv.Mat(new Buffer.from(msg.data), msg.height, msg.width, cv.CV_8UC3);
-    
+    let src = matFromArray.resize(224, 224);
     //convert from BGR to RGB
-    let mat = matFromArray.cvtColor(cv.COLOR_BGR2RGB);
-        
+    let mat = src.cvtColor(cv.COLOR_BGR2RGB);
+  
     // convert to 3d tensor
     let buffer = new Uint8Array(mat.getData().buffer);
-    let tFrame = tf.tensor3d(buffer, [640, 480, 3]);
+    let tFrame = tf.tensor3d(buffer, [224, 224, 3]);
 
     // net is your poseNet instance
-    let pose = await net.estimateSinglePose(tFrame);
+    let pose = await net.estimateSinglePose(tFrame,flipHorizontal);
+    //let pose = await net.estimateMultiplePoses(tFrame, imageScaleFactor, flipHorizontal, outputStride, maxPoseDetections, scoreThreshold, nmsRadius);
     for(const keypoint of pose.keypoints) {
-      console.log(`${keypoint.part}: (${keypoint.position.x},${keypoint.position.y})`);
+      console.log(`${keypoint.part}: (${keypoint.position.x},${keypoint.position.y},${keypoint.score})`);
     }
 
-    const persons_msg = new pose_estimation.msg.Persons;
-    persons_msg.header = msg.header
-    persons_msg.persons = new Array();
+    const msgPersons = new pose_estimation.msg.Persons;
+    msgPersons.header = msg.header
+    msgPersons.persons = new Array();
     person_msg = new pose_estimation.msg.Person;
   
     for(idx = 0; idx < 25; idx++) {
       person_msg.bodyParts[idx] = new pose_estimation.msg.Bodypart;
     }
+    var len = pose.keypoints.length;
+    for(idx = 0; idx < len; idx++) {/*
+      person_msg.bodyParts[idx].score = pose.keypoints[idx].score
+      person_msg.bodyParts[idx].pixel.x = pose.keypoints[idx].position.x
+      person_msg.bodyParts[idx].pixel.y = pose.keypoints[idx].position.y
+      person_msg.bodyParts[idx].point.x =pose.keypoints[idx].position.x/100
+      person_msg.bodyParts[idx].point.y =pose.keypoints[idx].position.y/100
+      person_msg.bodyParts[idx].point.z = 0*/
+      
+      person_msg.bodyParts[idx].score = pose.keypoints[idx].score
+      person_msg.bodyParts[idx].pixel.x = pose.keypoints[idx].position.x
+      person_msg.bodyParts[idx].pixel.y = pose.keypoints[idx].position.y
+      person_msg.bodyParts[idx].point.x =2*(pose.keypoints[idx].position.x/500-0.5)* msg.width/msg.height
+      person_msg.bodyParts[idx].point.y =0.0
+      person_msg.bodyParts[idx].point.z = -2*(pose.keypoints[idx].position.y/500-1.5)
+      //mat.drawCircle(new cv.Point2(pose.keypoints[idx].position.x, pose.keypoints[idx].position.y)  , 5 , new cv.Vec(255,255,255) ,1 , 2 ,  0 ); 
+      
+    }
    
+    //cv.imwrite('./src/rosnodejsNodes/img.png', mat);
+
+    msgPersons.persons.push(person_msg)
+    pub.publish(msgPersons)
+ 
+  }
+}
+rosnodejs.initNode('/DasTorZurUnterwelt')
+.then(() => {loadModel()
+});
+const nh = rosnodejs.nh;
+const sub = nh.subscribe('/image', 'sensor_msgs/Image', tryModelIN);
+const pub = nh.advertise('/personsJS', 'pose_estimation/Persons');
+
+ /*  
     person_msg.bodyParts[0].score = pose.keypoints[0].score;
     person_msg.bodyParts[0].pixel.x = pose.keypoints[0].position.x/1000;
     person_msg.bodyParts[0].pixel.y = pose.keypoints[0].position.y/1000;
@@ -170,31 +213,4 @@ tryModelIN = async(msg) => {
     person_msg.bodyParts[11].point.y = 0.0;
     person_msg.bodyParts[11].point.z = -2*(pose.keypoints[16].position.y/1000-1.5);
 
-  
-    persons_msg.persons.push(person_msg)
-    pub.publish(persons_msg)
- 
-   
-
-
-
-  }
-}
-
-rosnodejs.initNode('/DasTorZurUnterwelt')
-.then(() => {loadModel()
-});
-const nh = rosnodejs.nh;
-const sub = nh.subscribe('/image', 'sensor_msgs/Image', tryModelIN);
-
-const pub = nh.advertise('/personsJS', 'pose_estimation/Persons');
-/*
-   var len = pose.keypoints.length;
-    for(idx = 0; idx < len; idx++) {
-      person_msg.bodyParts[idx].score = pose.keypoints[idx].score
-      person_msg.bodyParts[idx].pixel.x = pose.keypoints[idx].position.x/100
-      person_msg.bodyParts[idx].pixel.y = pose.keypoints[idx].position.y/100
-      person_msg.bodyParts[idx].point.x = 2*(pose.keypoints[idx].position.x/100-0.5)*msg.width/msg.height
-      person_msg.bodyParts[idx].point.y = 0.0
-      person_msg.bodyParts[idx].point.z = -2*(pose.keypoints[idx].position.y/100-1.5)
-    }*/
+  */

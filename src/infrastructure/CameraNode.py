@@ -3,18 +3,32 @@ import rospy
 import cv2
 from sensor_msgs.msg import Image
 import numpy as np
+import pafy
+
+url = "https://www.youtube.com/watch?v=9hQTvrP6EsM"
+video = pafy.new(url)
+best = video.getbest(preftype="mp4")
 
 def camera():
     pub = rospy.Publisher('image', Image, queue_size=2)
     rospy.init_node('camera', anonymous=True)
-    cap = cv2.VideoCapture(0)
+    rate = rospy.Rate(30)
+    cap = cv2.VideoCapture(0)   
+    if cap is None or not cap.isOpened():
+       rospy.loginfo('INFO: No webCam source. Youtube video will be used as source!')
+       cap = cv2.VideoCapture()
+       cap.open(best.url)
+
     while not rospy.is_shutdown():
         ret, frame = cap.read()
         #rospy.loginfo("read camera")
         if not ret:
-            print('cant read camera', ret)
+            try:
+                cap.open(best.url)
+            except:
+                rospy.loginfo('cant read camera', ret)
             continue
-        
+
         msg = Image()
         msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = 'dev0'
@@ -23,6 +37,7 @@ def camera():
         msg.height, msg.width = frame.shape[:-1]
         msg.step = frame.shape[-1]*frame.shape[0]
         pub.publish(msg)
+        rate.sleep()
 
 if __name__ == '__main__':
     try:

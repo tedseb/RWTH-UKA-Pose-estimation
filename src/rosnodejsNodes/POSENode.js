@@ -72,9 +72,9 @@ tryModelIN = async(msg) => {
       person_msg.bodyParts[idx].score = pose.keypoints[idx].score
       person_msg.bodyParts[idx].pixel.x = pose.keypoints[idx].position.x
       person_msg.bodyParts[idx].pixel.y = pose.keypoints[idx].position.y
-      person_msg.bodyParts[idx].point.x =2*(pose.keypoints[idx].position.x/500-0.5)* msg.width/msg.height
+      person_msg.bodyParts[idx].point.x =2*(pose.keypoints[idx].position.x/50-2)* msg.width/msg.height///500-0.5
       person_msg.bodyParts[idx].point.y =0.0
-      person_msg.bodyParts[idx].point.z = -2*(pose.keypoints[idx].position.y/500-1.5)
+      person_msg.bodyParts[idx].point.z = -2*(pose.keypoints[idx].position.y/50-4)  ///500-1.5
       //mat.drawCircle(new cv.Point2(pose.keypoints[idx].position.x, pose.keypoints[idx].position.y)  , 5 , new cv.Vec(255,255,255) ,1 , 2 ,  0 ); 
       
     }

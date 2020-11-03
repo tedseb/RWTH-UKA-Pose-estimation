@@ -1,0 +1,9 @@
+docker stop trainerAI > /dev/null
+
+docker run  -t --rm \
+    --name trainerAI \
+    -e DISPLAY=$DISPLAY \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -v $(pwd):/trainerai \
+    registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update &2>1 > /dev/null &
+

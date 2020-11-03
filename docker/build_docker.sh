@@ -62,5 +62,5 @@ fi
 
 
 
-
+# Example: bash docker/build_docker.sh --push --dev /home/shawan/PycharmProjects/core/docker/dev-update
 # Build the release image, which builds the software and packs all the files in it

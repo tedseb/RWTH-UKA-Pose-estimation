@@ -17,7 +17,13 @@ RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
 RUN apt-get install nodejs
 RUN npm install rosnodejs
 
-RUN sudo apt install firefox -y
+RUN apt install firefox -y
+
+RUN apt install python3-pip -y
+RUN pip3 install --upgrade mps-youtube
+RUN pip3 install pafy -U
+RUN pip3 install --upgrade youtube-dl
+
 
 
 

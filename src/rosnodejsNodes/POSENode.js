@@ -1,13 +1,9 @@
 const rosnodejs = require('rosnodejs');
 const pose_estimation = rosnodejs.require("pose_estimation");
-
-const { createCanvas, loadImage } = require('canvas')
 const fs = require('fs')
 const tf = require('@tensorflow/tfjs-node');
 const posenet = require('@tensorflow-models/posenet');
 const cv = require('opencv4nodejs');
-const { drawKeyPoints, ellipse } = require('opencv4nodejs');
-const { array } = require('@tensorflow/tfjs-data');
 
 const imageScaleFactor = 0.5;
 const outputStride = 16;
@@ -61,14 +57,7 @@ tryModelIN = async(msg) => {
       person_msg.bodyParts[idx] = new pose_estimation.msg.Bodypart;
     }
     var len = pose.keypoints.length;
-    for(idx = 0; idx < len; idx++) {/*
-      person_msg.bodyParts[idx].score = pose.keypoints[idx].score
-      person_msg.bodyParts[idx].pixel.x = pose.keypoints[idx].position.x
-      person_msg.bodyParts[idx].pixel.y = pose.keypoints[idx].position.y
-      person_msg.bodyParts[idx].point.x =pose.keypoints[idx].position.x/100
-      person_msg.bodyParts[idx].point.y =pose.keypoints[idx].position.y/100
-      person_msg.bodyParts[idx].point.z = 0*/
-      
+    for(idx = 0; idx < len; idx++) {
       person_msg.bodyParts[idx].score = pose.keypoints[idx].score
       person_msg.bodyParts[idx].pixel.x = pose.keypoints[idx].position.x
       person_msg.bodyParts[idx].pixel.y = pose.keypoints[idx].position.y
@@ -93,7 +82,7 @@ const nh = rosnodejs.nh;
 const sub = nh.subscribe('/image', 'sensor_msgs/Image', tryModelIN);
 const pub = nh.advertise('/personsJS', 'pose_estimation/Persons');
 
- /*  
+ /* For later, to draw the complete skellet:
     person_msg.bodyParts[0].score = pose.keypoints[0].score;
     person_msg.bodyParts[0].pixel.x = pose.keypoints[0].position.x/1000;
     person_msg.bodyParts[0].pixel.y = pose.keypoints[0].position.y/1000;

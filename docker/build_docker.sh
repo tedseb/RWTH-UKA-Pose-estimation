@@ -1,60 +1,57 @@
 set -e
 
-PUSH="false"
-BUILD="false"
-BUILDUPDATE="false"
-DEV=""
-while [[ $# -gt 0 ]]
-do
+push="false"
+build="false"
+build_and_update="false"
+
+while [ "${1+defined}" ]; do
 key="$1"
+shift  # Simple and safe loop over arguments: https://wiki.bash-hackers.org/scripting/posparams
 case $key in
     -p|--push)
-    PUSH=true
-    shift # past argument
+    push=true
     ;;
-    -b|--build-orig)
-    BUILD=true
-    shift # past argument
+    -b|--build)
+    build=true
     ;;
     -d|--dev)
-    # path in the format: path/Dockfile
-    BUILDUPDATE=true
-    shift # past argument
+    # Path in the format: path/Dockfile
+    build_and_update=true
     ;;
-    *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift # past argument
+    *)    # Positional parameter
+    positional_parameters+=("$1") # save it in an array for later
     ;;
 esac
 done
-set -- "${POSITIONAL[@]}" # restore positional parameters
+set -- "${positional_parameters[@]}" # Restore positional parameters
 
 
-if [ "$BUILD" = "true" ] ; then
-    echo 'Building images'
-    # Build the base image with the general dependencies. 
-    # "-t" will specify the name of the image and with "-f" you specify from where to  read a Dockerfile 
+if [ "$build" = "true" ] ; then
+    echo 'building images'
+    # build the base image with the general dependencies. 
+    # "-t" specifies the name of the image and "-f"the location of the Dockerfile 
     docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-base -f docker/base docker
-    # Build the dev image, which adds dev tools to the image
+    # build the dev image, which adds dev tools to the image
     docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-dev -f docker/dev .
+    # TODO: Include release image here
 fi
 
-if [ "$BUILDUPDATE" = "true" ] ; then
-    echo 'Building an update image'
-    echo "Using the Dockfile with the path: " $1
-    # Build the dev image, which adds dev tools to the image
+if [ "$build_and_update" = "true" ] ; then
+    echo 'building an update image'
+    echo "Using Dockfile at " $1
+    # build the dev image, which adds dev tools to the image
     name=$(echo $1 | sed 's:.*/::')
     docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-"${name}" -f $1 .
 fi
 
 
-if [ "$PUSH" = "true" ] ; then
+if [ "$push" = "true" ] ; then
 	echo 'Pushing built images to registry'
-	if [ "$BUILD" = "true" ] ; then
+	if [ "$build" = "true" ] ; then
 	    docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-base
 	    docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-dev
 	fi
-	if [ "$BUILDUPDATE" = "true" ] ; then
+	if [ "$build_and_update" = "true" ] ; then
 	    docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-"${name}"
 	fi
 
@@ -63,4 +60,4 @@ fi
 
 
 # Example: bash docker/build_docker.sh --push --dev /home/shawan/PycharmProjects/core/docker/dev-update
-# Build the release image, which builds the software and packs all the files in it
+# build the release image, which builds the software and packs all the files in it

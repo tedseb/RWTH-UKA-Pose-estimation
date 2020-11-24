@@ -56,7 +56,7 @@ docker stop trainerAI > /dev/null || true
 echo "done"
 echo "Running new docker container..."
 # Run the image as a container with the specified option strings
-docker run -t -d --rm \
+docker run -it -d --rm \
         --name trainerAI \
         -e DISPLAY=$display \
         -v /tmp/.X11-unix:/tmp/.X11-unix \

@@ -2,20 +2,21 @@
 set -e
 set -o pipefail
 
-gpu_option="--gpus=all -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all"
+gpu_option=""
 cpus_option=""
-webcam_option="--device=/dev/video0"
+webcam_option=""
 display=$DISPLAY
+osx=false
 
 # functions
 usage() {
     echo '---------------- help -------------------'
     echo '-h, --help                Show this help.'
-    echo '-w, --linux-webcam        Enable Linux Webcam.                (--device=/dev/video0)'
+    echo '-o, --osx		    Set display to "host.docker.internal:0" and your IP to the X access control list of the container'
+    echo '-w, --linux-webcam        Enable webcam under linux.          (--device=/dev/video0)'
     echo '-d, --display DISPLAY     Speficy a display for X11.          (-e DISPLAY=$DISPLAY)'
-    echo '-g, --nogpu              Hand over GPUs to Container.         (omit --gpus=all -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all)'
+    echo '-g, --gpu                 Hand over GPUs to Container.        (--gpus=all -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all)'
     echo '-c, --cpus decimal        Limit number of CPUs.               (--cpus decimal)'
-    echo '-w, --nowebcam           Launch without webcam video input.   (omit --device=/dev/video0)'
     echo 'Note: Different options can be combined.'
 }
 
@@ -23,19 +24,23 @@ while [ "${1+defined}" ]; do # Simple and safe loop over arguments: https://wiki
 key="$1"
 shift 
 case $key in
+    -o|--osx)
+    display=host.docker.internal:0
+    osx=true
+    ;;
     -h|--help)
     usage >&2;
     exit
     ;;
-    -g| --nogpu)
-    gpu_option=""
+    -g| --gpus)
+    gpu_option="--gpus=all -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all"
     ;;
     -c| --cpus)
     cpus_option="--cpus=${1}"
     shift
     ;;
-    -w|--nowebcam)
-    webcam_option=""
+    -w|--nebcam)
+    webcam_option="--device=/dev/video0"
     ;;
     -d|--display)
     display=${1}
@@ -65,4 +70,9 @@ docker run -it -d --rm \
         $webcam_option \
         $gpu_option \
         registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update > /dev/null
+
+if $osx; then
+	docker exec -it trainerAI sh -c "export DISPLAY=host.docker.internal:0 && xhost + $(ifconfig en0 | grep 'inet[ ]' | awk '{print$2}')"
+fi
+
 echo "done"

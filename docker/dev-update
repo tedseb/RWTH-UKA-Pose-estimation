@@ -24,9 +24,9 @@ RUN pip3 install --upgrade youtube-dl
 RUN apt-get install x11-xserver-utils
 
 WORKDIR /trainerai
-#RUN npm install @tensorflow/tfjs-node
-#RUN npm install @tensorflow-models/posenet
-#RUN npm install opencv4nodejs
+RUN npm install @tensorflow/tfjs-node
+RUN npm install @tensorflow-models/posenet
+RUN npm install opencv4nodejs
 RUN npm install rosnodejs
 
 USER trainerai

@@ -3,7 +3,7 @@ FROM registry.git.rwth-aachen.de/trainerai/core/trainerai-dev:latest
 USER root
 
 RUN echo "trainerai:esel1212" | chpasswd && usermod -aG sudo trainerai
-RUN apt update && apt-get -y install gedit iputils-ping
+RUN apt-get update && apt-get -y install gedit iputils-ping
 
 
 COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
@@ -14,18 +14,19 @@ RUN xhost +local: || true
 
 RUN apt-get install curl python-software-properties || true
 RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+
 RUN apt-get install nodejs
-RUN npm install @tensorflow/tfjs-node
-RUN npm install @tensorflow-models/posenet
-RUN npm install opencv4nodejs
-RUN npm install rosnodejs
-
-RUN apt install firefox -y
-
-RUN apt install python3-pip -y
+RUN apt-get install firefox -y
+RUN apt-get install python3-pip -y
 RUN pip3 install --upgrade mps-youtube
 RUN pip3 install pafy -U
 RUN pip3 install --upgrade youtube-dl
+RUN apt-get install x11-xserver-utils
+
+WORKDIR /trainerai
+#RUN npm install @tensorflow/tfjs-node
+#RUN npm install @tensorflow-models/posenet
+#RUN npm install opencv4nodejs
+RUN npm install rosnodejs
 
 USER trainerai
-WORKDIR /trainerai

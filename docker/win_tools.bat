@@ -30,6 +30,7 @@ GOTO :EOF
    Echo setup
    git config core.symlinks true
    git config core.autocrlf input
+   git read-tree --empty
    git reset --hard HEAD
    GOTO :EOF 
 

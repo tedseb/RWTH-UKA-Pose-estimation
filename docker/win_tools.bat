@@ -7,11 +7,15 @@ IF "%arg1%" == "setup" (
     GOTO setup
 ) 
 IF "%arg1%" == "start" (
-    GOTO start
+    GOTO getIpAndStart
 ) 
 IF "%arg1%" == "into" (
     GOTO into
 ) 
+IF "%arg1%" == "test" (
+    GOTO test
+) 
+
 
 Echo ---------------- Help ----------------
 Echo pull         Pull the current version.
@@ -34,12 +38,23 @@ GOTO :EOF
    git reset --hard HEAD
    GOTO :EOF 
 
+:getIpAndStart
+    REM set str = %ipconfig | findstr /i "ipv4"
+    ipconfig | findstr /i "ipv4" > ip.txt
+    REM "   IPv4-Adresse  . . . . . . . . . . : 192.168.178.21"
+    for /f "tokens=13" %%G IN (ip.txt) DO (
+        set ip=%%G
+        del ip.txt
+        GOTO start
+    ) 
+
 :start
    Echo Run Docker
+   ECHO The used IP: %ip%
    REM docker run -it --rm --name TrainerAi -v ${pwd}:/trainerai -v /trainerai/node_modules registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update
    SET CURRENTDIR=%~dp0..
    ECHO Mount Docker in %CURRENTDIR%
-   docker run -it --rm --name TrainerAi -v %CURRENTDIR%:/trainerai -v /trainerai/node_modules registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update
+   docker run -it --rm --name TrainerAi -e DISPLAY=%ip%:0.0 -v %CURRENTDIR%:/trainerai -v /trainerai/node_modules registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update
    GOTO :EOF 
 
 :into

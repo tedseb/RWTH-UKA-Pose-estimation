@@ -54,7 +54,7 @@ GOTO :EOF
    REM docker run -it --rm --name TrainerAi -v ${pwd}:/trainerai -v /trainerai/node_modules registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update
    SET CURRENTDIR=%~dp0..
    ECHO Mount Docker in %CURRENTDIR%
-   docker run -it --rm --name TrainerAi -e DISPLAY=%ip%:0.0 -v %CURRENTDIR%:/trainerai -v /trainerai/node_modules registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update
+   docker run -it --rm --name TrainerAi -e DISPLAY=%ip%:0.0 -p 3000:3000 -v %CURRENTDIR%:/trainerai -v /trainerai/node_modules registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update
    GOTO :EOF 
 
 :into

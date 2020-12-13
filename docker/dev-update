@@ -28,5 +28,10 @@ RUN npm install @tensorflow/tfjs-node
 RUN npm install @tensorflow-models/posenet
 RUN npm install opencv4nodejs
 RUN npm install rosnodejs
+RUN npm install express
+RUN npm install ws
+RUN npm install nodemon
+RUN npm install socket.io
+RUN apt-get -y install vim
 
 USER trainerai

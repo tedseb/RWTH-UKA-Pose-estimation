@@ -4,6 +4,6 @@ sed -i 's/`//g' ./devel/include/pose_estimation/Persons.h
 sed -i 's/`//g' ./devel/include/pose_estimation/Person.h
 sed -i 's/`//g' ./devel/include/pose_estimation/Bodypart.h
 sed -i 's/`//g' ./devel/include/pose_estimation/Pixel.h
-python3 checkGoogle.py
+python3 docker/scripts/SecureGoogleDrive.py
 bash script.sh
 rm script.sh

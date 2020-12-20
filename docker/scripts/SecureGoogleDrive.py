@@ -1,23 +1,13 @@
 from pydrive.drive import GoogleDrive
 from pydrive.auth import GoogleAuth
-
-gauth = GoogleAuth()
-gauth.LocalWebserverAuth()
-
-drive = GoogleDrive(gauth)
-"""
-file1 = drive.CreateFile({'title': 'Hello.txt'})  # Create GoogleDriveFile instance with title 'Hello.txt'.
-file1.SetContentString('Hello World!') # Set content of the file from given string.
-file1.Upload()
-
-https://drive.google.com/drive/folders/1FvP7f1_QbXqfhqPeV4HXguo2gtwUDQdC?usp=sharing
-"""
-
-
-
-# Import the Libraries
 import pandas as pd
 
+
+GoogleAuth.DEFAULT_SETTINGS['client_config_file'] = "./docker/scripts/client_secrets.json"
+        
+gauth = GoogleAuth()
+gauth.LocalWebserverAuth()
+drive = GoogleDrive(gauth)
 
 # Set the id of the Google Drive folder. You can find it in the URL of the google drive folder.
 parent_folder_id = '1FvP7f1_QbXqfhqPeV4HXguo2gtwUDQdC'
@@ -32,7 +22,6 @@ wget_text = '"wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?e
 
 
 # Get the folder structure
-
 file_dict = dict()
 folder_queue = [parent_folder_id]
 dir_queue = [parent_folder_dir]

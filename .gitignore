@@ -8,3 +8,5 @@ log
 devel
 build_isolated
 devel_isolated
+node_modules
+src/fastpose/parameters

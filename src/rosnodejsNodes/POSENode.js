@@ -75,7 +75,7 @@ tryModelIN = async(msg) => {
  
   }
 }
-rosnodejs.initNode('/DasTorZurUnterwelt')
+rosnodejs.initNode('/PoseNode')
 .then(() => {loadModel()
 });
 const nh = rosnodejs.nh;

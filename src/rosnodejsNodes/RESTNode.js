@@ -17,7 +17,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   //res.end('Hello World');
   //console.log('Got msg on chatter bevor');
-  const sub = nh.subscribe('/image', 'sensor_msgs/Image', (msg) => {
+  const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
     //console.log('Got msg on chatter: %j', msg);
     res.end(JSON.stringify(msg));
 

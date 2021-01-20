@@ -10,3 +10,14 @@ then
     rm script.sh
 fi
 
+
+if [[ ! -d './src/frankmocap/extra_data/body_module' ]]
+then 
+    echo "./src/frankmocap/extra_data/body_module/' does not exist on your filesystem."
+    echo ">>  Download extra data for body module"
+    python3 docker/scripts/frankmocap/SecureGoogleDrive.py
+    bash script.sh
+    rm script.sh
+fi
+
+

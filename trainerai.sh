@@ -11,11 +11,11 @@ then
 fi
 
 
-if [[ ! -d './src/frankmocap/extra_data/body_module' ]]
+if [[ ! -d './src/spin/extra_data/body_module' ]]
 then 
-    echo "./src/frankmocap/extra_data/body_module/' does not exist on your filesystem."
+    echo "./src/spin/extra_data/body_module/' does not exist on your filesystem."
     echo ">>  Download extra data for body module"
-    python3 docker/scripts/frankmocap/SecureGoogleDrive.py
+    python3 docker/scripts/spin/SecureGoogleDrive.py
     bash script.sh
     rm script.sh
 fi

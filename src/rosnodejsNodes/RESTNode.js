@@ -38,7 +38,9 @@ const port = 3000;
 const app = express();
 const server = app.listen(port, () => {console.log("Listening on " + port)});
 const hostname = '127.0.0.1';
+const StringMsg = rosnodejs.require('std_msgs').msg.String;
 let coordinates = "";
+let wrongcoordinates = [];
 let poses = [];
 const wss = new WebSocket.Server({server});
 app.use(bodyParser.json());
@@ -48,6 +50,15 @@ rosnodejs.initNode('/RESTApi')
   // do stuff
 });
 const nh = rosnodejs.nh;
+const reps = nh.subscribe('/repcounter', StringMsg, (msg) => {
+  console.log(msg);
+});
+const errors = nh.subscribe('/corrections', StringMsg, (msg) => {
+  console.log(msg);
+})
+const wrongc = nh.subscribe('/wrongcoordinates', StringMsg, (msg) => {
+  wrongcoordinates = msg.data;
+});
 const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
   
   let pose = {};
@@ -80,6 +91,10 @@ app.post('/api/pose', (req, res) => {
 app.get('/api/poses', (req, res) => {
   console.log(req.body);
   res.json(this.poses[0]);
+});
+app.get('/api/wrongCoordinates', (req, res) => {
+  console.log(req.body);
+  res.json(wrongcoordinates);
 });
 wss.on('connection', ws => {
   ws.on('message', function incoming(message) {

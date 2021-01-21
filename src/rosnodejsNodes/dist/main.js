@@ -7,7 +7,7 @@
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /Users/tamer/dev/guihmi/src/main.ts */"zUnb");
+module.exports = __webpack_require__(/*! /Users/tamer/dev/TrainerAI/guihmi/src/main.ts */"zUnb");
 
 
 /***/ }),
@@ -318,7 +318,7 @@ class RendererComponent {
             model: {},
             animate: false,
             skeleton: false,
-            coordinates: () => { this.dataService.getCoordinates(); },
+            deleteBones: () => { this.deleteBones(); },
             edit: () => { this.addBoneTransformations(this.model); },
             reset: () => { this.reset(); },
             addMash: () => {
@@ -341,10 +341,20 @@ class RendererComponent {
         });
         const skeletoncheck = this.gui.add(menu, 'skeleton', false).name('Show Skeleton');
         skeletoncheck.onChange(val => { this.skeletonCheck(val); });
-        const getCoordinates = this.gui.add(menu, 'coordinates').name('Coordinates');
+        const deleteBones = this.gui.add(menu, 'deleteBones').name('Delete Not Used Bones');
         const resetButton = this.gui.add(menu, 'reset').name('Reset');
         const editButton = this.gui.add(menu, 'edit').name('Edit');
         const renderSceleton = this.gui.add(menu, 'renderSkeleton').name('Render Skeleton');
+    }
+    deleteBones() {
+        this.model.traverse(obj => {
+            if (obj instanceof three__WEBPACK_IMPORTED_MODULE_1__["Bone"]) {
+                if (obj.name.startsWith('f_') || obj.name.startsWith('thumb') || obj.name.startsWith('palm')) {
+                    console.log("deleted");
+                    this.scene.remove(obj);
+                }
+            }
+        });
     }
     loadModel(path) {
         this.scene.remove(this.model);
@@ -429,6 +439,14 @@ class RendererComponent {
         }
         this.orbit = true;
         this.orbitControls.enabled = true;
+        for (let line of this.lines) {
+            this.scene.remove(line);
+        }
+        for (const dot of this.dots) {
+            this.scene.remove(dot.dot);
+        }
+        this.lines = [];
+        this.dots = [];
         this.scene.remove(this.model);
     }
     initSkeleton() {
@@ -459,8 +477,11 @@ class RendererComponent {
         }
         this.renderSkeleton(1, 0, 5, 0);
         this.coordinatesService.update.subscribe(() => {
+            //this.transferCoordinates();
             this.renderSkeleton(1, 0, 5, 0);
         });
+    }
+    transferCoordinates(boneName, coordinate) {
     }
     renderSkeleton(scalar, offsetX, offsetY, offsetZ) {
         const pose = this.coordinatesService.lastPose;
@@ -481,8 +502,6 @@ class RendererComponent {
             const z1 = pose[mapping[1]].z * scalar + offsetZ;
             const start = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](x0, y0, z0);
             const end = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](x1, y1, z1);
-            console.log(start, end);
-            console.log(line);
             line.geometry.setFromPoints([start, end]);
             line.geometry.computeBoundingBox();
             line.geometry.computeBoundingSphere();

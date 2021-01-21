@@ -5,7 +5,7 @@ from sensor_msgs.msg import Image
 import numpy as np
 import pafy
 
-url = "https://www.youtube.com/watch?v=QnGHXh1NH8Q"
+url = "https://www.youtube.com/watch?v=afghBre8NlI"
 video = pafy.new(url)
 best = video.getbest(preftype="mp4")
 

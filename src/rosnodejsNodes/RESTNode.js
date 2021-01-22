@@ -1,34 +1,3 @@
-/* const http = require('http');
-const rosnodejs = require('rosnodejs');
-
-const hostname = '127.0.0.1';
-const port = 3000;
-
-
-rosnodejs.initNode('/DasTorZurUnterwelt')
-.then(() => {
-  // do stuff
-});
-
-const nh = rosnodejs.nh;
-
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  //res.end('Hello World');
-  //console.log('Got msg on chatter bevor');
-  const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
-    //console.log('Got msg on chatter: %j', msg);
-    res.end(JSON.stringify(msg));
-
-  });
-});
-
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
-});
- */
-
 const http = require('http');
 const rosnodejs = require('rosnodejs');
 const express = require('express');
@@ -59,9 +28,12 @@ const errors = nh.subscribe('/corrections', StringMsg, (msg) => {
 const wrongc = nh.subscribe('/wrongcoordinates', StringMsg, (msg) => {
   wrongcoordinates = msg.data;
 });
+
+
+
 const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
-  
-  let pose = {};
+  console.log(msg);
+ /*  let pose = {};
   this.coordinates = msg;
   let bodyParts = msg.persons[0]['bodyParts'];
   let labels = ['nose', 'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'];
@@ -76,7 +48,7 @@ const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
     if(client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(pose));
     }
-  });
+  }); */
 });
 app.get('/', (req, res) => {
   res.sendFile(process.cwd() + './dist/index.html');

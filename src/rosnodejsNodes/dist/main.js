@@ -7,7 +7,7 @@
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /Users/tamer/dev/TrainerAI/guihmi/src/main.ts */"zUnb");
+module.exports = __webpack_require__(/*! /home/optimus/PoseEstimation/guihmi/src/main.ts */"zUnb");
 
 
 /***/ }),
@@ -78,6 +78,13 @@ class DataService {
     postPose(pose) {
         this.http.post('/api/pose', pose);
     }
+    getConnections() {
+        let connections;
+        this.http.get('/api/connections').subscribe(val => {
+            return val;
+        });
+        //return connections;
+    }
 }
 DataService.ɵfac = function DataService_Factory(t) { return new (t || DataService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_angular_common_http__WEBPACK_IMPORTED_MODULE_2__["HttpClient"])); };
 DataService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineInjectable"]({ token: DataService, factory: DataService.ɵfac, providedIn: 'root' });
@@ -118,14 +125,31 @@ class CoordinatesService {
         });
         this.update = new rxjs__WEBPACK_IMPORTED_MODULE_1__["BehaviorSubject"](this.lastPose);
         this.connections = {
-            leftShoulder: ['rightShoulder', 'leftElbow', 'leftHip'],
-            rightShoulder: ['rightElbow', 'rightHip'],
-            leftElbow: ['leftWrist'],
-            rightElbow: ['rightWrist'],
-            leftHip: ['rightHip', 'leftKnee'],
-            rightHip: ['rightKnee'],
-            leftKnee: ['leftAnkle'],
-            rightKnee: ['rightAnkle']
+            OP_R_Shoulder: ['OP_R_Elblow', 'R_Hip'],
+            OP_R_Elblow: ['OP_R_Wrist'],
+            OP_L_Shoulder: ['OP_L_Elbow', 'L_Hip', 'OP_R_Shoulder'],
+            OP_L_Elbow: ['OP_L_Wrist'],
+            R_Hip: ['OP_R_Hip', 'L_Hip', 'OP_R_Knee'],
+            OP_R_Hip: ['OP_L_Hip', 'OP_R_Knee'],
+            OP_R_Knee: ['OP_R_Ankle'],
+            OP_L_Hip: ['OP_L_Knee'],
+            L_Hip: ['OP_L_Hip', 'OP_L_Knee'],
+            OP_L_Knee: ['OP_L_Ankle'],
+            OP_L_Ankle: ['OP_L_Heel'],
+            OP_L_Heel: ['OP_L_Small_Toe', 'OP_L_Big_Toe'],
+            OP_L_Small_Toe: ['OP_L_Big_Toe'],
+            OP_R_Ankle: ['OP_R_Heel'],
+            OP_R_Heel: ['OP_R_Big_Toe'],
+            OP_R_Big_Toe: ['OP_R_Small_Toe'],
+            OP_R_Small_Toe: ['OP_R_Heel'],
+            Jaw_HM: ['OP_R_Ear', 'OP_L_Ear', 'OP_Nose'],
+            OP_Nose: ['OP_R_Eye', 'OP_L_Eye'],
+            OP_R_Eye: ['OP_L_Eye'],
+            OP_R_Ear: ['Head_HM'],
+            OP_L_Ear: ['Head_HM'],
+            OP_Neck: ['Neck_LSP'],
+            Neck_LSP: ['Head_HM'],
+            Spine_HM: ['Neck_LSP', 'Pelvis_MPII']
         };
     }
 }
@@ -453,6 +477,7 @@ class RendererComponent {
         this.reset();
         // tslint:disable-next-line: forin
         for (const point in this.coordinatesService.lastPose) {
+            console.log(point);
             const geometry = new three__WEBPACK_IMPORTED_MODULE_1__["SphereBufferGeometry"](0.1, 32, 32);
             const material = new three__WEBPACK_IMPORTED_MODULE_1__["MeshBasicMaterial"]({ color: 0xafaab9 });
             const dot = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"](geometry, material);
@@ -475,10 +500,10 @@ class RendererComponent {
                 this.scene.add(line);
             }
         }
-        this.renderSkeleton(1, 0, 5, 0);
+        this.renderSkeleton(5, 0, 0, 0);
         this.coordinatesService.update.subscribe(() => {
             //this.transferCoordinates();
-            this.renderSkeleton(1, 0, 5, 0);
+            this.renderSkeleton(5, 0, 0, 0);
         });
     }
     transferCoordinates(boneName, coordinate) {
@@ -493,6 +518,7 @@ class RendererComponent {
         // tslint:disable-next-line: forin
         for (const index in this.lines) {
             const mapping = this.dotsMapping[index];
+            console.log(mapping);
             const line = this.lines[index];
             const x0 = pose[mapping[0]].x * scalar + offsetX;
             const x1 = pose[mapping[1]].x * scalar + offsetX;

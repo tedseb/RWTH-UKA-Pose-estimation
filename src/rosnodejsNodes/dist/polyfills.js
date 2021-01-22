@@ -7,7 +7,7 @@
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /Users/tamer/dev/TrainerAI/guihmi/src/polyfills.ts */"hN/g");
+module.exports = __webpack_require__(/*! /home/optimus/PoseEstimation/guihmi/src/polyfills.ts */"hN/g");
 
 
 /***/ }),

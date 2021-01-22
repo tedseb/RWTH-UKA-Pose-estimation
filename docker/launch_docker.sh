@@ -40,7 +40,7 @@ case $key in
     shift
     ;;
     -w|--nebcam)
-    webcam_option="--device=/dev/video0"
+    webcam_option="--device=/dev/video2"
     ;;
     -d|--display)
     display=${1}

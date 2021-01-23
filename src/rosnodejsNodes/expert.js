@@ -8,15 +8,11 @@ const ditw = ['nose', 'leftShoulder', 'rightShoulder',
     'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
     'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle',
     'rightAnkle'];
-
 const ownpose_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43];
-
-const ownpose_labels = [OP_Nose, OP_Neck, OP_R_Shoulder, OP_R_Elbow, OP_R_Wrist, OP_L_Shoulder, OP_L_Elbow, OP_L_Wrist, OP_Middle_Hip, OP_R_Hip, OP_R_Knee, OP_R_Ankle, OP_L_Hip, OP_L_Knee, OP_L_Ankle, OP_R_Eye, OP_L_Eye, OP_R_Ear, OP_L_Ear, OP_L_Big_Toe, OP_L_Small_Toe, OP_L_Heel, OP_R_Big_Toe, OP_R_Small_Toe, OP_R_Heel, R_Ankle, R_Knee, R_Hip, L_Hip9, L_Knee, L_Ankle, R_Wrist, R_Elbow, R_Shoulder, L_Shoulder, L_Elbow, L_Wrist, Neck_LSP, Top_of_Head_LSP, Pelvis_MPII, Thorax_MPII, Spine_HM, Jaw_HM, Head_HM, Nose, L_Eye, R_Eye, L_Ear, R_Ear]
-
+const ownpose_labels = ['OP_Nose', 'OP_Neck', 'OP_R_Shoulder', 'OP_R_Elbow', 'OP_R_Wrist', 'OP_L_Shoulder', 'OP_L_Elbow', 'OP_L_Wrist', 'OP_Middle_Hip', 'OP_R_Hip', 'OP_R_Knee', 'OP_R_Ankle', 'OP_L_Hip', 'OP_L_Knee', 'OP_L_Ankle', 'OP_R_Eye', 'OP_L_Eye', 'OP_R_Ear', 'OP_L_Ear', 'OP_L_Big_Toe', 'OP_L_Small_Toe', 'OP_L_Heel', 'OP_R_Big_Toe', 'OP_R_Small_Toe', 'OP_R_Heel', 'R_Ankle', 'R_Knee', 'R_Hip', 'L_Hip', 'L_Knee', 'L_Ankle', 'R_Wrist', 'R_Elbow', 'R_Shoulder', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'Neck_LSP', 'Top_of_Head_LSP', 'Pelvis_MPII', 'Thorax_MPII', 'Spine_HM', 'Jaw_HM', 'Head_HM', 'Nose', 'L_Eye', 'R_Eye', 'L_Ear', 'R_Ear']
 const ownpose = [
     [2, 3], [3, 4], [5, 6], [6, 7], [27, 9], [9, 12], [27, 28], [27, 10], [10, 11], [12, 13], [9, 10], [28, 12], [28, 13], [13, 14], [14, 21], [21, 20], [21, 19], [20, 19], [11, 24], [24, 22], [22, 23], [23, 24], [5, 28], [2, 27], [5, 2], [42, 17], [42, 18], [42, 0], [0, 15], [0, 16], [15, 16], [17, 43], [18, 43], [1, 37], [37, 43], [41, 37], [41, 39]
 ]
-
 const angle_points = {
     leftLeg: ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Ankle'],
     leftArm: ['OP_L_Shoulder', 'OP_L_Elbow', 'OP_L_Wrist'],
@@ -27,9 +23,10 @@ const angle_points = {
     upperBody: ['OP_R_Shoulder', 'OP_R_Hip', 'OP_R_Knee', 'OP_L_Shoulder', 'OP_L_Hip', 'OP_L_Knee']
 }
 
+var last30 = [];
 
 var angles = {};
-var alpha = 15;
+var alpha = 20;
 // var squats = {
 //     1: {
 //         leftLeg: 165,
@@ -58,9 +55,9 @@ var squats = {
         },
         2: {
             angles: {
-                leftLeg: 130,
-                rightLeg: 130,
-                upperBody: 130
+                leftLeg: 125,
+                rightLeg: 125,
+                upperBody: 125
             },
             rules: {},
             name: "Transition"
@@ -115,17 +112,11 @@ const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
         point.z = bodyParts[index].point.y;
         pose[ownpose_labels[index]] = point;
     });
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(pose));
-        }
-    });
-    lastPose = pose;
+    save(pose);
     let entries = Object.entries(angle_points);
-    for(const [angle, points] in entries) {
+    for (const [angle, points] of entries) {
         angles[angle] = calculateAngle(points);
-    } 
-    console.log(angles);
+    }
     /* angles.leftLeg = threepointangle(pose.leftHip, pose.leftKnee, pose.leftAnkle);
     angles.rightLeg = threepointangle(pose.rightHip, pose.rightKnee, pose.rightAnkle);
     angles.leftArm = threepointangle(pose.leftShoulder, pose.leftElbow, pose.leftWrist);
@@ -153,13 +144,24 @@ correct = () => {
 
 };
 
+save = (obj) => {
+    lastPose = obj;
+    if (last30.length >= 30) {
+        last30.shift();
+        last30.push(obj);
+        console.log(checkForStretch(last30));
+    } else {
+        last30.push(obj);
+    }
+}
+
 calculateAngle = (arr) => {
-    switch(arr.length) {
+    switch (arr.length) {
         case 2:
             let newPoint = {
-                x: arr[1].x,
-                y: arr[1].y - 1,
-                z: arr[1].z
+                x: lastPose[arr[1]].x,
+                y: lastPose[arr[1]].y - 1,
+                z: lastPose[arr[1]].z
             };
             return threepointangle(lastPose[arr[0]], lastPose[arr[1]], newPoint);
             break;
@@ -179,6 +181,8 @@ count = () => {
         if (checkforstate(angles, squats, state + 1)) {
             //states.squats.push(states + 1);
             state++;
+        } else {
+
         }
     }
     if (state === 3) {
@@ -262,6 +266,44 @@ checkforrep = (arr) => {
         }
     }
     return true;
+}
+
+checkForStretch = (arr) => {
+    let lastAngles;
+    let currentAngles = {};
+    let differences = {};
+    let keys = Object.keys(angle_points);
+    for (const key of keys) {
+        differences[key] = [];
+    }
+    arr.forEach(el => {
+        let entries = Object.entries(angle_points);
+        for (const [angle, points] of entries) {
+            currentAngles[angle] = calculateAngle(points);
+        }
+        if (lastAngles) {
+            let keys = Object.keys(lastAngles);
+            for (const key of keys) {
+                console.log(currentAngles[key] - lastAngles[key]);
+                differences[key].push(currentAngles[key] - lastAngles[key]);
+            }
+        } else {
+            lastAngles = currentAngles;
+        }
+    });
+    let entries = Object.entries(differences);
+    let sums = {};
+    for (const [angle, diff] of entries) {
+        console.log(diff);
+        let sum = 0;
+        diff.forEach(el => { sum += el });
+        sums[angle] = sum;
+    }
+    console.log(sums);
+    console.log(Object.values(sums));
+    if (sums[leftLeg] >= 0 || sums[rightLeg] >= 0) {
+        return true;
+    } else return false;
 }
 
 angle2d = (x, y) => {

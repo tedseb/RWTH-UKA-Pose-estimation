@@ -125,8 +125,8 @@ class CoordinatesService {
         });
         this.update = new rxjs__WEBPACK_IMPORTED_MODULE_1__["BehaviorSubject"](this.lastPose);
         this.connections = {
-            OP_R_Shoulder: ['OP_R_Elblow', 'R_Hip'],
-            OP_R_Elblow: ['OP_R_Wrist'],
+            OP_R_Shoulder: ['OP_R_Elbow', 'R_Hip'],
+            OP_R_Elbow: ['OP_R_Wrist'],
             OP_L_Shoulder: ['OP_L_Elbow', 'L_Hip', 'OP_R_Shoulder'],
             OP_L_Elbow: ['OP_L_Wrist'],
             R_Hip: ['OP_R_Hip', 'L_Hip', 'OP_R_Knee'],

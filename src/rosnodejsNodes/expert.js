@@ -1,6 +1,7 @@
 const rosnodejs = require('rosnodejs');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const math = require('mathjs');
+const { dot } = require('mathjs');
 
 
 // detection in the wild labels in right order
@@ -262,6 +263,27 @@ checkforrep = (arr) => {
         }
     }
     return true;
+}
+
+
+const vectorUp = {x: 0, y: 1, z: 0}; 
+const vectorRight = {x: 1, y: 0, z: 0};
+
+//a and b are the start and end point of a given vector, which is perpendicular to the plane
+//p is a point of that plane
+//x will be checked against that plane
+// const b_ = {x: b.x, y: a.y, z: b.z}; for a plane that is 
+plane3d = (a, b, p, x) => {
+    //const b_ = {x: b.x, y: a.y, z: b.z};
+    const direction = vector(a, b);
+    const val = dot({x: x.x - p.x, y: x.y - p.y, z: x.z - p.z}, direction);
+    console.log(val);
+    return val;
+}
+
+cross = (x1, x2) => {
+    const cross =  math.cross([x.x, x.y, x.z], [y.x, y.y, y.z]);
+    return {x: cross[0], y: cross[1], z: cross[2]};
 }
 
 angle2d = (x, y) => {

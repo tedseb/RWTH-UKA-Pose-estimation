@@ -1,4 +1,3 @@
-const http = require('http');
 const rosnodejs = require('rosnodejs');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -6,11 +5,12 @@ const WebSocket = require('ws');
 const port = 3000;
 const app = express();
 const server = app.listen(port, () => { console.log("Listening on " + port) });
-const hostname = '127.0.0.1';
+//const hostname = '127.0.0.1';
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-let coordinates = "";
+//let coordinates = "";
 let wrongcoordinates = [];
-let poses = [];
+const url = require('url');
+//let poses = [];
 const wss = new WebSocket.Server({ server });
 app.use(bodyParser.json());
 app.use(express.static(process.cwd() + '/dist/'));
@@ -98,6 +98,7 @@ app.get('/api/wrongCoordinates', (req, res) => {
   res.json(wrongcoordinates);
 });
 wss.on('connection', ws => {
+  const location = url.parse(req.url, true);
   ws.on('message', function incoming(message) {
     console.log('received: %s', message);
   });

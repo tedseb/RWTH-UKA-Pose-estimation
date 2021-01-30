@@ -10,3 +10,4 @@ build_isolated
 devel_isolated
 node_modules
 src/fastpose/parameters
+package-lock.json

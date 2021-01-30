@@ -1,7 +1,7 @@
 const rosnodejs = require('rosnodejs');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const math = require('mathjs');
-const { dot } = require('mathjs');
+
 
 
 // detection in the wild labels in right order
@@ -152,7 +152,7 @@ save = (obj) => {
     if (last30.length >= 30) {
         last30.shift();
         last30.push(obj);
-        console.log(checkForStretch(last30));
+        //console.log(checkForStretch(last30));
     } else {
         last30.push(obj);
     }
@@ -243,8 +243,12 @@ checkForCorrection = (angles, exercise, state) => {
                 break;
             case "behind":
                 //a: 0, b: 1, p: 1, x: 2
-                const val_x = plane3d(angle_points[k][0], angle_points[k][1], angle_points[k][1], angle_points[k][2]);
-                const val_a = plane3d(angle_points[k][0], angle_points[k][1], angle_points[k][1], angle_points[k][0]);
+                const a = last_pose[angle_points[k][0]]
+                const b = last_pose[angle_points[k][1]]
+                const p = last_pose[angle_points[k][1]]
+                const x = last_pose[angle_points[k][2]]
+                const val_x = plane3d(a, b, p, x);
+                const val_a = plane3d(a, b, p, a);
                 if(math.sign(val_x) === math.sign(val_a)) {
                     corrections += rules[k][2] + ". ";
                     coordinats_pub.publish({ data: JSON.stringify(angle_points[k]) });
@@ -291,6 +295,8 @@ const vectorRight = {x: 1, y: 0, z: 0};
 plane3d = (a, b, p, x) => {
     //const b_ = {x: b.x, y: a.y, z: b.z};
     const direction = vector(a, b);
+    console.log(direction);
+    console.log({x: x.x - p.x, y: x.y - p.y, z: x.z - p.z});
     const val = dot({x: x.x - p.x, y: x.y - p.y, z: x.z - p.z}, direction);
     console.log(val);
     return val;

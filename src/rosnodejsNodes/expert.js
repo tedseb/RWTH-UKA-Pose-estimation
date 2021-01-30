@@ -27,7 +27,7 @@ const angle_points = {
 }
 
 var last30 = [];
-
+var lastPose = {};
 var angles = {};
 var alpha = 20;
 // var squats = {
@@ -243,10 +243,10 @@ checkForCorrection = (angles, exercise, state) => {
                 break;
             case "behind":
                 //a: 0, b: 1, p: 1, x: 2
-                const a = last_pose[angle_points[k][0]]
-                const b = last_pose[angle_points[k][1]]
-                const p = last_pose[angle_points[k][1]]
-                const x = last_pose[angle_points[k][2]]
+                const a = lastPose[angle_points[k][0]]
+                const b = lastPose[angle_points[k][1]]
+                const p = lastPose[angle_points[k][1]]
+                const x = lastPose[angle_points[k][2]]
                 const val_x = plane3d(a, b, p, x);
                 const val_a = plane3d(a, b, p, a);
                 if(math.sign(val_x) === math.sign(val_a)) {

@@ -15,6 +15,8 @@ const ownpose = [
     [2, 3], [3, 4], [5, 6], [6, 7], [27, 9], [9, 12], [27, 28], [27, 10], [10, 11], [12, 13], [9, 10], [28, 12], [28, 13], [13, 14], [14, 21], [21, 20], [21, 19], [20, 19], [11, 24], [24, 22], [22, 23], [23, 24], [5, 28], [2, 27], [5, 2], [42, 17], [42, 18], [42, 0], [0, 15], [0, 16], [15, 16], [17, 43], [18, 43], [1, 37], [37, 43], [41, 37], [41, 39]
 ]
 const angle_points = {
+    leftHipKneeToe: ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Big_Toe'],
+    rightHipKneeToe: ['OP_R_Hip', 'OP_R_Knee', 'OP_R_Big_Toe'],
     leftLeg: ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Ankle'],
     leftArm: ['OP_L_Shoulder', 'OP_L_Elbow', 'OP_L_Wrist'],
     leftShin: ['OP_L_Knee', 'OP_L_Ankle'],
@@ -70,8 +72,8 @@ var squats = {
                 upperBody: 90
             },
             rules: {
-                leftShin: ["min", 160, "Bitte achte darauf, in der Hocke dein linkes Knie nicht über deine Zehenspitzen zu lassen"],
-                rightShin: ["min", 160, "Bitte achte darauf, in der Hocke dein rechtes Knie nicht über deine Zehenspitzen zu lassen"],
+                leftHipKneeToe: ["behind", 160, "Bitte achte darauf, in der Hocke dein linkes Knie nicht über deine Zehenspitzen zu lassen"],
+                rightHipKneeToe: ["behind", 160, "Bitte achte darauf, in der Hocke dein rechtes Knie nicht über deine Zehenspitzen zu lassen"],
             },
             name: "Hocke"
         }
@@ -239,6 +241,15 @@ checkForCorrection = (angles, exercise, state) => {
                     coordinats_pub.publish({ data: JSON.stringify(angle_points[k]) });
                 }
                 break;
+            case "behind":
+                //a: 0, b: 1, p: 1, x: 2
+                const val_x = plane3d(angle_points[k][0], angle_points[k][1], angle_points[k][1], angle_points[k][2]);
+                const val_a = plane3d(angle_points[k][0], angle_points[k][1], angle_points[k][1], angle_points[k][0]);
+                if(math.sign(val_x) === math.sign(val_a)) {
+                    corrections += rules[k][2] + ". ";
+                    coordinats_pub.publish({ data: JSON.stringify(angle_points[k]) });
+                }
+                break;
         }
     });
     if (corrections.length === 0) {
@@ -285,7 +296,7 @@ plane3d = (a, b, p, x) => {
     return val;
 }
 
-cross = (x1, x2) => {
+cross = (x, y) => {
     const cross =  math.cross([x.x, x.y, x.z], [y.x, y.y, y.z]);
     return {x: cross[0], y: cross[1], z: cross[2]};
 }

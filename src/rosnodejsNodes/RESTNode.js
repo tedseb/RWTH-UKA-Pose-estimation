@@ -8,7 +8,8 @@ const server = app.listen(port, () => { console.log("Listening on " + port) });
 //const hostname = '127.0.0.1';
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 //let coordinates = "";
-let wrongcoordinates = [];
+let correctionClients = [];
+let coordinateClients = [];
 const url = require('url');
 //let poses = [];
 const wss = new WebSocket.Server({ server });
@@ -23,10 +24,30 @@ rosnodejs.initNode('/RESTApi')
 
 const nh = rosnodejs.nh;
 const reps = nh.subscribe('/repcounter', StringMsg, (msg) => {
-  console.log(msg);
+  correctionClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      let answer = {
+        action: 'ubung',
+        id: 1,
+        info: msg['data'],
+        bool: true
+      };
+      client.send(JSON.stringify(answer));
+    }
+  });
 });
 const errors = nh.subscribe('/corrections', StringMsg, (msg) => {
-  console.log(msg);
+  correctionClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      let answer = {
+        action: 'ubung',
+        id: 1,
+        info: msg['data'],
+        bool: false
+      };
+      client.send(JSON.stringify(answer));
+    }
+  });
 })
 const wrongc = nh.subscribe('/wrongcoordinates', StringMsg, (msg) => {
   wrongcoordinates = msg.data;
@@ -60,7 +81,7 @@ const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
     point.z = bodyParts[index].point.y;
     pose[ownpose_labels[index]] = point;
   });
-  wss.clients.forEach(client => {
+  coordinateClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(pose));
     }
@@ -97,10 +118,16 @@ app.get('/api/wrongCoordinates', (req, res) => {
   console.log(req.body);
   res.json(wrongcoordinates);
 });
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
   const location = url.parse(req.url, true);
+  if(location.path.includes('corrections')){
+    correctionClients.push(ws);
+  } else {
+    coordinateClients.push(ws);
+  }
   ws.on('message', function incoming(message) {
     console.log('received: %s', message);
   });
-  ws.send(JSON.stringify('connected'));
+
+  ws.send(JSON.stringify({action: 'ubung', info: 'Übung wird gestartet. Viel Erfolg!', bool: true, id: "StartMessage"}));
 });

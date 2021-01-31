@@ -1,0 +1,3 @@
+[submodule "src/kinect/src/kinect"]
+	path = src/kinect/src/kinect
+	url = https://git.rwth-aachen.de/trainerai/kinect

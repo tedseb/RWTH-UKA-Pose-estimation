@@ -12,7 +12,7 @@ drive = GoogleDrive(gauth)
 # Set the id of the Google Drive folder. You can find it in the URL of the google drive folder.
 parent_folder_id = '1FvP7f1_QbXqfhqPeV4HXguo2gtwUDQdC'
 # Set the parent folder, where you want to store the contents of the google drive folder
-parent_folder_dir = './src/fastpose/parameters/'
+parent_folder_dir = './src/AI/fastpose/parameters/'
 
 if parent_folder_dir[-1] != '/':
     parent_folder_dir = parent_folder_dir + '/'

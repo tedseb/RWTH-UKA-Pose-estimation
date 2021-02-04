@@ -1,6 +1,6 @@
 <launch>
   <include file="$(find infrastructure)/launch/all_cameras.launch" />
-  <node name="SpinVis" pkg="pose_estimation" type="SpinVis.py" />
+  <node name="SpinVis" pkg="backend" type="SpinVis.py" />
   <include file="$(find spin)/launch/spin.launch" />
 </launch> 
  

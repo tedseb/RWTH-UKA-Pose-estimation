@@ -1,0 +1,3 @@
+<launch>
+  <node name="spin3D" pkg="spin" type="demo_bodymocap.py" />
+</launch> 

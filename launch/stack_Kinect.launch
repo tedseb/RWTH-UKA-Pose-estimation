@@ -1,0 +1,6 @@
+<launch>
+  <!-- The kinect cameras are launched by serve.cpp on the local machine, no infrastructure include neccessary -->
+  <node name="KinectVis" pkg="kinect" type="KinectVis.py" />
+  <include file="$(find kinect)/launch/kinect.launch" />
+</launch> 
+ 

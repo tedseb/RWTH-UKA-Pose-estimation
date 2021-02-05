@@ -108,6 +108,7 @@ catkin_package(
 #  LIBRARIES kinect
 #  CATKIN_DEPENDS roscpp
 #  DEPENDS system_lib
+CATKIN_DEPENDS message_runtime
 )
 
 ###########

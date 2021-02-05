@@ -1,0 +1,3 @@
+<launch>
+  <node name="kinect" pkg="kinect" type="serve.py" />
+</launch> 

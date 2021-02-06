@@ -1,6 +1,4 @@
 # Original code from SPIN: https://github.com/nkolot/SPIN
-
-
 import torch
 import numpy as np
 import smplx

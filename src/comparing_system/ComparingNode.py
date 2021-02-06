@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import math
 import rospy
-from pose_estimation.msg import Persons, commands
+from backend.msg import Persons, commands
 from geometry_msgs.msg import Vector3, Point
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
@@ -42,7 +42,7 @@ class elComparador():
                 msg = commands()
                 msg.id = idx                                            #Not sure if self.frame_callback or only id is the correct choice for the skelleton definition
                 msg.data = "Kopf hoch kleines"
-                msg_array.append(msg)
+            msg_array.append(msg)
             
 
         # publish the markers

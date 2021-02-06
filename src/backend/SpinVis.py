@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import math
 import rospy
-from pose_estimation.msg import Persons
+from backend.msg import Persons
 from std_msgs.msg import ColorRGBA
 from geometry_msgs.msg import Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray

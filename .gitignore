@@ -9,3 +9,6 @@ devel
 build_isolated
 devel_isolated
 src/spin/extra_data
+node_modules
+src/fastpose/parameters
+package-lock.json

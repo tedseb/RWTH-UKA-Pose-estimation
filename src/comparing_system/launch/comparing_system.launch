@@ -1,0 +1,3 @@
+<launch>
+  <node name="ComNode" pkg="comparing_system" type="ComparingNode.py" />
+</launch> 

@@ -10,18 +10,19 @@ sh $SCRIPTPATH/devel/setup.sh
 # TODO: @Shawan What does this line do? Is there a link you copied this from?
 find ./devel -type f -name "*.js" -exec sed -i 's/`resolution`//g' {} \;
 
-if [[ ! -d './src/fastpose/parameters/' ]]
+
+if [[ ! -d './src/AI/fastpose/parameters/' ]]
 then
-    echo "'./src/fastpose/parameters/' does not exist on your filesystem."
+    echo "'./src/AI/fastpose/parameters/' does not exist on your filesystem."
     python3 docker/scripts/SecureGoogleDrive.py
-    sh script.sh
+    bash script.sh
     rm script.sh
 fi
 
 
-if [[ ! -d './src/spin/extra_data/body_module' ]]
+if [[ ! -d './src/AI/spin/extra_data/body_module' ]]
 then 
-    echo "./src/spin/extra_data/body_module/' does not exist on your filesystem."
+    echo "./src/AI/spin/extra_data/body_module/' does not exist on your filesystem."
     echo ">>  Download extra data for body module"
     python3 docker/scripts/spin/SecureGoogleDrive.py
     sh script.sh

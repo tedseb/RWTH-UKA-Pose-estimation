@@ -62,7 +62,7 @@ const ownpose = [
 ];
 
 
-const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
+const sub = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
   let pose = {};
   this.coordinates = msg;
   let bodyParts = msg.persons[0]['bodyParts'];

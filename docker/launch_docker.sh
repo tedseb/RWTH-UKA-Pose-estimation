@@ -64,7 +64,8 @@ echo "Running new docker container..."
 docker run -it -d --rm \
         --name trainerAI \
         -e DISPLAY=$display \
-	-p 3000:3000 \
+	    -p 3000:3000 \
+        --privileged \
         --net=host \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         -v $(pwd):/trainerai \

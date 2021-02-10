@@ -95,7 +95,7 @@ rosnodejs.initNode('/expert')
         // do stuff
     });
 const nh = rosnodejs.nh;
-const sub = nh.subscribe('/personsJS', 'pose_estimation/Persons', (msg) => {
+const sub = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
     let pose = {};
     this.coordinates = msg;
     let bodyParts = msg.persons[0]['bodyParts'];
@@ -295,10 +295,10 @@ const vectorRight = {x: 1, y: 0, z: 0};
 plane3d = (a, b, p, x) => {
     //const b_ = {x: b.x, y: a.y, z: b.z};
     const direction = vector(a, b);
-    console.log(direction);
-    console.log({x: x.x - p.x, y: x.y - p.y, z: x.z - p.z});
+    //console.log(direction);
+    //console.log({x: x.x - p.x, y: x.y - p.y, z: x.z - p.z});
     const val = dot({x: x.x - p.x, y: x.y - p.y, z: x.z - p.z}, direction);
-    console.log(val);
+    //console.log(val);
     return val;
 }
 
@@ -354,6 +354,7 @@ angle3d = (x, y) => {
 threepointangle = (a, b, c) => {
     const ba = vector(b, a);
     const bc = vector(b, c);
+    console.log(angle3d(ba, bc));
     return angle3d(ba, bc);
 };
 vector = (x, y) => {

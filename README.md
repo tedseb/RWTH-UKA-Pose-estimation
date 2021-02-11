@@ -47,7 +47,7 @@ to create a session in the dev container. The repository is mounted in the /trai
 Use `source trainerai.sh` to build the project and set the environment variables. When building the project, large files will be downloaded from Google Drive, like neural networks. Therefore, a browser will open where you will be asked to log in to your Google account (social@trainerai.de). Then the files are downloaded automatically via OAuth2.0.
 After building it, it can be run using launch files, so that we can use that to orchestrate the nodes. You can run `terminator -l layout` to launch 4 terminals, where roscore and htop are running by default. You are now ready to develop on the software.
 To start all cameras use `roslaunch infrastructure all_cameras.launch`. To start the whole trainerAI system with all nodes `roslaunch launch/stack_3Dspin.launch`.
-To visualize results, we want to use rviz and rqt. They are both available in the environment, I will add further information for this as we progress in the work.
+To visualize results, we want to use `rviz -d docker/scripts/default.rviz` and rqt. They are both available in the environment, I will add further information for this as we progress in the work.
 ## Docker
 To allow for reproducible and shared environments, we use Docker to encapsulate the environment. At this point in time, we have 3 docker images: A **base** image which contains the requirements to run the software (i.e. all dependencies), a **dev** image, which adds development tools, such as an IDE, and a **release** image, which contains the packaged app.
 I have pushed an up-to-date version 

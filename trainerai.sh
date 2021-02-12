@@ -11,15 +11,6 @@ sh $SCRIPTPATH/devel/setup.sh
 find ./devel -type f -name "*.js" -exec sed -i 's/`resolution`//g' {} \;
 
 
-if [[ ! -d './src/AI/fastpose/parameters/' ]]
-then
-    echo "'./src/AI/fastpose/parameters/' does not exist on your filesystem."
-    python3 docker/scripts/SecureGoogleDrive.py
-    bash script.sh
-    rm script.sh
-fi
-
-
 if [[ ! -d './src/AI/spin/extra_data/body_module' ]]
 then 
     echo "./src/AI/spin/extra_data/body_module/' does not exist on your filesystem."

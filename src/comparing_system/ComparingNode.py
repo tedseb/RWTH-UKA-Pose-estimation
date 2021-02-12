@@ -6,6 +6,7 @@ from backend.msg import Persons, commands
 from geometry_msgs.msg import Vector3, Point
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
+import json
 
 class elComparador():
     def __init__(self, publish_topic, subscribe_topic, skeleton_frame):
@@ -31,13 +32,15 @@ class elComparador():
         This function will be called everytime whenever a message is received by the subscriber
         '''
         idx = 0
-        print("vis: ", data)
+        exercise = rospy.get_param('exercise')
+        exercise = json.loads(exercise)
         msg_array = list()
         for person in data.persons:
             idx+=1 
             for bodypart in person.bodyParts:
                 print("--------------------------------------")
-                print("persons: ", bodypart)   
+                print("exercise: ", exercise)
+               #print("persons: ", bodypart)   
                 #Use for your calculation for example this: bodypart.point.x, bodypart.point.y , bodypart.point.z
                 msg = commands()
                 msg.id = idx                                            #Not sure if self.frame_callback or only id is the correct choice for the skelleton definition

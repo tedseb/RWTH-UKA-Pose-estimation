@@ -47,8 +47,14 @@ rosnodejs.initNode('/expert_slim')
         // do stuff
     });
 const nh = rosnodejs.nh;
-
 var s_squats = JSON.stringify(squats);
 
-nh.setParam('exercise',s_squats);
-console.log(s_squats);
+const errors = nh.subscribe('/qr_exercise', StringMsg, (msg) => {
+    //Call Reader Function to load data from database and send it to server in ms is exercise name
+    nh.setParam('exercise',s_squats); //dirty
+    console.log(s_squats);
+});
+
+
+
+

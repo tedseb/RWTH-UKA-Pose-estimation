@@ -23,6 +23,7 @@ rosnodejs.initNode('/RESTApi')
 
 
 const nh = rosnodejs.nh;
+const pub_qr = nh.advertise('/qr_exercise', StringMsg);
 const reps = nh.subscribe('/repcounter', StringMsg, (msg) => {
   correctionClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -125,8 +126,9 @@ wss.on('connection', (ws, req) => {
   } else {
     coordinateClients.push(ws);
   }
-  ws.on('message', function incoming(message) {
-    console.log('received: %s', message);
+  ws.on('message', function incoming(message) {//Shawan
+    pub_qr.publish({ data: message }) 
+    console.log('received: %s', message); //json squats
   });
 
   ws.send(JSON.stringify({action: 'ubung', info: 'Übung wird gestartet. Viel Erfolg!', bool: true, id: "StartMessage"}));

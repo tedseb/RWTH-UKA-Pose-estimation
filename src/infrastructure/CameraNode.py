@@ -6,18 +6,19 @@ import numpy as np
 import pafy
 
 url = "https://www.youtube.com/watch?v=IFQmOZqvtWg"
-video = pafy.new(url)
-best = video.getbest(preftype="mp4")
+
 
 def camera():
     pub = rospy.Publisher('image', Image, queue_size=2)
     rospy.init_node('camera', anonymous=True)
     rate = rospy.Rate(30)
-    cap = cv2.VideoCapture(1)   
+    cap = cv2.VideoCapture(2)   
     if cap is None or not cap.isOpened():
-       rospy.loginfo('INFO: No webCam source. Youtube video will be used as source!')
-       cap = cv2.VideoCapture()
-       cap.open(best.url)
+        video = pafy.new(url)
+        best = video.getbest(preftype="mp4")
+        rospy.loginfo('INFO: No webCam source. Youtube video will be used as source!')
+        cap = cv2.VideoCapture()
+        cap.open(best.url)
 
     while not rospy.is_shutdown():
         ret, frame = cap.read()

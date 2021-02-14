@@ -1,8 +1,9 @@
 const rosnodejs = require('rosnodejs');
+const YAML = require('yaml')
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 
 var squats = {
-    exercise: 'squats',
+    name: 'squats',
     stages: {
         0: { angles: {}, rules: {} },
         1: {
@@ -47,7 +48,7 @@ rosnodejs.initNode('/expert_slim')
         // do stuff
     });
 const nh = rosnodejs.nh;
-var s_squats = JSON.stringify(squats);
+var s_squats = YAML.stringify(squats);
 
 const errors = nh.subscribe('/qr_exercise', StringMsg, (msg) => {
     //Call Reader Function to load data from database and send it to server in ms is exercise name

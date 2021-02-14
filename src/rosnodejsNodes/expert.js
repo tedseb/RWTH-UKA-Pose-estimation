@@ -94,7 +94,14 @@ rosnodejs.initNode('/expert')
     .then(() => {
         // do stuff
     });
+
+
 const nh = rosnodejs.nh;
+
+nh.setParam('person', {'Bein_x': 102, 'Bein_y': 250, 'Bein_z': 170}) ;//Shawan
+nh.setParam('station_skeleton', {'Station1': 1, 'Station2': 3, 'Station3': 2});//Shawan
+
+
 const sub = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
     let pose = {};
     this.coordinates = msg;

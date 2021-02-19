@@ -41,11 +41,18 @@ current_exercise = None
 
 JOINT_ADAPTER_FILE = 'joint_adapters.spin_adapter'
 
+
+# TODO: Switch this for a ROS_TOPIC_USER_EXERCISE_STATES ROS_TOPIC
+ROS_TOPIC_USER_EXERCISE_STATES = '/user_states'
+ROS_TOPIC_USER_CORRECTIONS = '/user_corrections'
+
 ROS_TOPIC_REPETITION_COUNTER = '/repcounter'  # Shawan topic choice: commands2user
 ROS_TOPIC_CORRECTIONS = '/corrections'
 ROS_TOPIC_WRONG_COORDINATES = '/wrongcoordinates'
+ROS_TOPIC_SECONDS_SINCE_START = '/seconds_since_start'
 
 ROS_TOPIC_CALLBACK = 'fused_skelleton' # Shawan's topic choice
+
 
 import_module(JOINT_ADAPTER_FILE)
 
@@ -53,6 +60,9 @@ import_module(JOINT_ADAPTER_FILE)
 class Comparator():
     def __init__(self):
         # Define a publisher to publish the 3D skeleton of multiple people
+        self.user_exercise_state_publisher = rp.publisher(ROS_TOPIC_USER_EXERCISE_STATES)
+
+
         self.repetition_publisher = rp.Publisher(ROS_TOPIC_REPETITION_COUNTER, String, queue_size=100)
         self.error_publisher = rp.Publisher(ROS_TOPIC_CORRECTIONS, String, queue_size=100)
         self.coordinates_publisher = rp.Publisher(ROS_TOPIC_WRONG_COORDINATES, String, queue_size=100)
@@ -132,7 +142,7 @@ class Comparator():
         #     reply.append(msg)
         # publish the markers
         # self.repetition_publisher.publish(reply)
-  
+
         
     def correct(self, angles, exercise, state):
         messages = self.checkForCorrection(angles, exercise['stages'], state)

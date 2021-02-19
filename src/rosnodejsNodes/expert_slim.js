@@ -44,9 +44,7 @@ var squats = {
 
 
 rosnodejs.initNode('/expert_slim')
-    .then(() => {
-        // do stuff
-    });
+
 const nh = rosnodejs.nh;
 var s_squats = YAML.stringify(squats);
 

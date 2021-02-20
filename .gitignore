@@ -8,3 +8,7 @@ log
 devel
 build_isolated
 devel_isolated
+src/AI/spin/extra_data
+node_modules
+package-lock.json
+bagfiles

@@ -13,7 +13,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 # Arturs Imports
 from importlib import import_module
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 import yaml
 from src.joint_adapters.spin import *
 
@@ -54,11 +54,13 @@ class Receiver():
         except KeyError as e:
             print("No exercise set under rostopic 'exercise', maybe the expert system is not running or ROS is not properly set up?")
             return
-        print("dictinary: ",current_exercise['exercise'].keys()) #Shawan get station IDs
 
         data = {'current_exercise': from_ros_parameter_server_current_exercise, 'message': message}
 
-        self.message_in_queue.put_nowait(data)
+        try:
+            self.message_in_queue.put_nowait(data)
+        except Full:
+            rp.logerr("ComparingNode message queue is full. Comparator thread(s) not dequeuing fast enough from message queue. Consider adding more Comparator threads.")
         
 
 class Sender(Thread):

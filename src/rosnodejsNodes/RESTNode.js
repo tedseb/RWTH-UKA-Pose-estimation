@@ -37,7 +37,8 @@ const express = require('express');  // Express NodeJ Web App framework
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-const pose_estimation_messages = rosnodejs.require("pose_estimation");
+const pose_estimation_messages = rosnodejs.require("backend");
+const comparing_system_messages = rosnodejs.require("comparing_system");
 const url = require('url');
 
 // Parameters and Constants:
@@ -74,7 +75,7 @@ const nh = rosnodejs.nh;
 const pub_qr = nh.advertise('/qr_exercise', StringMsg);
 
 // We use this user_state and deprecate the very first API structure "repetition"
-const user_state = nh.subscribe('/user_state', pose_estimation_messages.msg.user_state, (msg) => {
+const user_state = nh.subscribe('/user_state', comparing_system_messages.msg.user_state, (msg) => {
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(msg));
@@ -83,7 +84,7 @@ const user_state = nh.subscribe('/user_state', pose_estimation_messages.msg.user
 });
 
 // We use this user_correction and deprecate the very first API structure "corrections"
-const user_correction = nh.subscribe('/user_correction', pose_estimation_messages.msg.user_correction, (msg) => {
+const user_correction = nh.subscribe('/user_correction', comparing_system_messages.msg.user_correction, (msg) => {
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(msg));

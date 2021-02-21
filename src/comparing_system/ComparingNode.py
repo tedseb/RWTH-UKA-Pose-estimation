@@ -54,6 +54,7 @@ class Receiver():
         except KeyError as e:
             print("No exercise set under rostopic 'exercise', maybe the expert system is not running or ROS is not properly set up?")
             return
+        print("dictinary: ",current_exercise['exercise'].keys()) #Shawan get station IDs
 
         data = {'current_exercise': from_ros_parameter_server_current_exercise, 'message': message}
 

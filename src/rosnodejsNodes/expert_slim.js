@@ -46,7 +46,6 @@ var squats = {
 rosnodejs.initNode('/expert_slim')
 
 const nh = rosnodejs.nh;
-var s_squats = YAML.stringify(squats);
 
 const errors = nh.subscribe('/qr_exercise', StringMsg, (msg) => {
     //Call Reader Function to load data from database and send it to server in ms is exercise name
@@ -54,6 +53,13 @@ const errors = nh.subscribe('/qr_exercise', StringMsg, (msg) => {
     console.log(s_squats);
 });
 
-
+//Put into exercise the different exercises
+var exercises = {
+        1: squats,
+        3: squats
+}
+var s_exercises = YAML.stringify(exercises);
+nh.setParam('exercise',s_exercises); //dirty
+console.log(exercises);
 
 

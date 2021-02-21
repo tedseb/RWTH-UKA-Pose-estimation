@@ -57,7 +57,6 @@ class BodyMocap(object):
                 boxScale_o2n: bbox scaling factor (redundant) 
         """
         pred_output_list = list()
-
         for body_bbox in body_bbox_list:
             img, norm_img, boxScale_o2n, bboxTopLeft, bbox = process_image_bbox(
                 img_original, body_bbox, input_res=constants.IMG_RES)

@@ -4,5 +4,5 @@
 # The location has been resized to the desired output
 # resolution (e.g., `resolution` flag in the demo).
 
-float32 id
+Header header
 string data

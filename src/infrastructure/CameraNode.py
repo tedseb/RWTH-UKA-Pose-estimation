@@ -4,15 +4,16 @@ import cv2
 from sensor_msgs.msg import Image
 import numpy as np
 import pafy
+# from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
-url = "https://www.youtube.com/watch?v=C_VtOYc6j5c"
+url = "https://www.youtube.com/watch?v=6XpGQ2EhfUQ"             #"https://www.youtube.com/watch?v=C_VtOYc6j5c"
 video = pafy.new(url)
 best = video.getbest(preftype="mp4")
 def camera():
     pub = rospy.Publisher('image', Image, queue_size=2)
     rospy.init_node('camera', anonymous=True)
     rate = rospy.Rate(30)
-    cap = cv2.VideoCapture(0)   
+    cap = cv2.VideoCapture(10)   
     if cap is None or not cap.isOpened():
         rospy.loginfo('INFO: No webCam source. Youtube video will be used as source!')
         cap = cv2.VideoCapture()
@@ -39,6 +40,8 @@ def camera():
         rate.sleep()
 
 if __name__ == '__main__':
+        
+
     try:
         camera()
     except rospy.ROSInterruptException:

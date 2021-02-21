@@ -1,3 +1,4 @@
 <launch>
-  <node name="spin3D" pkg="spin" type="demo_bodymocap.py" />
+  <node name="objectdetection" pkg="spin" type="object_detection.py" />
+  <node name="spin3D" pkg="spin" type="run_3Dpose_estimation.py" />
 </launch> 

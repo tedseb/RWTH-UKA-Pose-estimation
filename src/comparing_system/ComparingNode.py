@@ -69,7 +69,7 @@ class Comparator():
         global current_exercise
         global ownpose_used
 
-
+        
         pose = {}
         bodyParts = msg.persons[0].bodyParts # TODO: This currently uses only the first person, which we not sustainable, as we want to track multiple people
 
@@ -78,6 +78,7 @@ class Comparator():
         except KeyError as e:
             print("No exercise set under rostopic 'exercise', maybe the expert system is not running or ROS is not properly set up?")
             return
+        print("dictinary: ",current_exercise['exercise'].keys()) #Shawan get station IDs
 
         if current_exercise['name'] not in states.keys():
             states[current_exercise['name']] = []

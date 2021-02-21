@@ -1,5 +1,0 @@
-<launch>
-  <include file="$(find infrastructure)/launch/all_cameras.launch" />
-  <node name="pose2dVis" pkg="pose_estimation" type="PoseVis2D.py" />
-</launch> 
- 

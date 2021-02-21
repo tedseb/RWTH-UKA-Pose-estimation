@@ -74,7 +74,6 @@ class RealtimeVisualization():
 
         for person in data.persons:
             marker_color = self.colors[person_counter % len(self.colors)]
-
             for bodypart in person.bodyParts:
                 if bodypart.score < 0.1:
                     continue

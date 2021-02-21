@@ -5,7 +5,7 @@
 # For questions, refer to Artur
 
 
-user_id: int16 
-repetition: int16
-positive_correction: bool
-display_text: string
+int16 user_id
+int16 repetition
+bool positive_correction
+string display_text

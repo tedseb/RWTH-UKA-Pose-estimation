@@ -5,12 +5,12 @@
 # For questions, refer to Artur
 
 
-user_id: int16
-current_exercise_name: string
-repetitions: int16
-seconds_since_last_exercise_start: int16
-milliseconds_since_last_repetition: int32
-repetition_score: int8
-exercise_score: int8
-user_position: geometry_msgs/Point32 point 
+int16 user_id
+string current_exercise_name
+int16 repetitions
+int16 seconds_since_last_exercise_start
+int32 milliseconds_since_last_repetition
+int8 repetition_score
+int8 exercise_score
+geometry_msgs/Point32 user_position
 

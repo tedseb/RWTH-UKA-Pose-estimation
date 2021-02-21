@@ -162,7 +162,7 @@ wss.on('connection', (ws, req) => {
   const my_url = URL(req.url); // TODO: @Tamer Add authorization and so on...
   const my_search_params = URLSearchParams(req.url)
 
-  if((my_uri.pathname == "/api/smartphone_app") ||= (uri.path.includes('corrections'))){ // Deprecate "corrections" paths
+  if((my_url.pathname == "/api/smartphone_app") || (my_url.path.includes('corrections'))){ // Deprecate "corrections" paths
     // Arturs connection
     SmartphoneAppClients.push(ws);
     ws.on('message', function incoming(message) {

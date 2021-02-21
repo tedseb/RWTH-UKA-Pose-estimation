@@ -54,7 +54,8 @@ add_message_files(
   Bodypart.msg
   Person.msg
   Persons.msg
-  commands.msg
+  Commands.msg
+  Bboxes.msg
 )
 
 ## Generate services in the 'srv' folder

@@ -30,18 +30,6 @@ var last30 = [];
 var lastPose = {};
 var angles = {};
 var alpha = 20;
-// var squats = {
-//     1: {
-//         leftLeg: 165,
-//         rightLeg: 165,
-//         upperBody: 165
-//     },
-//     2: {
-//         leftLeg: 90,
-//         rightLeg: 90,
-//         upperBody: 90
-//     }
-// }
 var squats = {
     stages: {
         0: { angles: {}, rules: {} },
@@ -127,15 +115,7 @@ const sub = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
     for (const [angle, points] of entries) {
         angles[angle] = calculateAngle(points);
     }
-    /* angles.leftLeg = threepointangle(pose.leftHip, pose.leftKnee, pose.leftAnkle);
-    angles.rightLeg = threepointangle(pose.rightHip, pose.rightKnee, pose.rightAnkle);
-    angles.leftArm = threepointangle(pose.leftShoulder, pose.leftElbow, pose.leftWrist);
-    angles.rightArm = threepointangle(pose.rightShoulder, pose.rightElbow, pose.rightWrist);
-    angles.upperBody = (threepointangle(pose.leftShoulder, pose.leftHip, pose.leftKnee) + threepointangle(pose.rightShoulder, pose.rightHip, pose.rightKnee)) / 2;
-    const bottomLeft = { x: pose.leftAnkle.x, y: pose.leftAnkle.y - 1, z: pose.leftAnkle.z };
-    const bottomRight = { x: pose.rightAnkle.x, y: pose.rightAnkle.y - 1, z: pose.rightAnkle.z };
-    angles.leftShin = threepointangle(pose.leftKnee, pose.leftAnkle, bottomLeft);
-    angles.rightShin = threepointangle(pose.rightKnee, pose.rightAnkle, bottomRight); */
+    
     count();
     correct();
 });
@@ -159,7 +139,6 @@ save = (obj) => {
     if (last30.length >= 30) {
         last30.shift();
         last30.push(obj);
-        //console.log(checkForStretch(last30));
     } else {
         last30.push(obj);
     }
@@ -204,28 +183,6 @@ count = () => {
             pub.publish({ data: reps.toString() })
         }
     }
-    // if (state === 0) {
-    //     if (checkforstate(angles, squats, 1)) {
-    //         states.squats.push(1);
-    //         state = 1;
-    //     }
-    // } else if (state === 1) {
-    //     if (checkforstate(angles, squats, 2)) {
-    //         states.squats.push(2);
-    //         state = 2;
-    //     }
-    // } else if (state === 2) {
-    //     if (checkforstate(angles, squats, 1)) {
-    //         states.squats.push(1);
-    //         state = 1;
-    //         reps++;
-    //         console.log(reps);
-    //         pub.publish({ data: reps.toString() })
-    //     }
-    // }
-    // if (checkforrep(states.squats)) {
-    //     //reps = checkforrep;
-    // }
 };
 
 checkForCorrection = (angles, exercise, state) => {
@@ -237,14 +194,12 @@ checkForCorrection = (angles, exercise, state) => {
             case "max":
                 if (angles[k] >= rules[k][1] + alpha) {
                     corrections += rules[k][2] + ". ";
-                    //console.log(JSON.stringify(angle_points[k]));
                     coordinats_pub.publish({ data: JSON.stringify(angle_points[k]) });
                 }
                 break;
             case "min":
                 if (angles[k] <= rules[k][1] - alpha) {
                     corrections += rules[k][2] + ". ";
-                    //console.log(JSON.stringify(angle_points[k]));
                     coordinats_pub.publish({ data: JSON.stringify(angle_points[k]) });
                 }
                 break;
@@ -254,8 +209,9 @@ checkForCorrection = (angles, exercise, state) => {
                 const b = lastPose[angle_points[k][1]]
                 const p = lastPose[angle_points[k][1]]
                 const x = lastPose[angle_points[k][2]]
-                const val_x = plane3d(a, b, p, x);
-                const val_a = plane3d(a, b, p, a);
+                const b_ = {x: b.x, y: a.y, z: b.z};
+                const val_x = plane3d(a, b_, p, x);
+                const val_a = plane3d(a, b_, p, a);
                 if(math.sign(val_x) === math.sign(val_a)) {
                     corrections += rules[k][2] + ". ";
                     coordinats_pub.publish({ data: JSON.stringify(angle_points[k]) });

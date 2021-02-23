@@ -1,21 +1,14 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-
-
 import threading
 
 import math
 import numpy as np
 import rospy as rp
 
-# Arturs Imports
 from importlib import import_module
 from collections import deque
 from threading import Thread
 import yaml
 from src.joint_adapters.spin import *
-
-# Datafields from Tamer:
 
 # TODO: What are those three?
 last_30_poses = deque()
@@ -29,16 +22,70 @@ states = dict()
 corrections = dict()
 reps = 0
 
+REDIS_MAXIMUM_PAST_QUEUE_SIZE = 1000
+
+
+
 
 class Comparator(Thread):
-    def __init__(self, message_in_queue, user_state_out_queue, user_correction_out_queue):
+    def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, exercises, redis_connection):
+        super(Comparator, self).__init__()
 
-        self.message_in_queue = message_in_queue
+        self.message_queue_load_order = message_queue_load_order
         self.user_state_out_queue = user_state_out_queue
         self.user_correction_out_queue = user_correction_out_queue
+        
+        # This datafield is filled with exercises retrieved from tamer by the ExerciseDataUpdater
+        self.exercises = exercises
+        self.redis_connection = redis_connection
+
+        self.running = True
+
+        self.start()
 
 
     def run(self):
+        while(self.running):
+            self.compare()
+
+    def compare(self):
+        # TODO: Investigate if these redis instructions can be optimized
+        # Fetch all data that is needed for the comparison:
+        try:
+            redis_spot_key = self.message_queue_load_order.popitem()[0]
+        except KeyError:
+            return
+
+        redis_spot_queue_key = redis_spot_key + ':queue'
+        redis_spot_info_key = redis_spot_key + ':info'
+        redis_spot_past_queue_key = redis_spot_queue_key + "_past"
+        joints_with_timestamp = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
+        
+        # TODO: This will only work if Tamers sets exercises
+        # spot_info_json = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
+        # exercise = spot_info_json['exercise']
+        # start_time = spot_info_json['start_time']
+
+        self.redis_connection.ltrim(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+
+        # later on, we can use the present and the past joints to 
+        # future_joints_with_timestamp_list = self.redis_connection.get(redis_spot_queue_key)
+        # past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+
+        dummy_user_state = {
+        'user_id': 1,
+        'current_exercise_name': "testexercisename",
+        'repetitions': 0,
+        'seconds_since_last_exercise_start': 1,
+        'milliseconds_since_last_repetition': 1,
+        'repetition_score': 100,
+        'exercise_score': 100,
+        'user_position': {'x':0, 'y':0, 'z': 0}
+        }
+        self.user_state_out_queue.put_nowait(dummy_user_state)
+
+
+    def old_run(self):
         self.user_state_out_queue.put(self.message_in_queue.get(timeout=1))
 
         data = self.message_in_queue.get(timeout=1)

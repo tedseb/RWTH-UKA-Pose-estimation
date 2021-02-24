@@ -1,3 +1,22 @@
+"""
+This file contains the Comparator. The comparator is a thread that handles Redis FIFO Queues that contain joints that are produced by whatever AI our System uses.
+Data that is expected by the comparator is listed below.
+
+The redis keys and values are as follows:
+    * Spot with ID N is:                <spot #N>               :(prefix for other data)
+    * Queue for spot with ID N is       <spot #N:queue>         :Redis FIFO Queue
+    * Past queue for spot with ID N is  <spot #N:queue_past>    :Redis FIFO Queue
+    * Info for spot with ID N is        <spot #N:info>          :stringified YAML
+
+The 'queue' for a spot is expected to contain a list of of dictionaries '{'bodyParts': <Bodyparts>, 'time_stamp': <header.stamp>}'.
+These dictionaries represent data not yet processed by the comparator, or 'the future'.
+
+The 'past queue' for a spot is expected to contains the dictionaries already processed, or 'the past'.
+
+The info for a spot contains additional information like timing data in a dictionary.
+"""
+
+
 import threading
 
 import math
@@ -9,6 +28,7 @@ from collections import deque
 from threading import Thread
 import yaml
 from src.joint_adapters.spin import *
+from src.config import *
 
 # TODO: What are those three?
 last_30_poses = deque()
@@ -21,10 +41,6 @@ state = 0
 states = dict()
 corrections = dict()
 reps = 0
-
-REDIS_MAXIMUM_PAST_QUEUE_SIZE = 1000
-
-
 
 
 class Comparator(Thread):
@@ -46,46 +62,73 @@ class Comparator(Thread):
 
     def run(self):
         while(self.running):
-            self.compare()
+            try:
+                data = self.get_data()
+            except Exception as e:
+                rp.logerr("Error getting data in the comparator: " + str(e))
+            try:
+                # info = self.compare(data)
+                info = None
+            except Exception as e:
+                rp.logerr("Error comparing data in the comparator: " + str(e))
+            try:
+                self.send_info(info)
+            except Exception as e:
+                raise(e)
+                rp.logerr("Error sending data in the comparator: " + str(e))
+                
+            
 
-    def compare(self):
+    def get_data(self):
         # TODO: Investigate if these redis instructions can be optimized
         # Fetch all data that is needed for the comparison:
         try:
-            redis_spot_key = self.message_queue_load_order.popitem()[0]
+            redis_spot_key, redis_spot_queue_length = self.message_queue_load_order.popitem()
         except KeyError:
             return
 
         redis_spot_queue_key = redis_spot_key + ':queue'
         redis_spot_info_key = redis_spot_key + ':info'
         redis_spot_past_queue_key = redis_spot_queue_key + "_past"
+        
         joints_with_timestamp = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
         
-        # TODO: This will only work if Tamers sets exercises
-        # spot_info_json = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
-        # exercise = spot_info_json['exercise']
-        # start_time = spot_info_json['start_time']
+        spot_info_dict = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
+        exercise = spot_info_dict['exercise']
+        start_time = spot_info_dict['start_time']
 
         self.redis_connection.ltrim(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
 
-        # later on, we can use the present and the past joints to 
-        # future_joints_with_timestamp_list = self.redis_connection.get(redis_spot_queue_key)
-        # past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        future_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+
+        return spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
+
+    def send_info(self, info):
+
+        dummy_user_info = {
+            'user_id': 1,
+            'repetition': 0,
+            'positive_correction': False,
+            'display_text': "Hi Orhan"
+        }
 
         dummy_user_state = {
-        'user_id': 1,
-        'current_exercise_name': "testexercisename",
-        'repetitions': 0,
-        'seconds_since_last_exercise_start': 1,
-        'milliseconds_since_last_repetition': 1,
-        'repetition_score': 100,
-        'exercise_score': 100,
-        'user_position': {'x':0, 'y':0, 'z': 0}
+            'user_id': 1,
+            'current_exercise_name': "testexercisename",
+            'repetitions': 0,
+            'seconds_since_last_exercise_start': 1,
+            'milliseconds_since_last_repetition': 1,
+            'repetition_score': 100,
+            'exercise_score': 100,
+            'user_position': {'x':0, 'y':0, 'z': 0}
         }
-        self.user_state_out_queue.put_nowait(dummy_user_state)
+        
+        self.redis_connection.lpush(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(dummy_user_state))
+        self.redis_connection.lpush(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(dummy_user_info))
 
 
-    def old_run(self):
+    def compare(self, data):
         self.user_state_out_queue.put(self.message_in_queue.get(timeout=1))
 
         data = self.message_in_queue.get(timeout=1)

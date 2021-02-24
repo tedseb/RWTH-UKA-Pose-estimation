@@ -4,9 +4,8 @@ const StringMsg = rosnodejs.require('std_msgs').msg.String;
 
 var squats = {
     name: 'squats',
-    stages: {
-        0: { angles: {}, rules: {} },
-        1: {
+    stages: [
+        {
             angles: {
                 leftLeg: 165,
                 rightLeg: 165,
@@ -17,7 +16,7 @@ var squats = {
             },
             name: "Anfangsposition"
         },
-        2: {
+        {
             angles: {
                 leftLeg: 125,
                 rightLeg: 125,
@@ -26,7 +25,7 @@ var squats = {
             rules: {},
             name: "Transition"
         },
-        3: {
+        {
             angles: {
                 leftLeg: 90,
                 rightLeg: 90,
@@ -38,9 +37,8 @@ var squats = {
             },
             name: "Hocke"
         }
-    }
+    ]
 }
-
 
 
 rosnodejs.initNode('/expert_slim')
@@ -55,9 +53,12 @@ const errors = nh.subscribe('/qr_exercise', StringMsg, (msg) => {
 
 //Put into exercise the different exercises
 var exercises = {
-        1: squats,
-        3: squats
+        '0.0': squats,
+        '1.0': squats
 }
+
+console.log(exercises)
+
 var s_exercises = YAML.stringify(exercises);
 nh.setParam('exercise',s_exercises); //dirty
 console.log(exercises);

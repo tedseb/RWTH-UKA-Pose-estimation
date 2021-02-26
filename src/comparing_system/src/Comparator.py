@@ -30,6 +30,16 @@ import yaml
 from src.joint_adapters.spin import *
 from src.config import *
 
+import traceback 
+
+
+#Old imports 
+
+from backend.msg import Persons
+from geometry_msgs.msg import Vector3, Point
+from std_msgs.msg import String
+from visualization_msgs.msg import Marker, MarkerArray
+
 # TODO: What are those three?
 last_30_poses = deque()
 lastPose = {}
@@ -63,18 +73,19 @@ class Comparator(Thread):
     def run(self):
         while(self.running):
             try:
-                data = self.get_data()
+                spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.get_data()
             except Exception as e:
+                traceback.print_exc() 
                 rp.logerr("Error getting data in the comparator: " + str(e))
             try:
-                # info = self.compare(data)
-                info = None
+                info = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
             except Exception as e:
+                traceback.print_exc() 
                 rp.logerr("Error comparing data in the comparator: " + str(e))
             try:
                 self.send_info(info)
             except Exception as e:
-                raise(e)
+                traceback.print_exc() 
                 rp.logerr("Error sending data in the comparator: " + str(e))
                 
             
@@ -85,13 +96,14 @@ class Comparator(Thread):
         try:
             redis_spot_key, redis_spot_queue_length = self.message_queue_load_order.popitem()
         except KeyError:
+            # Supposingly, no message queue is holding any value (at the start of the system)
             return
 
         redis_spot_queue_key = redis_spot_key + ':queue'
         redis_spot_info_key = redis_spot_key + ':info'
         redis_spot_past_queue_key = redis_spot_queue_key + "_past"
         
-        joints_with_timestamp = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
+        joints_with_timestamp = yaml.load(self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key))
         
         spot_info_dict = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
         exercise = spot_info_dict['exercise']
@@ -128,13 +140,12 @@ class Comparator(Thread):
         self.redis_connection.lpush(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(dummy_user_info))
 
 
-    def compare(self, data):
-        self.user_state_out_queue.put(self.message_in_queue.get(timeout=1))
-
-        data = self.message_in_queue.get(timeout=1)
-
-        current_exercise = data['current_exercise']
-        message = data['message']
+    def compare(self, spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list):
+        global lastPose
+        current_exercise = spot_info_dict['exercise']
+        
+        joints = joints_with_timestamp['joints']
+        timestamp = joints_with_timestamp['timestamp']
 
         if current_exercise['name'] not in states.keys():
             states[current_exercise['name']] = []
@@ -142,16 +153,14 @@ class Comparator(Thread):
         if current_exercise['name'] not in corrections.keys():
             corrections[current_exercise['name']] = {1: "", 2: ""}
 
-
         pose = {}
-        bodyParts = msg.persons[0].bodyParts # TODO: This currently uses only the first person, which we not sustainable, as we want to track multiple people
 
         for index in ownpose_used:
             point = Point()
             # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-            point.x = bodyParts[index].point.x
-            point.y = bodyParts[index].point.z
-            point.z = bodyParts[index].point.y
+            point.x = joints[index].point.x
+            point.y = joints[index].point.z
+            point.z = joints[index].point.y
             pose[joint_labels[index]] = point
 
         # This corresponds to Tamers "save" method
@@ -161,7 +170,7 @@ class Comparator(Thread):
             last_30_poses.popleft()
             # console.log(checkForStretch(last30)) # TODO: This is nodejs code from Tamer, find out what it does
 
-        for angle, points in joints.items():
+        for angle, points in angle_joints_mapping.items():
             angles[angle] = calculateAngle(points)
         
         # The following commented out code is not Python, but leftovers from Tamer for completeness
@@ -175,25 +184,8 @@ class Comparator(Thread):
         # angles.leftShin = threepointangle(pose.leftKnee, pose.leftAnkle, bottomLeft);
         # angles.rightShin = threepointangle(pose.rightKnee, pose.rightAnkle, bottomRight); *
 
-        self.count()
-        self.correct(angles, current_exercise, str(state))
-
-
-        # This code was initially written by Shawan when he passed the code to me but does not fit what Tamer did
-        # reply = list()
-        # for idx, person in range(len(msg.persons)), msg.persons:  # TODO: Check if this works
-        #     print("--------------------------------------")
-        #     print("Persons: ")
-        #     for bodypart in person.bodyParts:
-        #         print(bodypart)
-        #         # Use for your calculation for example this: bodypart.point.x, bodypart.point.y , bodypart.point.z
-        #         msg = commands()
-        #         msg.id = idx  # Not sure if self.frame_callback or only id is the correct choice for the skelleton definition
-        #         msg.data = "test"
-        #     reply.append(msg)
-        # publish the markers
-        # self.repetition_publisher.publish(reply)
-
+        self.count(current_exercise)
+        self.correct(angles, current_exercise, state)
         
     def correct(self, angles, exercise, state):
         messages = self.checkForCorrection(angles, exercise['stages'], state)
@@ -217,37 +209,37 @@ class Comparator(Thread):
                 if (angles[key] >= rules[key][1] + alpha):
                     corrections += rules[key][2] + ". "
                     # console.log(JSON.stringify(angle_points[k]))
-                    self.coordinates_publisher.publish(str(joints[key]))
+                    self.coordinates_publisher.publish(str(angle_joints_mapping[key]))
             elif rule == "min":
                 if (angles[key] <= rules[key][1] - alpha):
                     corrections += rules[key][2] + ". "
                     # console.log(JSON.stringify(angle_points[k]))
-                    self.coordinates_publisher.publish(str(joints[key]))
+                    self.coordinates_publisher.publish(str(angle_joints_mapping[key]))
             elif rule == "behind":
                 # a: 0, b: 1, p: 1, x: 2
-                a = lastPose[joints[key][0]]
-                b = lastPose[joints[key][1]]
-                p = lastPose[joints[key][1]]
-                x = lastPose[joints[key][2]]
+                a = lastPose[angle_joints_mapping[key][0]]
+                b = lastPose[angle_joints_mapping[key][1]]
+                p = lastPose[angle_joints_mapping[key][1]]
+                x = lastPose[angle_joints_mapping[key][2]]
                 val_x = plane3d(a, b, p, x)
                 val_a = plane3d(a, b, p, a)
                 if (math.copysign(1, val_x) == math.copysign(1, val_a)):
                     corrections += rules[key][2] + ". "
-                    self.coordinates_publisher.publish(str(joints[key]))
+                    self.coordinates_publisher.publish(str(angle_joints_mapping[key]))
         return corrections
 
-    def count(self):
+    def count(self, current_exercise):
         # TODO: Get these global Variables into a class
         global state
         global reps
         global states
 
-        if state < 3 and checkforstate(angles, current_exercise, str(state + 1)):
+        if state < 3 and checkforstate(angles, current_exercise, state + 1):
             # states.squats.push(states + 1)
             state += 1
         
         if (state == 3):
-            if (checkforstate(angles, current_exercise, str(1))):
+            if (checkforstate(angles, current_exercise, 1)):
                 states['squats'].append(1)
                 state = 1
                 reps += 1
@@ -316,10 +308,10 @@ def checkForStretch(arr):
     lastAngles = {}
     currentAngles = {}
     differences = {}
-    for key in joints.keys():
+    for key in angle_joints_mapping.keys():
         differences[key] = []
     for element in arr:
-        for angle, points in joints:
+        for angle, points in angle_joints_mapping:
             currentAngles[angle] = calculateAngle(points)
         if (lastAngles):
             for key in lastAngles.keys():

@@ -11,6 +11,7 @@ from threading import Thread
 from importlib import import_module
 from queue import Queue, Empty, Full
 from collections import OrderedDict
+from rospy_message_converter import message_converter
 
 from comparing_system.msg import user_state, user_correction
 from backend.msg import Persons
@@ -25,6 +26,7 @@ from src.config import *
 
 # db 0 is our (comparing node) database
 # TODO: Use a connection pool
+# TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
 redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0)
 
 
@@ -46,12 +48,14 @@ class Receiver():
         It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
         '''
 
+        # TODO: Change all these ROS messages to python dicts
+
         # For every person in the image, sort their data into the correction spot queue in redis
         for p in message.persons:
             redis_spot_key = 'spot #' + str(p.stationID)
             redis_spot_queue_key = redis_spot_key + ':queue'
-            joints_with_timestamp = {'bodyParts': p.bodyParts, 'timestamp': message.header.stamp}
-            queue_size = redis_connection.rpush(redis_spot_queue_key, str(joints_with_timestamp)) # TODO: Use serialized bodyparts here (see above)
+            joints_with_timestamp = {'joints': p.bodyParts, 'timestamp': message.header.stamp}   # Get away from messages here, towards a simple dict
+            queue_size = redis_connection.rpush(redis_spot_queue_key, yaml.dump(joints_with_timestamp)) # TODO: Use serialized bodyparts here (see above)
 
             if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
                 if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):

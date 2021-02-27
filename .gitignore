@@ -12,3 +12,4 @@ src/AI/spin/extra_data
 node_modules
 package-lock.json
 bagfiles
+package-lock.json

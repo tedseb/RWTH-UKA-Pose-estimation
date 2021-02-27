@@ -172,6 +172,14 @@ if __name__ == '__main__':
 
     rp.on_shutdown(kill_threads)
 
+    # TEST CODE, REMOVE AS SOON A TAMER PUBLISHES EXERCISES
+    publisher = rp.Publisher(ROS_EXERCISES_CHANGE_TOPIC, String, queue_size=10)
+    message = 'exercise'
+    import time
+    for i in range(3):
+        time.sleep(0.3)
+        publisher.publish(message)
+
     rp.spin()
 
  

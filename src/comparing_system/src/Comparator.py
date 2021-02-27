@@ -248,12 +248,14 @@ class Comparator(Thread):
 
         if state < 2 and checkforstate(angles, current_exercise, state + 1):
             state += 1
-        
-        if (state == current_exercise['stages']):
+
+        if (state >= len(current_exercise['stages']) - 1):
             if (checkforstate(angles, current_exercise, 0)):
                 state = 0
                 reps += 1
+                rp.logerr(reps)
                 return reps
+        return 
 
 def calculateAngle(array):
     # Tamer used this function to calculate the angle between left hip, l knee and big toe

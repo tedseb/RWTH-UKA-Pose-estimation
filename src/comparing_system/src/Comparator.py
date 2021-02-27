@@ -131,7 +131,7 @@ class Comparator(Thread):
         if correction != None:
             user_info_message = {
                 'user_id': 0,
-                'repetition': repetitions,
+                'repetition': updated_repetitions,
                 'positive_correction': False,
                 'display_text': correction
             }
@@ -141,7 +141,7 @@ class Comparator(Thread):
             user_state_message = {
                 'user_id': 0,
                 'current_exercise_name': spot_info_dict.get('exercise').get('name'),
-                'repetitions': repetitions,
+                'repetitions': updated_repetitions,
                 'seconds_since_last_exercise_start': (rp.Time.now() - spot_info_dict.get('start_time')).to_sec(),
                 'milliseconds_since_last_repetition': 0,
                 'repetition_score': 100,
@@ -233,12 +233,14 @@ class Comparator(Thread):
 
         if state < 2 and checkforstate(angles, current_exercise, state + 1):
             state += 1
-        
-        if (state == current_exercise['stages']):
+
+        if (state >= len(current_exercise['stages']) - 1):
             if (checkforstate(angles, current_exercise, 0)):
                 state = 0
                 reps += 1
+                rp.logerr(reps)
                 return reps
+        return 
 
 def calculateAngle(array):
     # Tamer used this function to calculate the angle between left hip, l knee and big toe

@@ -99,6 +99,7 @@ class Sender(Thread):
                 continue
             try:
                 # Unpack message dict and error out if it contains bad fields
+                rp.loginfo("Sending message: " + str)
                 self.publisher.publish(**message)
                 rp.loginfo("Sent message: " + str(message))
             except Exception as e:
@@ -107,7 +108,7 @@ class Sender(Thread):
                 
 
 
-class StationInfoHandler():
+class SpotInfoHandler():
     """
     This class waits for updates on the spots, such as a change of exercises that the spot.
     Such changes are written into the spot information .json via Redis.
@@ -152,7 +153,7 @@ if __name__ == '__main__':
     # Put queue lengths with queue names here
     message_queue_load_order = OrderedDict()
 
-    # This dictionary is shared between the ExerciseDataUpdater and the comparators to update all comparators on spots and exrcises
+    # This dictionary is shared between the SpotInfoHandler and the comparators to update all comparators on spots and exrcises
     spots = dict()
 
     # Spawn a couple of Comparator threads
@@ -163,7 +164,7 @@ if __name__ == '__main__':
 
     receiver = Receiver(message_queue_load_order)
 
-    station_info_handler = StationInfoHandler(spots)
+    spot_info_handler = SpotInfoHandler(spots)
 
     def kill_threads():
         all_threads = comparators + [user_state_sender, user_correction_sender]

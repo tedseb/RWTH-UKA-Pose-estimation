@@ -39,6 +39,9 @@ reps = 0
 class NoJointsAvailable(Exception):
     pass
 
+class NoSpotInfoAvailable(Exception):
+    pass
+
 class Comparator(Thread):
     def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, exercises, redis_connection_pool):
         super(Comparator, self).__init__()
@@ -66,6 +69,8 @@ class Comparator(Thread):
             try:
                 spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.get_data()
             except NoJointsAvailable:
+                continue
+            except NoSpotInfoAvailable:
                 continue
             except Exception as e:
                 traceback.print_exc() 
@@ -101,8 +106,12 @@ class Comparator(Thread):
             raise NoJointsAvailable
 
         joints_with_timestamp = yaml.load(joinsts_with_timestamp_yaml)
-        
-        spot_info_dict = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
+
+        redis_spot_info_yaml = self.redis_connection.get(redis_spot_info_key)
+        if redis_spot_info_yaml == None:
+            raise NoSpotInfoAvailable
+
+        spot_info_dict = yaml.load(redis_spot_info_yaml) # TODO: Switch from using yaml to Rejson
         exercise = spot_info_dict['exercise']
         start_time = spot_info_dict['start_time']
 

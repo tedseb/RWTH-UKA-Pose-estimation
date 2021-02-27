@@ -113,9 +113,9 @@ class SpotInfoHandler():
     This class waits for updates on the spots, such as a change of exercises that the spot.
     Such changes are written into the spot information .json via Redis.
     """
-    def __init__(self, spots):
+    def __init__(self):
         self.subscriber = rp.Subscriber(ROS_EXERCISES_CHANGE_TOPIC, String, self.callback)
-        self.spots = spots
+        self.spots = dict()
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)        
 
     def callback(self, name_parameter_containing_exercises):
@@ -143,8 +143,8 @@ if __name__ == '__main__':
 
     # TODO: Do not hardcode maxsize
     # Both queues contain dictionaries that can easily converted to YAML to be pusblished via ROS
-    user_state_out_queue = Queue(maxsize=1000)
-    user_correction_out_queue = Queue(maxsize=1000)
+    user_state_out_queue = Queue(maxsize=QUEUEING_USER_STATE_QUEUE_SIZE_MAX)
+    user_correction_out_queue = Queue(maxsize=QUEUEING_USER_INFO_QUEUE_SIZE_MAX)
 
     # Define a publisher to publish the data for all users to the REST Node
     user_state_sender = Sender(ROS_TOPIC_USER_EXERCISE_STATES, user_state, REDIS_USER_STATE_SENDING_QUEUE_NAME)
@@ -153,22 +153,19 @@ if __name__ == '__main__':
     # Put queue lengths with queue names here
     message_queue_load_order = OrderedDict()
 
-    # This dictionary is shared between the SpotInfoHandler and the comparators to update all comparators on spots and exrcises
-    spots = dict()
-
     # Spawn a couple of Comparator threads
-    # TODO: Possibly distribute for load balancing
     comparators = []
     for i in range(NUMBER_OF_COMPARATOR_THREADS):
-        comparators.append(Comparator(message_queue_load_order, user_state_out_queue, user_correction_out_queue, spots, redis_connection_pool))
+        comparators.append(Comparator(message_queue_load_order, user_state_out_queue, user_correction_out_queue, redis_connection_pool))
 
     receiver = Receiver(message_queue_load_order)
 
-    spot_info_handler = SpotInfoHandler(spots)
+    spot_info_handler = SpotInfoHandler()
 
     def kill_threads():
         all_threads = comparators + [user_state_sender, user_correction_sender]
         for t in all_threads:
+            # TODO: We can not use thread.join() for some reason, envestigate why
             t.running = False
 
     rp.on_shutdown(kill_threads)
@@ -178,7 +175,7 @@ if __name__ == '__main__':
     message = 'exercise'
     import time
     for i in range(3):
-        time.sleep(0.3)
+        time.sleep(0.9)
         publisher.publish(message)
 
     rp.spin()

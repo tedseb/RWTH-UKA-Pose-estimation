@@ -1,3 +1,8 @@
+"""
+This file contains the adapter data for the spin paper.
+"""
+
+
 ditw = ['nose', 'leftShoulder', 'rightShoulder',
     'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
     'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle',
@@ -22,3 +27,5 @@ angle_joints_mapping = {
     'rightShin': ['OP_R_Knee', 'OP_R_Ankle'],
     'upperBody': ['OP_R_Shoulder', 'OP_R_Hip', 'OP_R_Knee', 'OP_L_Shoulder', 'OP_L_Hip', 'OP_L_Knee']
 }
+
+center_of_body_label = 'Pelvis_MPII'

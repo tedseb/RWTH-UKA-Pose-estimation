@@ -4,18 +4,18 @@ This file contains the Comparator.
 
 
 import threading
-
 import math
-import numpy as np
 import rospy as rp
 import redis
+import yaml
 
 from importlib import import_module
 from collections import deque
 from threading import Thread
-import yaml
+
 from src.joint_adapters.spin import *
 from src.config import *
+from src.Queueing import *
 
 import traceback 
 
@@ -43,17 +43,22 @@ class NoSpotInfoAvailable(Exception):
     pass
 
 class Comparator(Thread):
-    def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, exercises, redis_connection_pool):
+    """
+    The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
+    """
+    def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, redis_connection_pool, spot_queue_interface=None):
         super(Comparator, self).__init__()
 
         self.message_queue_load_order = message_queue_load_order
         self.user_state_out_queue = user_state_out_queue
         self.user_correction_out_queue = user_correction_out_queue
         
-        # This datafield is filled with exercises retrieved from tamer by the ExerciseDataUpdater
-        self.exercises = exercises
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
+        # TODO: Integrate this interface into the comparator after the alpha
+        self.spot_queue_interface = spot_queue_interface
+
+        # This can be set to false by an external entity to stop the loop from running
         self.running = True
 
         self.start()
@@ -68,9 +73,7 @@ class Comparator(Thread):
         while(self.running):
             try:
                 spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.get_data()
-            except NoJointsAvailable:
-                continue
-            except NoSpotInfoAvailable:
+            except QueueEmpty:
                 continue
             except Exception as e:
                 traceback.print_exc() 
@@ -87,13 +90,18 @@ class Comparator(Thread):
                 rp.logerr("Error sending data in the comparator: " + str(e))    
             
     def get_data(self):
+        """
+        This method gets information from inbound queues, checks for errors like empty queues and returns information if any is present
+        """
         # TODO: Investigate if these redis instructions can be optimized
         # Fetch all data that is needed for the comparison:
         try:
-            redis_spot_key, redis_spot_queue_length = self.message_queue_load_order.popitem()
+            # Always get the element with the longest queue
+            # TODO: Establish a fair algorithm for this
+            redis_spot_key, redis_spot_queue_length = self.message_queue_load_order[0]
         except KeyError:
             # Supposingly, no message queue is holding any value (at the start of the system)
-            raise NoJointsAvailable
+            raise QueueEmpty
 
         redis_spot_queue_key = redis_spot_key + ':queue'
         redis_spot_info_key = redis_spot_key + ':info'
@@ -105,7 +113,7 @@ class Comparator(Thread):
                 raise KeyError
         except KeyError:
             # Supposingly, no message queue is holding any value (at the start of the system)
-            raise NoJointsAvailable
+            raise QueueEmpty
     
         joints_with_timestamp = yaml.load(joinsts_with_timestamp_yaml)
 
@@ -125,13 +133,16 @@ class Comparator(Thread):
         return spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
 
     def send_info(self, info, spot_info_dict):
+        """
+        This method packs information that occurs in the process of analyzing the joint- and exercise-data into messages and enques them into an sending queue.
+        """
 
-        updated_repetitions, correction = info
+        updated_repetitions, correction, center_of_body = info
 
         if correction != None:
             user_info_message = {
                 'user_id': 0,
-                'repetition': repetitions,
+                'repetition': updated_repetitions,
                 'positive_correction': False,
                 'display_text': correction
             }
@@ -141,12 +152,12 @@ class Comparator(Thread):
             user_state_message = {
                 'user_id': 0,
                 'current_exercise_name': spot_info_dict.get('exercise').get('name'),
-                'repetitions': repetitions,
+                'repetitions': updated_repetitions,
                 'seconds_since_last_exercise_start': (rp.Time.now() - spot_info_dict.get('start_time')).to_sec(),
                 'milliseconds_since_last_repetition': 0,
                 'repetition_score': 100,
                 'exercise_score': 100,
-                'user_position': {'x':0, 'y':0, 'z': 0}
+                'user_position': {'x':center_of_body.x, 'y':center_of_body.y, 'z': center_of_body.z}
             }
             self.redis_connection.lpush(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
         
@@ -184,7 +195,11 @@ class Comparator(Thread):
 
         updated_repetitions = self.count(current_exercise)
         correction = self.correct(angles, current_exercise, state)
-        return updated_repetitions, correction
+
+        # We define the center of the body as the pelvis
+        center_of_body = pose[center_of_body_label]
+
+        return updated_repetitions, correction, center_of_body
 
         
     def correct(self, angles, exercise, state):

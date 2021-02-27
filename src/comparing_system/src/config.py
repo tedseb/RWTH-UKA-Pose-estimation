@@ -21,5 +21,15 @@ STATION_QUEUE_SIZE_MINIMUM = 0
 REDIS_USER_STATE_SENDING_QUEUE_NAME = "user_state_sending_queue"
 REDIS_USER_INFO_SENDING_QUEUE_NAME = "user_info_sending_queue"
 
-if STATION_QUEUE_SIZE_MINIMUM >= REDIS_MAXIMUM_QUEUE_SIZE:
-    raise Exception("The minimum spot queue size can not be longer than the maximum queue size of the spot's Redis queue.")
+QUEUEING_USER_STATE_QUEUE_SIZE_MAX = 100
+QUEUEING_USER_INFO_QUEUE_SIZE_MAX = 100
+
+assert STATION_QUEUE_SIZE_MINIMUM <= REDIS_MAXIMUM_QUEUE_SIZE
+
+
+
+# Incase other people want to use the same redis database, better use a prefix for keys so our data does not collide
+REDIS_GENERAL_PREFIX = "ComparingSystem:"
+REDIS_SPOT_QUEUE_POSTFIX = ":queue"
+REDIS_SPOT_PAST_QUEUE_POSTFIX = ":queue_past"
+REDIS_SPOT_INFO_POSTFIX = ":info"

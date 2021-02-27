@@ -99,7 +99,7 @@ class Sender(Thread):
                 continue
             try:
                 # Unpack message dict and error out if it contains bad fields
-                rp.loginfo("Sending message: " + str)
+                rp.loginfo("Sending message: " + str(message))
                 self.publisher.publish(**message)
                 rp.loginfo("Sent message: " + str(message))
             except Exception as e:

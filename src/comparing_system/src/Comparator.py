@@ -101,10 +101,12 @@ class Comparator(Thread):
         
         try:
             joinsts_with_timestamp_yaml = self.redis_connection.rpop(redis_spot_queue_key) # self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
+            if not joinsts_with_timestamp_yaml:
+                raise KeyError
         except KeyError:
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise NoJointsAvailable
-
+    
         joints_with_timestamp = yaml.load(joinsts_with_timestamp_yaml)
 
         redis_spot_info_yaml = self.redis_connection.get(redis_spot_info_key)
@@ -124,9 +126,9 @@ class Comparator(Thread):
 
     def send_info(self, info, spot_info_dict):
 
-        repetitions, correction = info
+        updated_repetitions, correction = info
 
-        if correction:
+        if correction != None:
             user_info_message = {
                 'user_id': 0,
                 'repetition': repetitions,
@@ -135,17 +137,18 @@ class Comparator(Thread):
             }
             self.redis_connection.lpush(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(user_info_message))
         
-        user_state_message = {
-            'user_id': 0,
-            'current_exercise_name': spot_info_dict.get('exercise').get('name'),
-            'repetitions': repetitions,
-            'seconds_since_last_exercise_start': (rp.Time.now() - spot_info_dict.get('start_time')).to_sec(),
-            'milliseconds_since_last_repetition': 0,
-            'repetition_score': 100,
-            'exercise_score': 100,
-            'user_position': {'x':0, 'y':0, 'z': 0}
-        }
-        self.redis_connection.lpush(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
+        if updated_repetitions != None:
+            user_state_message = {
+                'user_id': 0,
+                'current_exercise_name': spot_info_dict.get('exercise').get('name'),
+                'repetitions': repetitions,
+                'seconds_since_last_exercise_start': (rp.Time.now() - spot_info_dict.get('start_time')).to_sec(),
+                'milliseconds_since_last_repetition': 0,
+                'repetition_score': 100,
+                'exercise_score': 100,
+                'user_position': {'x':0, 'y':0, 'z': 0}
+            }
+            self.redis_connection.lpush(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
         
 
 
@@ -179,9 +182,9 @@ class Comparator(Thread):
         for angle, points in angle_joints_mapping.items():
             angles[angle] = calculateAngle(points)
 
-        repetitions = self.count(current_exercise)
+        updated_repetitions = self.count(current_exercise)
         correction = self.correct(angles, current_exercise, state)
-        return repetitions, correction
+        return updated_repetitions, correction
 
         
     def correct(self, angles, exercise, state):
@@ -220,6 +223,9 @@ class Comparator(Thread):
         return corrections
 
     def count(self, current_exercise):
+        """
+        Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
+        """
         
         # TODO: Get these global Variables into a class
         global state
@@ -232,7 +238,7 @@ class Comparator(Thread):
             if (checkforstate(angles, current_exercise, 0)):
                 state = 0
                 reps += 1
-        return reps
+                return reps
 
 def calculateAngle(array):
     # Tamer used this function to calculate the angle between left hip, l knee and big toe

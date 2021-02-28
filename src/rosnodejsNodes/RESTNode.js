@@ -76,18 +76,20 @@ const pub_qr = nh.advertise('/qr_exercise', StringMsg);
 
 // We use this user_state and deprecate the very first API structure "repetition"
 const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
+  const data = msg[data];
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({topic: "user_state", data: msg}));
+      client.send(JSON.stringify({topic: "user_state", data: data}));
     };
   });
 });
 
 // We use this user_correction and deprecate the very first API structure "corrections"
 const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
+  const data = msg[data];
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({topic: "user_correction", data: msg}));
+      client.send(JSON.stringify({topic: "user_correction", data: data}));
     };
   });
 });
@@ -174,5 +176,5 @@ wss.on('connection', (ws, req) => {
     // Tamers connection
     coordinateClients.push(ws);
   }
-  ws.send(JSON.stringify({topic: 'user_correction', data: {display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage"}}));
+  ws.send(JSON.stringify({topic: 'start', data: {display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage"}}));
 });

@@ -98,7 +98,7 @@ class Comparator(Thread):
         try:
             # Always get the element with the longest queue
             # TODO: Establish a fair algorithm for this
-            redis_spot_key, redis_spot_queue_length = self.message_queue_load_order[0]
+            redis_spot_key, redis_spot_queue_length = self.message_queue_load_order.popitem(last=False)
         except KeyError:
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise QueueEmpty
@@ -139,10 +139,12 @@ class Comparator(Thread):
 
         updated_repetitions, correction, center_of_body = info
 
+        global reps
+
         if correction != None:
             user_info_message = {
                 'user_id': 0,
-                'repetition': updated_repetitions,
+                'repetition': reps,
                 'positive_correction': False,
                 'display_text': correction
             }

@@ -75,19 +75,19 @@ const nh = rosnodejs.nh;
 const pub_qr = nh.advertise('/qr_exercise', StringMsg);
 
 // We use this user_state and deprecate the very first API structure "repetition"
-const user_state = nh.subscribe('/user_state', comparing_system_messages.msg.user_state, (msg) => {
+const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(msg));
+      client.send(JSON.stringify({topic: "user_state", data: msg}));
     };
   });
 });
 
 // We use this user_correction and deprecate the very first API structure "corrections"
-const user_correction = nh.subscribe('/user_correction', comparing_system_messages.msg.user_correction, (msg) => {
+const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(msg));
+      client.send(JSON.stringify({topic: "user_correction", data: msg}));
     };
   });
 });
@@ -160,12 +160,12 @@ app.get('/api/wrongCoordinates', (req, res) => {
 
 // Add new client connections
 wss.on('connection', (ws, req) => {
-  const my_url = URL(req.url); // TODO: @Tamer Add authorization and so on...
-  const my_search_params = URLSearchParams(req.url)
+  const location = url.parse(req.url, true);
 
-  if((my_url.pathname == "/api/smartphone_app") || (my_url.path.includes('corrections'))){ // Deprecate "corrections" paths
+  if((location.path.includes('corrections'))){ // Deprecate "corrections" paths
     // Arturs connection
     SmartphoneAppClients.push(ws);
+    console.log("Orhan hat sich verbunden :)");
     ws.on('message', function incoming(message) {
       pub_qr.publish({ data: message })  // Refine this
       console.log('received: %s', message); //json squats
@@ -174,6 +174,5 @@ wss.on('connection', (ws, req) => {
     // Tamers connection
     coordinateClients.push(ws);
   }
-
-  ws.send(JSON.stringify({action: 'ubung', info: 'Übung wird gestartet. Viel Erfolg!', bool: true, id: "StartMessage"}));
+  ws.send(JSON.stringify({topic: 'user_correction', data: {display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage"}}));
 });

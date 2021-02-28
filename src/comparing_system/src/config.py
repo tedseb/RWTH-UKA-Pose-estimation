@@ -5,14 +5,14 @@ This file contains some parameters to our ComparingNode, such as ROS Topic names
 
 DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
 
-ROS_TOPIC_USER_EXERCISE_STATES = '/user_states'
-ROS_TOPIC_USER_CORRECTIONS = '/user_corrections'
+ROS_TOPIC_USER_EXERCISE_STATES = '/user_state'
+ROS_TOPIC_USER_CORRECTIONS = '/user_correction'
 
 ROS_JOINTS_TOPIC = 'fused_skelleton' # Shawan's topic choice
 ROS_EXERCISES_CHANGE_TOPIC = 'changeme' # TODO: Change this from tamer
 ROS_SKELLETON_DEFINITION = 'skelleton_name'
 
-NUMBER_OF_COMPARATOR_THREADS = 1
+NUMBER_OF_COMPARATOR_THREADS = 4
 
 REDIS_MAXIMUM_QUEUE_SIZE = 100
 REDIS_MAXIMUM_PAST_QUEUE_SIZE = 100

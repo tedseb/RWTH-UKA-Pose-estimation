@@ -76,7 +76,7 @@ class Sender(Thread):
     """
     def __init__(self, publisher_topic, message_type, redis_sending_queue_name):
         super(Sender, self).__init__()
-        self.publisher = rp.Publisher(publisher_topic, message_type, queue_size=1000)    
+        self.publisher = rp.Publisher(publisher_topic, String, queue_size=1000)    
         self.redis_sending_queue_name = redis_sending_queue_name
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)  
 
@@ -99,7 +99,7 @@ class Sender(Thread):
                 continue
             try:
                 # Unpack message dict and error out if it contains bad fields
-                self.publisher.publish(**message)
+                self.publisher.publish(json.dumps(message))
                 rp.logerr("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)

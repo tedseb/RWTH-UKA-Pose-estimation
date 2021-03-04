@@ -14,6 +14,10 @@ const uri = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin";
 
 const client = new MongoClient(uri);
 
+// MongoClient.connect(uri, (err, client) => {
+
+// });
+
 
 async function run() {
   try {
@@ -22,19 +26,17 @@ async function run() {
     const exercises = db.collection("exercises");
 
     nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
-      try {
-        const qr = { name: msg };
-        var result = await exercises.findOne(qr); 
-      } finally {
+      exercises.findOne({ name: msg }, (err, result) => {
+        console.log(msg);
+        console.log(result);
         const stringified = YAML.stringify(result);
-        console.log(stringified);
-       // nh.setParam('exercise', stringified);
+        nh.setParam('exercise', stringified);
         pubex.publish({ data: 'exercise' });
-      }
+      });
     });
 
   } finally {
-   // await client.close();
+    // await client.close();
   }
 }
 run().catch(console.dir);

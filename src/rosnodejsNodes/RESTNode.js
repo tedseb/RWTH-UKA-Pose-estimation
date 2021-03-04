@@ -76,7 +76,7 @@ const pub_qr = nh.advertise('/qr_exercise', StringMsg);
 
 // We use this user_state and deprecate the very first API structure "repetition"
 const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
-  const data = msg[data];
+  const data = msg['data'];
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({topic: "user_state", data: data}));
@@ -86,7 +86,8 @@ const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
 
 // We use this user_correction and deprecate the very first API structure "corrections"
 const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
-  const data = msg[data];
+  const data = msg['data'];
+
   SmartphoneAppClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({topic: "user_correction", data: data}));

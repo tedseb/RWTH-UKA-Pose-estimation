@@ -47,8 +47,7 @@ const nh = rosnodejs.nh;
 
 const errors = nh.subscribe('/qr_exercise', StringMsg, (msg) => {
     //Call Reader Function to load data from database and send it to server in ms is exercise name
-    nh.setParam('exercise',s_squats); //dirty
-    console.log(s_squats);
+    nh.setParam('exercise',s_exercises); //dirty
 });
 
 //Put into exercise the different exercises

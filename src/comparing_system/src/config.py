@@ -9,7 +9,7 @@ ROS_TOPIC_USER_EXERCISE_STATES = '/user_state'
 ROS_TOPIC_USER_CORRECTIONS = '/user_correction'
 
 ROS_JOINTS_TOPIC = 'fused_skelleton' # Shawan's topic choice
-ROS_EXERCISES_CHANGE_TOPIC = 'changeme' # TODO: Change this from tamer
+ROS_EXERCISES_CHANGE_TOPIC = 'exercises' # TODO: Change this from tamer
 ROS_SKELLETON_DEFINITION = 'skelleton_name'
 
 NUMBER_OF_COMPARATOR_THREADS = 4
@@ -19,7 +19,7 @@ REDIS_MAXIMUM_PAST_QUEUE_SIZE = 100
 STATION_QUEUE_SIZE_MINIMUM = 0
 
 REDIS_USER_STATE_SENDING_QUEUE_NAME = "user_state_sending_queue"
-REDIS_USER_INFO_SENDING_QUEUE_NAME = "user_info_sending_queue"
+REDIS_USER_INFO_SENDING_QUEUE_NAME = "user_correction_sending_queue"
 
 QUEUEING_USER_STATE_QUEUE_SIZE_MAX = 100
 QUEUEING_USER_INFO_QUEUE_SIZE_MAX = 100

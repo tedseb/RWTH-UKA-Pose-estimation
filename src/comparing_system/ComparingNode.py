@@ -11,7 +11,6 @@ from threading import Thread
 from importlib import import_module
 from queue import Queue, Empty, Full
 from collections import OrderedDict
-from rospy_message_converter import message_converter
 
 from comparing_system.msg import user_state, user_correction
 from backend.msg import Persons
@@ -90,7 +89,9 @@ class Sender(Thread):
         '''
         while(self.running):
             try:
-                message = self.redis_connection.rpop(self.redis_sending_queue_name)
+                message = self.redis_connection.brpop(self.redis_sending_queue_name, 1)
+                if not message:
+                    continue
             except Exception as e:
                 rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
             try:
@@ -100,7 +101,7 @@ class Sender(Thread):
             try:
                 # Unpack message dict and error out if it contains bad fields
                 self.publisher.publish(json.dumps(message))
-                rp.logerr("ComparingNode.py sent message: " + str(message))
+                rp.loginfo("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)
                 rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))

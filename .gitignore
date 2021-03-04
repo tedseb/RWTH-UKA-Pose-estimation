@@ -13,3 +13,7 @@ node_modules
 package-lock.json
 bagfiles
 package-lock.json
+<<<<<<< HEAD
+=======
+package-lock.json
+>>>>>>> master

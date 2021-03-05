@@ -46,7 +46,7 @@ class Comparator(Thread):
     """
     The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     """
-    def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, redis_connection_pool, spot_queue_interface=None):
+    def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, redis_connection_pool, spot_queue_interface: SpotQueueInterface, message_queue_interface: MessageQueueInterface):
         super(Comparator, self).__init__()
 
         self.message_queue_load_order = message_queue_load_order

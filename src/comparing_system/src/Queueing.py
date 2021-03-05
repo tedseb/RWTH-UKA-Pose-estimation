@@ -8,6 +8,7 @@ import threading
 import redis
 import rospy as rp
 import yaml
+import msgpack
 
 from src.config import *
 
@@ -36,25 +37,52 @@ class SpotQueueInterface:
     def dequeue(self, spot_key: str) -> Tuple[dict, list, list, list]:
         """
         Dequeue spot data from queues and return it as a tuple:
+
+        Returns a spot-info dictionary and three lists:
+        * The first is a list of lists of joints, possibly with additional data, representing the past.
+        * The second is a list of joints, possibly with additional data.
+        * The third is a list of lists of joints, possibly with additional data, representing the future.
+
         Return spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-    def enqueue(self, spot_key: str, data: Any) -> None:
+    def blocking_dequeue(self, spot_key: str, timeout=0: int) -> Tuple[dict, list, list, list]:
+        """ 
+        Returns three a spot-info dictionary and three lists:
+        * The first is a list of lists of joints, possibly with additional data, representing the past.
+        * The second is a list of joints, possibly with additional data.
+        * The third is a list of lists of joints, possibly with additional data, representing the future.
+        """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    def enqueue(self, spot_key: str, message: Any) -> None:
+        """ 
+        Enqueue a list of joints, possibly with additional data.
+        """
+        raise NotImplementedError("This is an interface and shold not be called directly")
+
+        
 class MessageQueueInterface:
-    # TODO: Implement
     def __init__(self):
         raise NotImplementedError("This is an interface and shold not be called directly")
     
-    def enqueue(self, key: str, message: Any):
+    def enqueue(self, spot_key: str, message: Any) -> None:
+        """ 
+        Enqueue a dictionary, which can be sent as a message somewhere else.
+        """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-    def dequeue(self, key):
+    def dequeue(self, spot_key: str) -> dict:
+        """ 
+        Dequeue a dictionary, which can be sent as a message somewhere else.
+        """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-    def delete(self):
+    def delete(self, spot_key: str) -> None:
+        raise NotImplementedError("This is an interface and shold not be called directly")
+
+    def size(self, spot_key): -> Tuple[int, int, int]::
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
@@ -63,14 +91,27 @@ class RedisMessageQueue():
     def __init__(self, redis_connection: redis.Redis):
         self.redis_connection = redis_connection
 
-    def enqueue(self, key: str, message: Any):
-        raise NotImplementedError
+    def enqueue(self, key, message):
+        message = self.redis_connection.lpush(key, msgpack.packb(message))
 
-    def dequeue(self, key):
-        raise NotImplementedError
+    def blocking_dequeue(self, key, timeout=0):
+        try:
+            return msgpack.unpackb(self.redis_connection.rbpop(key, 2).decode("utf-8")) # TODO: Python 2.7 bytestrings anywhere?
+        except Exception as e:
+            rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
 
-    def delete(self, key):
-        raise NotImplementedError
+   def dequeue(self, key: str): 
+        try:
+            return msgpack.unpackb(self.redis_connection.rbpop(key).decode("utf-8")) # TODO: Python 2.7 bytestrings anywhere?
+        except Exception as e:
+            rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
+        
+
+    def delete(self, key: str) -> None:
+        return self.redis_connection.del(key)
+
+    def size(self, key: str) -> Tuple[int, int, int]:
+        return redis_connection.llen(key)
 
 
 class RedisSpotQueueInterface(SpotQueueInterface):
@@ -96,7 +137,6 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         Return spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
         """
         # TODO: Investigate if these redis instructions can be optimized
-        # Fetch all data that is needed for the comparison:
 
         redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(spot_key)
         
@@ -106,8 +146,8 @@ class RedisSpotQueueInterface(SpotQueueInterface):
             raise QueueEmpty
 
         try:
-            joints_with_timestamp_yaml = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
-            assert joints_with_timestamp_yaml
+            joints_with_timestame = msgpack.unpackb(redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key))
+            assert joints_with_timestamp
         except (KeyError, AssertionError):
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise QueueEmpty
@@ -119,8 +159,6 @@ class RedisSpotQueueInterface(SpotQueueInterface):
 
         self.dequeue_semaphore.release()
 
-        joints_with_timestamp = yaml.load(joints_with_timestamp_yaml)
-        
         spot_info_dict = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
         exercise = spot_info_dict['exercise']
         start_time = spot_info_dict['start_time']
@@ -130,13 +168,33 @@ class RedisSpotQueueInterface(SpotQueueInterface):
     def enqueue(self, spot_key: str, data: Any) -> int:
         """ Return queue size """
         redis_spot_queue_key, _, _ = generate_redis_key_names(spot_key)
-        queue_size = self.redis_connection.rpush(spot_key, yaml.dump(data)) # TODO: Use serialized bodyparts here (see above)
+        queue_size = self.redis_connection.rpush(spot_key, msgpack.packb(data))
 
-        if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-            rp.logerr("Maximum Queue size for spotID " + str(p.stationID) + " reached. Removing first element.")
-            self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+        if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
+            if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
+                rp.logerr("Maximum Queue size for s potID " + str(p.stationID) + " reached. Removing first element.")
+                self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+
+            # Reorder Queue for simple loadbalancing
+            # Track queue length with spot_key
+            self.message_queue_load_order[redis_spot_key] = queue_size
+            longest_queue = max(self.message_queue_load_order.items(), key=operator.itemgetter(1))[0]
+            if queue_size > self.message_queue_load_order[longest_queue]:
+                self.message_queue_load_order.move_to_end[longest_queue]
 
         return queue_size
+
+    def size(self, spot_key: str):
+        redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(key)
+        return redis_connection.llen(redis_spot_queue_key), redis_connection.llen(redis_spot_past_queue_key), redis_connection.llen(redis_spot_info_key)
+
+    def delete(self, spot_key: str):
+        # TODO: Try and catch
+        keys = generate_redis_key_names(key)
+        for key in keys:
+            self.redis_connection.delete(key)
+
+
 
 
 def generate_redis_key_names(spot_key: str):

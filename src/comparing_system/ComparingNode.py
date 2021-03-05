@@ -22,6 +22,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from src.joint_adapters.spin import *
 from src.Comparator import Comparator
 from src.config import *
+from src.Queueing import *
 
 # db 0 is our (comparing node) database
 # TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
@@ -33,10 +34,11 @@ class Receiver():
     The Receiver subscribes to the ROS topic that contains joints (or 'skelletons') and puts them into separate queues.
     Each queue corresponds to one spot. Therefore, multiple views of the same spot go into the same queue.
     """
-    def __init__(self, message_queue_load_order):
+    def __init__(self, message_queue_load_order, spot_queue_interface: SpotQueueInterface):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
+        self.queueing_interface = spot_queue_interface
 
         self.message_queue_load_order = message_queue_load_order
         self.skelleton_adapter = None
@@ -52,32 +54,23 @@ class Receiver():
         # For every person in the image, sort their data into the correction spot queue in redis
         for p in message.persons:
             redis_spot_key = 'spot #' + str(p.stationID)
-            redis_spot_queue_key = redis_spot_key + ':queue'
+
             joints_with_timestamp = {'joints': p.bodyParts, 'timestamp': message.header.stamp}   # Get away from messages here, towards a simple dict
-            queue_size = self.redis_connection.rpush(redis_spot_queue_key, yaml.dump(joints_with_timestamp)) # TODO: Use serialized bodyparts here (see above)
 
-            if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
-                if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-                    rp.logerr("Maximum Queue size for spotID " + str(p.stationID) + " reached. Removing first element.")
-                    self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+            queue_size = self.queueing_interface.enqueue(redis_spot_key, joints_with_timestamp)
 
-                # Reorder Queue for simple loadbalancing
-                # Track queue length with spot_key
-                self.message_queue_load_order[redis_spot_key] = queue_size
-                longest_queue = max(self.message_queue_load_order.items(), key=operator.itemgetter(1))[0]
-                if queue_size > self.message_queue_load_order[longest_queue]:
-                    self.message_queue_load_order.move_to_end[longest_queue]
 
 
 class Sender(Thread):
     """
     The Sender thread waits for messages in the sending_queue and sends them via ROS as they become available.
     """
-    def __init__(self, publisher_topic, message_type, redis_sending_queue_name):
+    def __init__(self, publisher_topic, message_type, redis_sending_queue_name, message_queue_interface):
         super(Sender, self).__init__()
         self.publisher = rp.Publisher(publisher_topic, String, queue_size=1000)    
         self.redis_sending_queue_name = redis_sending_queue_name
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)  
+        self.message_queue_interface = message_queue_interface
 
         self.running = True
 
@@ -89,9 +82,7 @@ class Sender(Thread):
         '''
         while(self.running):
             try:
-                message = self.redis_connection.brpop(self.redis_sending_queue_name, 1)
-                if not message:
-                    continue
+                message = self.message_queue_interface.blocking_pop(self.redis_sending_queue_name, 2) # TODO: To not hardcode these two seconds
             except Exception as e:
                 rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
             try:

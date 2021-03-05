@@ -9,34 +9,26 @@ rosnodejs.initNode('/expert_system')
 const nh = rosnodejs.nh;
 const pubex = nh.advertise('/exercises', StringMsg);
 
-// Connect to the db
+// Connect to MongoDB
 const uri = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin";
 
-const client = new MongoClient(uri);
+const client = new MongoClient(uri, { useUnifiedTopology: true });
 
-// MongoClient.connect(uri, (err, client) => {
+MongoClient.connect(uri, { useUnifiedTopology: true }, (err, client) => {
+  //get trainerai DB and exercises collection
+  const db = client.db("trainerai");
+  const exercises = db.collection("exercises");
 
-// });
-
-
-async function run() {
-  try {
-    await client.connect();
-    const db = client.db("trainerai");
-    const exercises = db.collection("exercises");
-
-    nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
-      exercises.findOne({ name: msg }, (err, result) => {
-        console.log(msg);
-        console.log(result);
+  nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
+    exercises.findOne({ name: msg['data'] }, (err, result) => {
+      if (err) throw err;
+      if(result) {
         const stringified = YAML.stringify(result);
         nh.setParam('exercise', stringified);
         pubex.publish({ data: 'exercise' });
-      });
+      } else {
+        console.error(`No such exercise  ${msg['data']}`)
+      }
     });
-
-  } finally {
-    // await client.close();
-  }
-}
-run().catch(console.dir);
+  });
+});

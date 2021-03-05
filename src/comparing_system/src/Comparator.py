@@ -255,7 +255,6 @@ class Comparator(Thread):
             if (checkforstate(angles, current_exercise, 0)):
                 state = 0
                 reps += 1
-                rp.logerr(reps)
                 return reps
         return 
 

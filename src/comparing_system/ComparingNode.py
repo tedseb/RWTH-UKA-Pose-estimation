@@ -89,19 +89,16 @@ class Sender(Thread):
         '''
         while(self.running):
             try:
-                message = self.redis_connection.brpop(self.redis_sending_queue_name, 1)
+                message = self.redis_connection.rpop(self.redis_sending_queue_name)
                 if not message:
                     continue
             except Exception as e:
                 rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
-            try:
-                message = yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
-            except AttributeError:
-                continue
+            message = yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
             try:
                 # Unpack message dict and error out if it contains bad fields
                 self.publisher.publish(json.dumps(message))
-                rp.loginfo("ComparingNode.py sent message: " + str(message))
+                rp.logerr("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)
                 rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
@@ -169,14 +166,6 @@ if __name__ == '__main__':
             t.running = False
 
     rp.on_shutdown(kill_threads)
-
-    # TEST CODE, REMOVE AS SOON A TAMER PUBLISHES EXERCISES
-    publisher = rp.Publisher(ROS_EXERCISES_CHANGE_TOPIC, String, queue_size=10)
-    message = 'exercise'
-    import time
-    for i in range(3):
-        time.sleep(0.9)
-        publisher.publish(message)
 
     rp.spin()
 

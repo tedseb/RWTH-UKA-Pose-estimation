@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import rospy as rp
-import redis
 import yaml
 import json
 import operator
@@ -34,11 +33,10 @@ class Receiver():
     The Receiver subscribes to the ROS topic that contains joints (or 'skelletons') and puts them into separate queues.
     Each queue corresponds to one spot. Therefore, multiple views of the same spot go into the same queue.
     """
-    def __init__(self, message_queue_load_order, spot_queue_interface: SpotQueueInterface):
+    def __init__(self, message_queue_load_order, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
-        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
-        self.queueing_interface = spot_queue_interface
+        self.spot_queue_interface = spot_queue_interface_class()
 
         self.message_queue_load_order = message_queue_load_order
         self.skelleton_adapter = None
@@ -57,7 +55,7 @@ class Receiver():
 
             joints_with_timestamp = {'joints': p.bodyParts, 'timestamp': message.header.stamp}   # Get away from messages here, towards a simple dict
 
-            queue_size = self.queueing_interface.enqueue(redis_spot_key, joints_with_timestamp)
+            queue_size = self.spot_queue_interface.enqueue(redis_spot_key, joints_with_timestamp)
 
 
 
@@ -65,12 +63,12 @@ class Sender(Thread):
     """
     The Sender thread waits for messages in the sending_queue and sends them via ROS as they become available.
     """
-    def __init__(self, publisher_topic, message_type, redis_sending_queue_name, message_queue_interface):
+    def __init__(self, publisher_topic: str, message_type, redis_sending_queue_name: str, message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
         super(Sender, self).__init__()
         self.publisher = rp.Publisher(publisher_topic, String, queue_size=1000)    
         self.redis_sending_queue_name = redis_sending_queue_name
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)  
-        self.message_queue_interface = message_queue_interface
+        self.message_queue_interface = message_queue_interface_class()
 
         self.running = True
 
@@ -82,13 +80,9 @@ class Sender(Thread):
         '''
         while(self.running):
             try:
-                message = self.message_queue_interface.blocking_pop(self.redis_sending_queue_name, 2) # TODO: To not hardcode these two seconds
+                message = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
             except Exception as e:
                 rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
-            try:
-                message = yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
-            except AttributeError:
-                continue
             try:
                 # Unpack message dict and error out if it contains bad fields
                 self.publisher.publish(json.dumps(message))
@@ -147,7 +141,7 @@ if __name__ == '__main__':
     # Spawn a couple of Comparator threads
     comparators = []
     for i in range(NUMBER_OF_COMPARATOR_THREADS):
-        comparators.append(Comparator(message_queue_load_order, user_state_out_queue, user_correction_out_queue, redis_connection_pool))
+        comparators.append(Comparator(message_queue_load_order))
 
     receiver = Receiver(message_queue_load_order)
 

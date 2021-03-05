@@ -10,9 +10,12 @@ import rospy as rp
 import yaml
 import msgpack
 
+from typing import Tuple, Any
+
 from src.config import *
 
-from typing import Tuple, Any
+redis_connection_pool = redis.ConnectionPool(host='localhost', port=5678, db=0)
+redis_spot_queue_dequeueing_semaphore = threading.Semaphore(value=1)
 
 class QueueingException(Exception):
     pass
@@ -47,7 +50,7 @@ class SpotQueueInterface:
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-    def blocking_dequeue(self, spot_key: str, timeout=0: int) -> Tuple[dict, list, list, list]:
+    def blocking_dequeue(self, spot_key: str, timeout: int = 0) -> Tuple[dict, list, list, list]:
         """ 
         Returns three a spot-info dictionary and three lists:
         * The first is a list of lists of joints, possibly with additional data, representing the past.
@@ -82,33 +85,39 @@ class MessageQueueInterface:
     def delete(self, spot_key: str) -> None:
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-    def size(self, spot_key): -> Tuple[int, int, int]::
+    def size(self, spot_key) -> Tuple[int, int, int]:
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class RedisMessageQueue():
-    # TODO: Implement
-    def __init__(self, redis_connection: redis.Redis):
-        self.redis_connection = redis_connection
+class RedisMessageQueueInterface(MessageQueueInterface):
+    def __init__(self):
+        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
     def enqueue(self, key, message):
         message = self.redis_connection.lpush(key, msgpack.packb(message))
 
-    def blocking_dequeue(self, key, timeout=0):
+    def blocking_dequeue(self, key, timeout=2):
         try:
-            return msgpack.unpackb(self.redis_connection.rbpop(key, 2).decode("utf-8")) # TODO: Python 2.7 bytestrings anywhere?
+            return msgpack.unpackb(self.redis_connection.brpop(key, timeout).decode("utf-8")) # TODO: Python 2.7 bytestrings anywhere?
         except Exception as e:
-            rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
-
-   def dequeue(self, key: str): 
+            rp.logerr("Issue getting message from Queue: " + str(key) + ", Exception: " + str(e))
         try:
-            return msgpack.unpackb(self.redis_connection.rbpop(key).decode("utf-8")) # TODO: Python 2.7 bytestrings anywhere?
+            return yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
+        except AttributeError:
+            raise QueueEmpty
+            
+    def dequeue(self, key: str):
+        try:
+            message = msgpack.unpackb(self.redis_connection.brpop(key)) # TODO: Python 2.7 bytestrings anywhere?
         except Exception as e:
-            rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name) + ", Exception: " + str(e))
-        
+            rp.logerr("Issue getting message from Queue: " + str(key) + ", Exception: " + str(e))
+        try:
+            return yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
+        except AttributeError:
+            raise QueueEmpty
 
     def delete(self, key: str) -> None:
-        return self.redis_connection.del(key)
+        return self.redis_connection.delete(key)
 
     def size(self, key: str) -> Tuple[int, int, int]:
         return redis_connection.llen(key)
@@ -126,11 +135,10 @@ class RedisSpotQueueInterface(SpotQueueInterface):
     * The info for a spot contains additional information like timing data in a dictionary.
     """
 
-    def __init__(self, redis_connection: redis.Redis, dequeue_semaphore: threading.Semaphore):
-        self.redis_connection = redis_connection
+    def __init__(self):
+        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
         # Dequeueing consists of several operations. Until we move to a distribuetd system, we can use a semaphore to guarantee correct queuing.
         # Redis has distributed locks: https://redis.io/topics/distlock
-        self.dequeue_semaphore = dequeue_semaphore
 
     def dequeue(self, spot_key: str) -> Tuple[dict, list, list, list]:
         """
@@ -141,7 +149,7 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(spot_key)
         
         try:
-            assert self.dequeue_semaphore.acquire(blocking=True, timeout=0.1)
+            assert redis_spot_queue_dequeueing_semaphoree.acquire(blocking=True, timeout=0.1)
         except AssertionError:
             raise QueueEmpty
 
@@ -157,7 +165,7 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         future_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
         past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
 
-        self.dequeue_semaphore.release()
+        redis_spot_queue_dequeueing_semaphore.release()
 
         spot_info_dict = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
         exercise = spot_info_dict['exercise']
@@ -193,8 +201,6 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         keys = generate_redis_key_names(key)
         for key in keys:
             self.redis_connection.delete(key)
-
-
 
 
 def generate_redis_key_names(spot_key: str):

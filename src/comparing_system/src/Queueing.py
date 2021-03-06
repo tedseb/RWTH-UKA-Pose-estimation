@@ -9,6 +9,8 @@ import redis
 import rospy as rp
 import yaml
 import msgpack
+from traceback import print_exc
+from collections import OrderedDict
 
 from typing import Tuple, Any
 
@@ -17,11 +19,14 @@ from src.config import *
 redis_connection_pool = redis.ConnectionPool(host='localhost', port=5678, db=0)
 redis_spot_queue_dequeueing_semaphore = threading.Semaphore(value=1)
 
+
 class QueueingException(Exception):
     pass
 
+
 class QueueEmpty(QueueingException):
     pass
+
 
 class QueueTimeout(QueueingException):
     pass
@@ -89,6 +94,46 @@ class MessageQueueInterface:
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
+class QueueLoadBalancerInterface:
+    def __init__(self):
+        raise NotImplementedError("This is an interface and shold not be called directly")
+    
+    def get_queue_key(self) -> None:
+        """ Get the key for the spot that needs our attention the most """
+        raise NotImplementedError("This is an interface and shold not be called directly")
+
+    def set_queue_size(self, key: str, queue_size: int) -> None:
+        """ Set the size of a queue """
+        raise NotImplementedError("This is an interface and shold not be called directly")
+
+
+class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
+    # TODO: Use IndexedOrderedDict from the indexed package
+    def __init__(self):
+        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
+
+    def get_queue_key(self):
+        # For now, simply take the key corresponding to the spot with the highest load , NO ACTUALY LOAD BALANCING!
+        spot_key_list = self.redis_connection.zrange(REDIS_LOAD_BALANCER_LIST_KEY, 0, 0)
+        if not spot_key_list:
+            raise QueueEmpty
+        spot_key = spot_key_list[0]
+        try:
+            spot_key = spot_key.decode('utf-8')
+        except Exception:
+            # Catch cases where we can an byte encoded string back (ROS's Python 2.7 does that to us)
+            pass
+        return spot_key
+
+    def set_queue_size(self, key: str, queue_size: int) -> None:
+        """ Set the size of a queue """
+        if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
+            # The queue_size serves as our score
+            self.redis_connection.zadd(REDIS_LOAD_BALANCER_LIST_KEY, {key: queue_size})
+        else:
+            self.redis_connection.zrem(REDIS_LOAD_BALANCER_LIST_KEY, key)
+        
+
 class RedisMessageQueueInterface(MessageQueueInterface):
     def __init__(self):
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
@@ -98,13 +143,23 @@ class RedisMessageQueueInterface(MessageQueueInterface):
 
     def blocking_dequeue(self, key, timeout=2):
         try:
-            return msgpack.unpackb(self.redis_connection.brpop(key, timeout).decode("utf-8")) # TODO: Python 2.7 bytestrings anywhere?
-        except Exception as e:
-            rp.logerr("Issue getting message from Queue: " + str(key) + ", Exception: " + str(e))
-        try:
-            return yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
-        except AttributeError:
+            message = self.redis_connection.brpop(key, timeout)
+            if not message:
+                raise QueueEmpty
+            message = message[1]
+            message = msgpack.unpackb(message) # TODO: Python 2.7 bytestrings anywhere?
+            try:
+                message = message.decode('utf-8')
+            except Exception:
+                # Catch cases where we can an byte encoded string back (ROS's Python 2.7 does that to us)
+                pass
+        except QueueEmpty:
             raise QueueEmpty
+        except Exception as e:
+            rp.logerr("Issue getting message from Queue: " + str(key))
+            print_exc()
+        
+        return message
             
     def dequeue(self, key: str):
         try:
@@ -120,7 +175,7 @@ class RedisMessageQueueInterface(MessageQueueInterface):
         return self.redis_connection.delete(key)
 
     def size(self, key: str) -> Tuple[int, int, int]:
-        return redis_connection.llen(key)
+        return self.redis_connection.llen(key)
 
 
 class RedisSpotQueueInterface(SpotQueueInterface):
@@ -148,15 +203,19 @@ class RedisSpotQueueInterface(SpotQueueInterface):
 
         redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(spot_key)
         
-        try:
-            assert redis_spot_queue_dequeueing_semaphoree.acquire(blocking=True, timeout=0.1)
-        except AssertionError:
-            raise QueueEmpty
+        # try:
+        #     assert redis_spot_queue_dequeueing_semaphore.acquire(blocking=True, timeout=0.1)
+        # except AssertionError:
+        #     raise QueueEmpty
 
         try:
-            joints_with_timestame = msgpack.unpackb(redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key))
+            joints_with_timestame_bytes = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
+            if not joints_with_timestame_bytes:
+                raise QueueEmpty
+            joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes) 
             assert joints_with_timestamp
         except (KeyError, AssertionError):
+            print_exc()
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise QueueEmpty
 
@@ -165,9 +224,14 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         future_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
         past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
 
-        redis_spot_queue_dequeueing_semaphore.release()
+        # redis_spot_queue_dequeueing_semaphore.release()
 
-        spot_info_dict = yaml.load(self.redis_connection.get(redis_spot_info_key)) # TODO: Switch from using yaml to Rejson
+        spot_info_yaml = self.redis_connection.get(redis_spot_info_key)
+
+        if not spot_info_yaml:
+            raise QueueEmpty
+
+        spot_info_dict = yaml.load(spot_info_yaml) # TODO: Switch from using yaml to Rejson
         exercise = spot_info_dict['exercise']
         start_time = spot_info_dict['start_time']
 
@@ -176,25 +240,18 @@ class RedisSpotQueueInterface(SpotQueueInterface):
     def enqueue(self, spot_key: str, data: Any) -> int:
         """ Return queue size """
         redis_spot_queue_key, _, _ = generate_redis_key_names(spot_key)
-        queue_size = self.redis_connection.rpush(spot_key, msgpack.packb(data))
 
-        if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
-            if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-                rp.logerr("Maximum Queue size for s potID " + str(p.stationID) + " reached. Removing first element.")
-                self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+        queue_size = self.redis_connection.rpush(redis_spot_queue_key, msgpack.packb(data))
 
-            # Reorder Queue for simple loadbalancing
-            # Track queue length with spot_key
-            self.message_queue_load_order[redis_spot_key] = queue_size
-            longest_queue = max(self.message_queue_load_order.items(), key=operator.itemgetter(1))[0]
-            if queue_size > self.message_queue_load_order[longest_queue]:
-                self.message_queue_load_order.move_to_end[longest_queue]
+        if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
+            rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
+            self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
 
         return queue_size
 
     def size(self, spot_key: str):
         redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(key)
-        return redis_connection.llen(redis_spot_queue_key), redis_connection.llen(redis_spot_past_queue_key), redis_connection.llen(redis_spot_info_key)
+        return self.redis_connection.llen(redis_spot_queue_key), self.redis_connection.llen(redis_spot_past_queue_key), self.redis_connection.llen(redis_spot_info_key)
 
     def delete(self, spot_key: str):
         # TODO: Try and catch
@@ -216,8 +273,9 @@ def generate_redis_key_names(spot_key: str):
         * Past queue for spot with ID N is  <spot_key:queue_past>    :Redis FIFO Queue
         * Info for spot with ID N is        <spot_key:info>          :stringified YAML
     """
-    redis_spot_queue_key = REDIS_GENERAL_PREFIX + spot_key + REDIS_SPOT_QUEUE_POSTFIX
+    redis_spot_queue_key = REDIS_GENERAL_PREFIX + str(spot_key) + REDIS_SPOT_QUEUE_POSTFIX
     redis_spot_past_queue_key = REDIS_GENERAL_PREFIX + redis_spot_queue_key + REDIS_SPOT_PAST_QUEUE_POSTFIX
-    redis_spot_info_key = REDIS_GENERAL_PREFIX + spot_key + REDIS_SPOT_INFO_POSTFIX
+    redis_spot_info_key = REDIS_GENERAL_PREFIX + str(spot_key) + REDIS_SPOT_INFO_POSTFIX
 
     return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key
+

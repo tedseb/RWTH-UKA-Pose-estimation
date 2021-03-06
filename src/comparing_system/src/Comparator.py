@@ -17,7 +17,7 @@ from src.joint_adapters.spin import *
 from src.config import *
 from src.Queueing import *
 
-import traceback 
+from traceback import print_exc
 
 #Old imports 
 from backend.msg import Persons
@@ -46,10 +46,10 @@ class Comparator(Thread):
     """
     The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     """
-    def __init__(self, message_queue_load_order, message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
+    def __init__(self, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
         super(Comparator, self).__init__()
 
-        self.message_queue_load_order = message_queue_load_order
+        self.spot_queue_load_balancer = spot_queue_load_balancer_class()
         self.message_out_queue_interface = message_out_queue_interface_class()
         self.spot_queue_interface = spot_queue_interface_class()
         
@@ -73,17 +73,17 @@ class Comparator(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                traceback.print_exc()
+                print_exc()
                 rp.logerr("Error getting data in the comparator: " + str(e))
             try:
                 info = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
             except Exception as e:
-                traceback.print_exc() 
+                print_exc() 
                 rp.logerr("Error comparing data in the comparator: " + str(e))
             try:
                 self.send_info(info, spot_info_dict)
             except Exception as e:
-                traceback.print_exc() 
+                print_exc() 
                 rp.logerr("Error sending data in the comparator: " + str(e))    
             
     def get_data(self):
@@ -91,13 +91,7 @@ class Comparator(Thread):
         This method gets information from inbound queues, checks for errors like empty queues and returns information if any is present
         """
         # Fetch all data that is needed for the comparison:
-        try:
-            # Always get the element with the longest queue
-            # TODO: Establish a fair algorithm for this
-            redis_spot_key, _ = self.message_queue_load_order.popitem(last=False)
-        except KeyError:
-            # Supposingly, no message queue is holding any value (at the start of the system)
-            raise QueueEmpty
+        redis_spot_key = self.spot_queue_load_balancer.get_queue_key()
 
         return self.spot_queue_interface.dequeue(redis_spot_key)
         
@@ -111,13 +105,13 @@ class Comparator(Thread):
         global reps
 
         if correction != None:
-            user_info_message = {
+            user_correction_message = {
                 'user_id': 0,
                 'repetition': reps,
                 'positive_correction': False,
                 'display_text': correction
             }
-            self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(user_info_message))
+            self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(user_correction_message))
         
         if updated_repetitions != None:
             user_state_message = {
@@ -130,7 +124,7 @@ class Comparator(Thread):
                 'exercise_score': 100,
                 'user_position': {'x':center_of_body.x, 'y':center_of_body.y, 'z': center_of_body.z}
             }
-            self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_info_message))
+            self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
         
 
 
@@ -149,9 +143,9 @@ class Comparator(Thread):
         for index in ownpose_used:
             point = Point()
             # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-            point.x = joints[index].point.x
-            point.y = joints[index].point.z
-            point.z = joints[index].point.y
+            point.x = joints[index]['point']['x']
+            point.y = joints[index]['point']['z']
+            point.z = joints[index]['point']['y']
             pose[joint_labels[index]] = point
 
         # This corresponds to Tamers "save" method
@@ -224,7 +218,7 @@ class Comparator(Thread):
             if (checkforstate(angles, current_exercise, 0)):
                 state = 0
                 reps += 1
-                rp.logerr(reps)
+                rp.logerr("Reps: " + str(reps))
                 return reps
         return 
 

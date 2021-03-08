@@ -68,9 +68,12 @@ class Sender(Thread):
     """
     def __init__(self, publisher_topic: str, message_type, redis_sending_queue_name: str, message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
         super(Sender, self).__init__()
-        self.publisher = rp.Publisher(publisher_topic, String, queue_size=1000)    
+         
+        self.publisher_topic = publisher_topic 
         self.redis_sending_queue_name = redis_sending_queue_name
         self.message_queue_interface = message_queue_interface_class()
+
+        self.publisher = rp.Publisher(self.publisher_topic, String, queue_size=1000)  
 
         self.running = True
 
@@ -82,7 +85,7 @@ class Sender(Thread):
         '''
         while(self.running):
             try:
-                message = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
+                data = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
             except QueueEmpty:
                 continue
             except Exception as e:
@@ -90,7 +93,8 @@ class Sender(Thread):
                 rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name))
             try:
                 # Unpack message dict and error out if it contains bad fields
-                self.publisher.publish(json.dumps(message))
+                message = json.dumps({'topic': self.publisher_topic, 'data': data})
+                self.publisher.publish(message)
                 rp.logerr("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)

@@ -163,13 +163,22 @@ class RedisMessageQueueInterface(MessageQueueInterface):
             
     def dequeue(self, key: str):
         try:
-            message = msgpack.unpackb(self.redis_connection.brpop(key)) # TODO: Python 2.7 bytestrings anywhere?
-        except Exception as e:
-            rp.logerr("Issue getting message from Queue: " + str(key) + ", Exception: " + str(e))
-        try:
-            return yaml.safe_load(message.decode("utf-8")) # TODO: We get byte strings here for some reason. Python 2.7 somewhere?!
-        except AttributeError:
+            message = self.redis_connection.rpop(key, timeout)
+            if not message:
+                raise QueueEmpty
+            message = msgpack.unpackb(message) # TODO: Python 2.7 bytestrings anywhere?
+            try:
+                message = message.decode('utf-8')
+            except Exception:
+                # Catch cases where we can an byte encoded string back (ROS's Python 2.7 does that to us)
+                pass
+        except QueueEmpty:
             raise QueueEmpty
+        except Exception as e:
+            rp.logerr("Issue getting message from Queue: " + str(key))
+            print_exc()
+        
+        return message
 
     def delete(self, key: str) -> None:
         return self.redis_connection.delete(key)

@@ -111,7 +111,7 @@ class Comparator(Thread):
                 'positive_correction': False,
                 'display_text': correction
             }
-            self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(user_correction_message))
+            self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
         
         if updated_repetitions != None:
             user_state_message = {
@@ -124,9 +124,8 @@ class Comparator(Thread):
                 'exercise_score': 100,
                 'user_position': {'x':center_of_body.x, 'y':center_of_body.y, 'z': center_of_body.z}
             }
-            self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
+            self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
         
-
 
     def compare(self, spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list):
         global lastPose

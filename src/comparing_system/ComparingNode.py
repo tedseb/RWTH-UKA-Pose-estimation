@@ -91,7 +91,7 @@ class Sender(Thread):
             try:
                 # Unpack message dict and error out if it contains bad fields
                 self.publisher.publish(json.dumps(message))
-                rp.loginfo("ComparingNode.py sent message: " + str(message))
+                rp.logerr("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)
                 rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))

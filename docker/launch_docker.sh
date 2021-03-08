@@ -72,7 +72,7 @@ docker run -it -d --rm \
         -v /trainerai/node_modules \
         $webcam_option \
         $gpu_option \
-        registry.git.rwth-aachen.de/trainerai/core/trainerai-dev-update > /dev/null
+        registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-dev-update > /dev/null
 
 if $osx; then
 	docker exec -it trainerAI sh -c "export DISPLAY=host.docker.internal:0 && xhost + $(ifconfig en0 | grep 'inet[ ]' | awk '{print$2}')"

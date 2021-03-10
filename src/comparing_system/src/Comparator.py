@@ -10,31 +10,15 @@ import redis
 import yaml
 
 from importlib import import_module
-from collections import deque
 from threading import Thread
 
 from src.joint_adapters.spin import *
 from src.config import *
 from src.Queueing import *
+from src.LegacyCompaing import compare_legacy
 
 from traceback import print_exc
 
-#Old imports 
-from backend.msg import Persons
-from geometry_msgs.msg import Vector3, Point
-from std_msgs.msg import String
-from visualization_msgs.msg import Marker, MarkerArray
-
-# TODO: What are those three?
-last_30_poses = deque()
-lastPose = {}
-angles = {}
-alpha = 20 # Beschreibt eine Art Schmidt-Trigger
-
-# TODO: Auslagern
-state = 0
-corrections = dict()
-reps = 0
 
 class NoJointsAvailable(Exception):
     pass
@@ -69,19 +53,14 @@ class Comparator(Thread):
         """
         while(self.running):
             try:
+                # Get data from queues
                 spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.get_data()
+                # Compare joints with expert system data
+                comparison_info = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                # Send info back back to outgoing message queue and back into the ROS system
+                self.send_info(comparison_info, spot_info_dict)
             except QueueEmpty:
                 continue
-            except Exception as e:
-                print_exc()
-                rp.logerr("Error getting data in the comparator: " + str(e))
-            try:
-                info = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
-            except Exception as e:
-                print_exc() 
-                rp.logerr("Error comparing data in the comparator: " + str(e))
-            try:
-                self.send_info(info, spot_info_dict)
             except Exception as e:
                 print_exc() 
                 rp.logerr("Error sending data in the comparator: " + str(e))    
@@ -95,19 +74,17 @@ class Comparator(Thread):
 
         return self.spot_queue_interface.dequeue(redis_spot_key)
         
-    def send_info(self, info, spot_info_dict):
+    def send_info(self, comparison_info: dict, spot_info_dict: dict):
         """
         This method packs information that occurs in the process of analyzing the joint- and exercise-data into messages and enques them into an sending queue.
         """
 
-        updated_repetitions, correction, center_of_body = info
-
-        global reps
+        updated_repetitions, correction, center_of_body = comparison_info
 
         if correction != None:
             user_correction_message = {
                 'user_id': 0,
-                'repetition': reps,
+                'repetition': updated_repetitions,
                 'positive_correction': False,
                 'display_text': correction
             }
@@ -126,183 +103,8 @@ class Comparator(Thread):
             }
             self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
         
-
-    def compare(self, spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list):
-        global lastPose
-        current_exercise = spot_info_dict['exercise']
-        
-        joints = joints_with_timestamp['joints']
-        timestamp = joints_with_timestamp['timestamp']
-
-        if current_exercise['name'] not in corrections.keys():
-            corrections[current_exercise['name']] = dict()
-
-        pose = {}
-
-        for index in ownpose_used:
-            point = Point()
-            # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-            point.x = joints[index]['point']['x']
-            point.y = joints[index]['point']['z']
-            point.z = joints[index]['point']['y']
-            pose[joint_labels[index]] = point
-
-        # This corresponds to Tamers "save" method
-        last_30_poses.append(pose)
-        lastPose = pose
-        if (len(last_30_poses) >= 30):
-            last_30_poses.popleft()
-            # console.log(checkForStretch(last30)) # TODO: This is nodejs code from Tamer, find out what it does
-
-        for angle, points in angle_joints_mapping.items():
-            angles[angle] = calculateAngle(points)
-
-        updated_repetitions = self.count(current_exercise)
-        correction = self.correct(angles, current_exercise, state)
-
-        # We define the center of the body as the pelvis
-        center_of_body = pose[center_of_body_label]
-
-        return updated_repetitions, correction, center_of_body
-
-        
-    def correct(self, angles, exercise, state):
-        messages = self.checkForCorrection(angles, exercise['stages'], state)
-        if (messages != corrections[exercise['name']].get(state)):
-            corrections[exercise['name']][state] = messages
-            if (len(messages) > 0):
-                # self.error_publisher.publish(messages)
-                return messages
-    
-    def checkForCorrection(self, angles, stages, state):
-        """
-        As of now, the default arguments to this function are: angles, squats, state
-        """
-        rules = stages[state]["rules"]
-        corrections = ""
-        for key in rules.keys():
-            rule = rules[key][0]
-            if rule == "max":
-                if (angles[key] >= rules[key][1] + alpha):
-                    corrections += rules[key][2] + ". "
-            elif rule == "min":
-                if (angles[key] <= rules[key][1] - alpha):
-                    corrections += rules[key][2] + ". "
-                    # console.log(JSON.stringify(angle_points[k]))
-            elif rule == "behind":
-                # a: 0, b: 1, p: 1, x: 2
-                a = lastPose[angle_joints_mapping[key][0]]
-                b = lastPose[angle_joints_mapping[key][1]]
-                p = lastPose[angle_joints_mapping[key][1]]
-                x = lastPose[angle_joints_mapping[key][2]]
-                val_x = plane3d(a, b, p, x)
-                val_a = plane3d(a, b, p, a)
-                if (math.copysign(1, val_x) == math.copysign(1, val_a)):
-                    corrections += rules[key][2] + ". "
-        return corrections
-
-    def count(self, current_exercise):
-        """
-        Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
-        """
-        
-        # TODO: Get these global Variables into a class
-        global state
-        global reps
-
-        if state < 2 and checkforstate(angles, current_exercise, state + 1):
-            state += 1
-
-        if (state >= len(current_exercise['stages']) - 1):
-            if (checkforstate(angles, current_exercise, 0)):
-                state = 0
-                reps += 1
-                rp.logerr("Reps: " + str(reps))
-                return reps
-        return 
-
-def calculateAngle(array):
-    # Tamer used this function to calculate the angle between left hip, l knee and big toe
-    if len(array) == 2:
-        newPoint = Point(lastPose[array[1]].x, lastPose[array[1]].y - 1, lastPose[array[1]].z)
-        return threepointangle(lastPose[array[0]], lastPose[array[1]], newPoint)
-    elif len(array) == 3:
-        return threepointangle(lastPose[array[0]], lastPose[array[1]], lastPose[array[2]])
-    elif len(array) == 6:
-        return (threepointangle(lastPose[array[0]], lastPose[array[1]], lastPose[array[2]]) + threepointangle(lastPose[array[3]], lastPose[array[4]], lastPose[array[5]])) / 2
-    return 0
-
-
-def checkforstate(angles, exercise, state):
-    stage = exercise["stages"][state]["angles"]
-    _pass = True
-    for key in stage.keys():
-        _pass = _pass and (angles[key] >= stage[key] - alpha and angles[key] <= stage[key] + alpha)
-    return _pass
-
-def checkforrep(array):
-    # TODO: This code is quite ugly
-    if array and (array[0] != 1 or array[len(array) - 1] != 1):
-        return False
-    for i in range(len(array)):
-        if (array[i] - array[i - 1] > 1):
-            return False
-    return True
-
-# a and b are the start and end point of a given vector, which is perpendicular to the plane
-# p is a point of that plane
-# x will be checked against that plane
-# b_ = {x: b.x, y: a.y, z: b.z}; for a plane that is 
-def plane3d (a, b, p, x):
-    # TODO: Clean this up
-    direction = create_vector_from_two_points(a, b)
-    val = dot_product(Vector3(x.x - p.x, x.y - p.y, x.z - p.z), direction)
-    return val
-
-def checkForStretch(arr):
-    # TODO: Clean this up
-    lastAngles = {}
-    currentAngles = {}
-    differences = {}
-    for key in angle_joints_mapping.keys():
-        differences[key] = []
-    for element in arr:
-        for angle, points in angle_joints_mapping:
-            currentAngles[angle] = calculateAngle(points)
-        if (lastAngles):
-            for key in lastAngles.keys():
-                differences[key].append(currentAngles[key] - lastAngles[key])
+    def compare(self, spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
+        if LEGACY_COMPARING:
+            return compare_legacy(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
         else:
-            lastAngles = currentAngles
-        
-    sums = {}
-    for angle, diff in differences:
-        sum = 0
-        for element in diff:
-            sum += element
-        sums[angle] = sum
-
-    if (sums['leftLeg'] >= 0 or sums['rightLeg'] >= 0):
-        return True
-    else:
-        return False
-
-def angle3d(a, b):
-    x = dot_product(a, b) / (length_of_vector(a) * length_of_vector(b))
-    return math.acos(x) * 180 / math.pi
-
-def threepointangle(a, b, c):
-    ba = create_vector_from_two_points(b, a)
-    bc = create_vector_from_two_points(b, c)
-    return angle3d(ba, bc)
-
-def create_vector_from_two_points(a, b):
-    return Vector3(b.x - a.x, b.y - a.y, b.z - a.z)
-
-def dot_product(a, b):
-    return a.x * b.x + a.y * b.y + a.z * b.z
-
-def length_of_vector(x):
-    return math.sqrt(math.pow(x.x, 2) + math.pow(x.y, 2) + math.pow(x.z, 2))
-
-
+            raise NotImplementedError

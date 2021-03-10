@@ -6,6 +6,7 @@ import yaml
 import json
 import operator
 import traceback
+import os
 
 from rospy_message_converter import message_converter
 from threading import Thread
@@ -47,9 +48,6 @@ class Receiver():
         This function will be called everytime whenever a message is received by the subscriber.
         It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
         '''
-
-        # TODO: Change all these ROS messages to python dicts
-
         # For every person in the image, sort their data into the correction spot queue in redis
         for p in message.persons:
             p_dict = message_converter.convert_ros_message_to_dictionary(p)
@@ -72,7 +70,7 @@ class Sender(Thread):
         self.publisher_topic = publisher_topic 
         self.redis_sending_queue_name = redis_sending_queue_name
         self.message_queue_interface = message_queue_interface_class()
-
+ 
         self.publisher = rp.Publisher(self.publisher_topic, String, queue_size=1000)  
 
         self.running = True
@@ -89,10 +87,9 @@ class Sender(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                traceback.print_exc()
                 rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name))
+                traceback.print_exc()
             try:
-                # Unpack message dict and error out if it contains bad fields
                 message = json.dumps({'topic': self.publisher_topic, 'data': data})
                 self.publisher.publish(message)
                 rp.logerr("ComparingNode.py sent message: " + str(message))
@@ -111,14 +108,14 @@ class SpotInfoHandler():
         self.spots = dict()
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)        
 
-    def callback(self, name_parameter_containing_exercises):
+    def callback(self, name_parameter_containing_exercises: str):
         last_spots = self.spots
         self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data)) # TODO: Fit this to API with tamer
 
         now = rp.get_rostime()
         for k, v in self.spots.items():
-            exercise_and_start_time = {'exercise': v, 'start_time': now}
-            if last_spots.get(k) == v:
+            if (v == last_spots.get(k)) or not last_spots:  # If last_spots is empty, it has not been set yet and we still want to set all spot info
+                exercise_and_start_time = {'exercise': v, 'start_time': now}
                 redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(k)
                 rp.logerr("Updating info for: " + redis_spot_info_key)
                 # Use keys to delete queues and update info on spots
@@ -155,16 +152,16 @@ if __name__ == '__main__':
         for t in all_threads:
             # TODO: We can not use thread.join() for some reason, envestigate why
             t.running = False
-
+    
     rp.on_shutdown(kill_threads)
 
-    # TEST CODE, REMOVE AS SOON A TAMER PUBLISHES EXERCISES
-    publisher = rp.Publisher(ROS_EXERCISES_CHANGE_TOPIC, String, queue_size=10)
-    message = 'exercise'
-    import time
-    time.sleep(1)
-    publisher.publish(message)
-    publisher.publish(message)
+    if int(os.environ.get('COMPARING_SYSTEM_DEVELOPER_MODE') or 0) == 1:
+        # This code is executed to not depend on the expert system
+        publisher = rp.Publisher(ROS_EXERCISES_CHANGE_TOPIC, String, queue_size=10)
+        message = 'exercise'
+        import time
+        time.sleep(0.3)
+        publisher.publish(message)
 
     rp.spin()
 

@@ -17,8 +17,6 @@ from typing import Tuple, Any
 from src.config import *
 
 redis_connection_pool = redis.ConnectionPool(host='localhost', port=5678, db=0)
-redis_spot_queue_dequeueing_semaphore = threading.Semaphore(value=1)
-
 
 class QueueingException(Exception):
     pass
@@ -108,20 +106,19 @@ class QueueLoadBalancerInterface:
 
 
 class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
-    # TODO: Use IndexedOrderedDict from the indexed package
     def __init__(self):
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
     def get_queue_key(self):
-        # For now, simply take the key corresponding to the spot with the highest load , NO ACTUALY LOAD BALANCING!
+        # For now, simply take the key corresponding to the spot with the highest load, NO ACTUALY LOAD BALANCING!
         spot_key_list = self.redis_connection.zrange(REDIS_LOAD_BALANCER_LIST_KEY, 0, 0)
         if not spot_key_list:
-            raise QueueEmpty
+           raise QueueEmpty
         spot_key = spot_key_list[0]
         try:
             spot_key = spot_key.decode('utf-8')
         except Exception:
-            # Catch cases where we can an byte encoded string back (ROS's Python 2.7 does that to us)
+            # Catch cases where we can an byte encoded string back (ROS Melodic's Python 2.7 does that to us)
             pass
         return spot_key
 
@@ -142,22 +139,16 @@ class RedisMessageQueueInterface(MessageQueueInterface):
         message = self.redis_connection.lpush(key, msgpack.packb(message))
 
     def blocking_dequeue(self, key, timeout=2):
-        try:
-            message = self.redis_connection.brpop(key, timeout)
-            if not message:
-                raise QueueEmpty
-            message = message[1]
-            message = msgpack.unpackb(message) # TODO: Python 2.7 bytestrings anywhere?
-            try:
-                message = message.decode('utf-8')
-            except Exception:
-                # Catch cases where we can an byte encoded string back (ROS's Python 2.7 does that to us)
-                pass
-        except QueueEmpty:
+        message = self.redis_connection.brpop(key, timeout)
+        if not message:
             raise QueueEmpty
-        except Exception as e:
-            rp.logerr("Issue getting message from Queue: " + str(key))
-            print_exc()
+        message = message[1]
+        message = msgpack.unpackb(message) # TODO: Python 2.7 bytestrings anywhere?
+        try:
+            message = message.decode('utf-8')
+        except Exception:
+            # Catch cases where we can an byte encoded string back (ROS's Python 2.7 does that to us)
+            pass
         
         return message
             
@@ -208,14 +199,9 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         """
         Return spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
         """
-        # TODO: Investigate if these redis instructions can be optimized
+        # TODO: Investigate if these redis instructions can be optimized, possibly use a distributed lock
 
         redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(spot_key)
-        
-        # try:
-        #     assert redis_spot_queue_dequeueing_semaphore.acquire(blocking=True, timeout=0.1)
-        # except AssertionError:
-        #     raise QueueEmpty
 
         try:
             joints_with_timestame_bytes = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
@@ -233,11 +219,10 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         future_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
         past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
 
-        # redis_spot_queue_dequeueing_semaphore.release()
-
         spot_info_yaml = self.redis_connection.get(redis_spot_info_key)
 
         if not spot_info_yaml:
+            rp.logerr("Missing spot info for spot key " + str(spot_key) + " \n Continueing with next timestep")
             raise QueueEmpty
 
         spot_info_dict = yaml.load(spot_info_yaml) # TODO: Switch from using yaml to Rejson

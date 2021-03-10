@@ -92,12 +92,10 @@ const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
   });
 });
 
-
 // Tamers Web-App Code
 const wrong_coordinates = nh.subscribe('/wrongcoordinates', StringMsg, (msg) => {
   wrongcoordinates = msg.data;
 });
-
 
 const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
   let pose = {};
@@ -155,20 +153,16 @@ app.get('/api/wrongCoordinates', (req, res) => {
   res.json(wrongcoordinates);
 });
 
-
-
-
 // Add new client connections
 wss.on('connection', (ws, req) => {
   const location = url.parse(req.url, true);
 
-  if((location.path.includes('corrections'))){ // Deprecate "corrections" paths
+  if(location.path.includes('corrections') || location.path == 'comparing-system-app-api') { // Deprecate "corrections" paths
     // Arturs connection
     SmartphoneAppClients.push(ws);
-    console.log("Orhan hat sich verbunden :)");
     ws.on('message', function incoming(message) {
       pub_qr.publish({ data: message })  // Refine this
-      console.log('received: %s', message); //json squats
+      rosnodejs.log.error("Received message ", message)
     });
   } else {
     // Tamers connection

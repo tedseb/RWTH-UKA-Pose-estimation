@@ -68,11 +68,11 @@ docker run -it -d --rm \
         --privileged \
         --net=host \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
-        -v $(pwd):/trainerai \
-        -v /trainerai/node_modules \
+        -v $(pwd):/home/trainerai/trainerai-core \
+        -v /home/trainerai/trainerai-core/node_modules \
         $webcam_option \
         $gpu_option \
-        registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-dev-update > /dev/null
+        registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 > /dev/null
 
 if $osx; then
 	docker exec -it trainerAI sh -c "export DISPLAY=host.docker.internal:0 && xhost + $(ifconfig en0 | grep 'inet[ ]' | awk '{print$2}')"

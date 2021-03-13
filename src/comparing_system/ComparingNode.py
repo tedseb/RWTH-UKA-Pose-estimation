@@ -1,308 +1,167 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# Shawans Imports
-import math
-import numpy as np
 import rospy as rp
+import yaml
+import json
+import operator
+import traceback
 
+from rospy_message_converter import message_converter
+from threading import Thread
+from importlib import import_module
+from queue import Queue, Empty, Full
+
+from comparing_system.msg import user_state, user_correction
 from backend.msg import Persons
 from geometry_msgs.msg import Vector3, Point
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
-# Arturs Imports
-import threading
-import sqlite3
-from importlib import import_module
-from collections import deque
-import yaml
-from joint_adapters.spin_adapter import *
+# ComparingNode imports
+from src.joint_adapters.spin import *
+from src.Comparator import Comparator
+from src.config import *
+from src.Queueing import *
 
-# Datafields from Tamer:
-
-# TODO: What are those three?
-last_30_poses = deque()
-lastPose = {}
-angles = {}
-alpha = 20 # Beschreibt eine Art Schmidt-Trigger
-
-# TODO: Auslagern
-state = 0
-states = dict()
-corrections = dict()
-reps = 0
+# db 0 is our (comparing node) database
+# TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
+redis_connection_pool = redis.ConnectionPool(host='localhost', port=5678, db=0)
 
 
-# Artur's Datafields:
-# TODO: Read the parameters from ROS launch file
-
-current_exercise = None
-
-JOINT_ADAPTER_FILE = 'joint_adapters.spin_adapter'
-
-ROS_TOPIC_REPETITION_COUNTER = '/repcounter'  # Shawan topic choice: commands2user
-ROS_TOPIC_CORRECTIONS = '/corrections'
-ROS_TOPIC_WRONG_COORDINATES = '/wrongcoordinates'
-
-ROS_TOPIC_CALLBACK = 'fused_skelleton' # Shawan's topic choice
-
-import_module(JOINT_ADAPTER_FILE)
-
-
-class Comparator():
-    def __init__(self):
-        # Define a publisher to publish the 3D skeleton of multiple people
-        self.repetition_publisher = rp.Publisher(ROS_TOPIC_REPETITION_COUNTER, String, queue_size=100)
-        self.error_publisher = rp.Publisher(ROS_TOPIC_CORRECTIONS, String, queue_size=100)
-        self.coordinates_publisher = rp.Publisher(ROS_TOPIC_WRONG_COORDINATES, String, queue_size=100)
+class Receiver():
+    """
+    The Receiver subscribes to the ROS topic that contains joints (or 'skelletons') and puts them into separate queues.
+    Each queue corresponds to one spot. Therefore, multiple views of the same spot go into the same queue.
+    """
+    def __init__(self, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
         # Define a subscriber to retrive tracked bodies
-        rp.Subscriber(ROS_TOPIC_CALLBACK, Persons, self.callback)
+        rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
+        self.spot_queue_interface = spot_queue_interface_class()
 
-        rp.spin()
+        self.spot_queue_load_balancer = spot_queue_load_balancer_class()
+        self.skelleton_adapter = None
 
-    def callback(self, msg):
+    def callback(self, message):
         '''
-        This function will be called everytime whenever a message is received by the subscriber
+        This function will be called everytime whenever a message is received by the subscriber.
+        It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
         '''
-        global lastPose
-        global current_exercise
-        global ownpose_used
 
-        
-        pose = {}
-        bodyParts = msg.persons[0].bodyParts # TODO: This currently uses only the first person, which we not sustainable, as we want to track multiple people
+        # TODO: Change all these ROS messages to python dicts
 
-        try:
-            current_exercise = yaml.safe_load(rp.get_param('exercise'))
-        except KeyError as e:
-            print("No exercise set under rostopic 'exercise', maybe the expert system is not running or ROS is not properly set up?")
-            return
-        print("dictinary: ",current_exercise['exercise'].keys()) #Shawan get station IDs
+        # For every person in the image, sort their data into the correction spot queue in redis
+        for p in message.persons:
+            p_dict = message_converter.convert_ros_message_to_dictionary(p)
+            timestamp = message_converter.convert_ros_message_to_dictionary(message.header.stamp)
 
-        if current_exercise['name'] not in states.keys():
-            states[current_exercise['name']] = []
-        
-        if current_exercise['name'] not in corrections.keys():
-            corrections[current_exercise['name']] = {1: "", 2: ""}
+            joints_with_timestamp = {'joints': p_dict["bodyParts"], 'timestamp': timestamp}   # Get away from messages here, towards a simple dict
 
-        for index in ownpose_used:
-            point = Point()
-            # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-            point.x = bodyParts[index].point.x
-            point.y = bodyParts[index].point.z
-            point.z = bodyParts[index].point.y
-            pose[joint_labels[index]] = point
+            queue_size = self.spot_queue_interface.enqueue(p.stationID, joints_with_timestamp)
 
-        # This corresponds to Tamers "save" method
-        last_30_poses.append(pose)
-        lastPose = pose
-        if (len(last_30_poses) >= 30):
-            last_30_poses.popleft()
-            # console.log(checkForStretch(last30)) # TODO: This is nodejs code from Tamer, find out what it does
-
-        for angle, points in joints.items():
-            angles[angle] = calculateAngle(points)
-        
-        # The following commented out code is not Python, but leftovers from Tamer for completeness
-        # angles.leftLeg = threepointangle(pose.leftHip, pose.leftKnee, pose.leftAnkle);
-        # angles.rightLeg = threepointangle(pose.rightHip, pose.rightKnee, pose.rightAnkle);
-        # angles.leftArm = threepointangle(pose.leftShoulder, pose.leftElbow, pose.leftWrist);
-        # angles.rightArm = threepointangle(pose.rightShoulder, pose.rightElbow, pose.rightWrist);
-        # angles.upperBody = (threepointangle(pose.leftShoulder, pose.leftHip, pose.leftKnee) + threepointangle(pose.rightShoulder, pose.rightHip, pose.rightKnee)) / 2;
-        # const bottomLeft = { x: pose.leftAnkle.x, y: pose.leftAnkle.y - 1, z: pose.leftAnkle.z };
-        # const bottomRight = { x: pose.rightAnkle.x, y: pose.rightAnkle.y - 1, z: pose.rightAnkle.z };
-        # angles.leftShin = threepointangle(pose.leftKnee, pose.leftAnkle, bottomLeft);
-        # angles.rightShin = threepointangle(pose.rightKnee, pose.rightAnkle, bottomRight); *
-
-        self.count()
-        self.correct(angles, current_exercise, str(state))
+            self.spot_queue_load_balancer.set_queue_size(p.stationID, queue_size)
 
 
-        # This code was initially written by Shawan when he passed the code to me but does not fit what Tamer did
-        # reply = list()
-        # for idx, person in range(len(msg.persons)), msg.persons:  # TODO: Check if this works
-        #     print("--------------------------------------")
-        #     print("Persons: ")
-        #     for bodypart in person.bodyParts:
-        #         print(bodypart)
-        #         # Use for your calculation for example this: bodypart.point.x, bodypart.point.y , bodypart.point.z
-        #         msg = commands()
-        #         msg.id = idx  # Not sure if self.frame_callback or only id is the correct choice for the skelleton definition
-        #         msg.data = "test"
-        #     reply.append(msg)
-        # publish the markers
-        # self.repetition_publisher.publish(reply)
-  
-        
-    def correct(self, angles, exercise, state):
-        messages = self.checkForCorrection(angles, exercise['stages'], state)
-        if (messages == corrections[exercise['name']].get(state)):
-            pass # TODO: Herausfinden was sich Tamer dabei gedacht hat
-        else:
-            corrections[exercise['name']][state] = messages
-            if (len(messages) > 0):
-                self.error_publisher.publish(messages)
-                print(messages.encode('utf-8').strip())
-    
-    def checkForCorrection(self, angles, stages, state):
-        """
-        As of now, the default arguments to this function are: angles, squats, state
-        """
-        rules = stages[state]["rules"]
-        corrections = ""
-        for key in rules.keys():
-            rule = rules[key][0]
-            if rule == "max":
-                if (angles[key] >= rules[key][1] + alpha):
-                    corrections += rules[key][2] + ". "
-                    # console.log(JSON.stringify(angle_points[k]))
-                    self.coordinates_publisher.publish(str(joints[key]))
-            elif rule == "min":
-                if (angles[key] <= rules[key][1] - alpha):
-                    corrections += rules[key][2] + ". "
-                    # console.log(JSON.stringify(angle_points[k]))
-                    self.coordinates_publisher.publish(str(joints[key]))
-            elif rule == "behind":
-                # a: 0, b: 1, p: 1, x: 2
-                a = lastPose[joints[key][0]]
-                b = lastPose[joints[key][1]]
-                p = lastPose[joints[key][1]]
-                x = lastPose[joints[key][2]]
-                val_x = plane3d(a, b, p, x)
-                val_a = plane3d(a, b, p, a)
-                if (math.copysign(1, val_x) == math.copysign(1, val_a)):
-                    corrections += rules[key][2] + ". "
-                    self.coordinates_publisher.publish(str(joints[key]))
-        return corrections
+class Sender(Thread):
+    """
+    The Sender thread waits for messages in the sending_queue and sends them via ROS as they become available.
+    """
+    def __init__(self, publisher_topic: str, message_type, redis_sending_queue_name: str, message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
+        super(Sender, self).__init__()
+        self.publisher = rp.Publisher(publisher_topic, String, queue_size=1000)    
+        self.redis_sending_queue_name = redis_sending_queue_name
+        self.message_queue_interface = message_queue_interface_class()
 
-    def count(self):
-        # TODO: Get these global Variables into a class
-        global state
-        global reps
-        global states
+        self.running = True
 
-        if state < 3 and checkforstate(angles, current_exercise, str(state + 1)):
-            # states.squats.push(states + 1)
-            state += 1
-        
-        if (state == 3):
-            if (checkforstate(angles, current_exercise, str(1))):
-                states['squats'].append(1)
-                state = 1
-                reps += 1
-                # console.log(reps)
-                self.repetition_publisher.publish(str(reps))
-        # if (state == 0):
-        #     if (checkforstate(angles, squats, 1)):
-        #         states['squats'].append(1)
-        #         state = 1
-        
-        # elif(state == 1):
-        #     if (checkforstate(angles, squats, 2)):
-        #         states['squats'].append(2)
-        #         state = 2
-        # elif(state == 2):
-        #     if(checkforstate(angles, squats, 1)):
-        #         states['squats'].append(1)
-        #         state = 1
-        #         reps += 1
-        #         # console.log(reps)
-        #         self.repetition_publisher.publish(commands(data=str(reps)))
-        # if (checkforrep(states['squats'])):
-        #     pass  # TODO: Again, why is this here?
-        #     # reps = checkforrep
+        self.start()
 
-def calculateAngle(array):
-    # Tamer used this function to calculate the angle between left hip, l knee and big toe
-    if len(array) == 2:
-        newPoint = Point(lastPose[array[1]].x, lastPose[array[1]].y - 1, lastPose[array[1]].z)
-        return threepointangle(lastPose[array[0]], lastPose[array[1]], newPoint)
-    elif len(array) == 3:
-        return threepointangle(lastPose[array[0]], lastPose[array[1]], lastPose[array[2]])
-    elif len(array) == 6:
-        return (threepointangle(lastPose[array[0]], lastPose[array[1]], lastPose[array[2]]) + threepointangle(lastPose[array[3]], lastPose[array[4]], lastPose[array[5]])) / 2
-    return 0
+    def run(self):
+        '''
+        We publish messages indefinately. If there are none, we wait for the queue to fill and report back every 5 seconds.
+        '''
+        while(self.running):
+            try:
+                message = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
+            except QueueEmpty:
+                continue
+            except Exception as e:
+                traceback.print_exc()
+                rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name))
+            try:
+                # Unpack message dict and error out if it contains bad fields
+                self.publisher.publish(json.dumps(message))
+                rp.logerr("ComparingNode.py sent message: " + str(message))
+            except Exception as e:
+                raise(e)
+                rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
+                
 
+class SpotInfoHandler():
+    """
+    This class waits for updates on the spots, such as a change of exercises that the spot.
+    Such changes are written into the spot information .json via Redis.
+    """
+    def __init__(self):
+        self.subscriber = rp.Subscriber(ROS_EXERCISES_CHANGE_TOPIC, String, self.callback)
+        self.spots = dict()
+        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)        
 
-def checkforstate(angles, exercise, state):
-    stage = exercise["stages"][state]["angles"]
-    _pass = True
-    for key in stage.keys():
-        _pass = _pass and (angles[key] >= stage[key] - alpha and angles[key] <= stage[key] + alpha)
-    return _pass
+    def callback(self, name_parameter_containing_exercises):
+        last_spots = self.spots
+        self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data)) # TODO: Fit this to API with tamer
 
-def checkforrep(array):
-    # TODO: This code is quite ugly
-    if array and (array[0] != 1 or array[len(array) - 1] != 1):
-        return False
-    for i in range(len(array)):
-        if (array[i] - array[i - 1] > 1):
-            return False
-    return True
-
-# a and b are the start and end point of a given vector, which is perpendicular to the plane
-# p is a point of that plane
-# x will be checked against that plane
-# b_ = {x: b.x, y: a.y, z: b.z}; for a plane that is 
-def plane3d (a, b, p, x):
-    # TODO: Clean this up
-    direction = create_vector_from_two_points(a, b)
-    val = dot_product(Vector3(x.x - p.x, x.y - p.y, x.z - p.z), direction)
-    return val
-
-def checkForStretch(arr):
-    # TODO: Clean this up
-    lastAngles = {}
-    currentAngles = {}
-    differences = {}
-    for key in joints.keys():
-        differences[key] = []
-    for element in arr:
-        for angle, points in joints:
-            currentAngles[angle] = calculateAngle(points)
-        if (lastAngles):
-            for key in lastAngles.keys():
-                differences[key].append(currentAngles[key] - lastAngles[key])
-        else:
-            lastAngles = currentAngles
-        
-    sums = {}
-    for angle, diff in differences:
-        sum = 0
-        for element in diff:
-            sum += element
-        sums[angle] = sum
-    
-
-    if (sums['leftLeg'] >= 0 or sums['rightLeg'] >= 0):
-        return True
-    else:
-        return False
-
-def angle3d(a, b):
-    # TODO: This code is quite ugly
-    x = dot_product(a, b) / (length_of_vector(a) * length_of_vector(b))
-    return math.acos(x) * 180 / math.pi
-
-def threepointangle(a, b, c):
-    ba = create_vector_from_two_points(b, a)
-    bc = create_vector_from_two_points(b, c)
-    return angle3d(ba, bc)
-
-def create_vector_from_two_points(a, b):
-    return Vector3(b.x - a.x, b.y - a.y, b.z - a.z)
-
-def dot_product(a, b):
-    return a.x * b.x + a.y * b.y + a.z * b.z  # TODO: This currently "only" fits the first three dimensions
-
-def length_of_vector(x):
-    return math.sqrt(math.pow(x.x, 2) + math.pow(x.y, 2) + math.pow(x.z, 2))
+        now = rp.get_rostime()
+        for k, v in self.spots.items():
+            exercise_and_start_time = {'exercise': v, 'start_time': now}
+            if last_spots.get(k) == v:
+                redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(k)
+                rp.logerr("Updating info for: " + redis_spot_info_key)
+                # Use keys to delete queues and update info on spots
+                self.redis_connection.set(redis_spot_info_key, yaml.dump(exercise_and_start_time))
+                num_deleted_items = self.redis_connection.delete(redis_spot_queue_key)
+                num_deleted_items += self.redis_connection.delete(redis_spot_past_queue_key)
+                rp.loginfo("Deleted " + str(num_deleted_items) + " from " + redis_spot_queue_key + " due to an exercise change at ROS time " + str(now))
+                
 
 if __name__ == '__main__':
     # initialize ros node
     rp.init_node('comparing_system_node', anonymous=False)
 
-    # instantiate the Comparator class
-    comparator = Comparator()
+    # TODO: Do not hardcode maxsize
+    # Both queues contain dictionaries that can easily converted to YAML to be pusblished via ROS
+    user_state_out_queue = Queue(maxsize=QUEUEING_USER_STATE_QUEUE_SIZE_MAX)
+    user_correction_out_queue = Queue(maxsize=QUEUEING_USER_INFO_QUEUE_SIZE_MAX)
 
+    # Define a publisher to publish the data for all users to the REST Node
+    user_state_sender = Sender(ROS_TOPIC_USER_EXERCISE_STATES, user_state, REDIS_USER_STATE_SENDING_QUEUE_NAME)
+    user_correction_sender = Sender(ROS_TOPIC_USER_CORRECTIONS, user_correction, REDIS_USER_INFO_SENDING_QUEUE_NAME)
+
+    # Spawn a couple of Comparator threads
+    comparators = []
+    for i in range(NUMBER_OF_COMPARATOR_THREADS):
+        comparators.append(Comparator())
+
+    receiver = Receiver()
+
+    spot_info_handler = SpotInfoHandler()
+
+    def kill_threads():
+        all_threads = comparators + [user_state_sender, user_correction_sender]
+        for t in all_threads:
+            # TODO: We can not use thread.join() for some reason, envestigate why
+            t.running = False
+
+    rp.on_shutdown(kill_threads)
+
+    # TEST CODE, REMOVE AS SOON A TAMER PUBLISHES EXERCISES
+    publisher = rp.Publisher(ROS_EXERCISES_CHANGE_TOPIC, String, queue_size=10)
+    message = 'exercise'
+    import time
+    time.sleep(1)
+    publisher.publish(message)
+    publisher.publish(message)
+
+    rp.spin()
+
+ 

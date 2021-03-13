@@ -58,8 +58,6 @@ async function run() {
     const db = client.db("trainerai");
     const exercises = db.collection("exercises");
 
-    const interim = exercises.insertOne(squats);
-
     nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
         const query = { name: msg };
         const result = await exercises.findOne(query);

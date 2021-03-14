@@ -20,7 +20,7 @@ case $key in
     build_and_update=true
     ;;
     *)    # Positional parameter
-    positional_parameters+=("$1") # save it in an array for later
+    positional_parameters+=($key) # save it in an array for later
     ;;
 esac
 done
@@ -40,15 +40,17 @@ fi
 
 if [ "$build_and_update" = "true" ] ; then
     echo 'building an update image'
-    #echo "Using Dockfile at " $1
+    echo "Using Dockfile at " $1
     # build the dev image, which adds dev tools to the image
-    #name=$(echo $1 | sed 's:.*/::')
+    name=$(echo $1 | sed 's:.*/::')
     docker build -t registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-"${name}" -f $1 .
 fi
 
 if [ "$push" = "true" ] ; then
 	echo 'Pushing built images to registry'
-    docker push registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-dev-update
+    echo "Using Dockfile at " $1
+    name=$(echo $1 | sed 's:.*/::')
+    docker push registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-"${name}"
 	# if [ "$build" = "true" ] ; then
 	#     docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-base
 	#     docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-dev
@@ -61,7 +63,7 @@ fi
 
 if [ "$push" = "false" ] && [ "$build_and_update" = "false" ] && [ "$build" = "false" ] ; then 
     echo 'pull docker image'
-    docker pull registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-dev-update
+    docker pull registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20
 fi
 
 # Example: bash docker/build_docker.sh --push --dev /home/shawan/PycharmProjects/core/docker/dev-update

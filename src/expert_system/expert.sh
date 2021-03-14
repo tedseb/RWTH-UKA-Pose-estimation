@@ -1,2 +1,2 @@
 #!/bin/bash
-node /trainerai/src/rosnodejsNodes/expert_slim.js
+node /home/trainerai/trainerai-core/src/rosnodejsNodes/expert_slim.js

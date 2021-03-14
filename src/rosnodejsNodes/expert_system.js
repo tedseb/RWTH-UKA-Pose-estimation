@@ -1,5 +1,4 @@
 var MongoClient = require('mongodb').MongoClient;
-const express = require('express');
 const rosnodejs = require('rosnodejs');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const YAML = require('yaml');

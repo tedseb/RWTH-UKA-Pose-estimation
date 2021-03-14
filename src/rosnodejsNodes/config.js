@@ -7,13 +7,14 @@ config.PORT = 3000;
 config.db_uri = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin";
 config.PORT_exp = 3001;
 config.exp_api_options = {
-    hostname: 'localhost',
-    port: 3001,
-    path: '/expert/exercises/recordings',
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    }
+  secure: false,
+  hostname: 'localhost',
+  port: 3001,
+  path: '/expert/exercises/recordings',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  }
 };
 
 // skeleton labeling related data

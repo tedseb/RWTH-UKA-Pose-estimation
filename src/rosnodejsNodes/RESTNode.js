@@ -51,7 +51,7 @@ const ownpose = config.ownpose;
 // Web App Code:
 const app = express();
 const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
-app.use(express.json);
+app.use(bodyParser.json());
 app.use(express.static(process.cwd() + '/dist/'));
 const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
@@ -59,12 +59,13 @@ let coordinateClients = [];
 
 rosnodejs.initNode('/RESTApi')
 
+
 // TODO: Shutdown gracefully to app: rosnodejs.on('shutdown', function() {  });
 const nh = rosnodejs.nh;
 
 //datastructures for expertsystem
 var isRecording = false;
-var recordedPoses = [{data: 'hi'}];
+var recordedPoses = [];
 var recordStart = Date.now();
 
 // We use this to advertise the Exercise name, read with the current QR Code
@@ -115,7 +116,7 @@ const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg
     }
   });
 
-  if(isRecording) {
+  if (isRecording) {
     recordedPoses.push([Date.now() - recordStart, pose]);
   }
 });
@@ -157,19 +158,28 @@ app.get('/api/wrongCoordinates', (req, res) => {
 });
 
 app.post('/api/exercise/recording/start', (req, res) => {
-  isRecording = true;
-  recordStart = Date.now();
+  console.log('recording requested');
+  if (isRecording) {
+    console.error('a recording is already in process');
+    res.status(500).send();
+  } else {
+    isRecording = true;
+    recordStart = Date.now();
+    res.status(200).send();
+  }
+
 });
 
 app.post('/api/exercise/recording/stop', (req, res) => {
+  console.log('saving record requested');
   isRecording = false;
   res.json(recordedPoses);
   //TODO: send to expertsystem after stop.
-  const saveRecordings = https.request(config.exp_api_options, res => {
+  /* const saveRecordings = https.request(config.exp_api_options, res => {
     console.log(`statusCode: ${res.statusCode}`);
   });
   saveRecordings.write(JSON.stringify(recordedPoses));
-  saveRecordings.end();
+  saveRecordings.end(); */
   recordedPoses = [];
 });
 

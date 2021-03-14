@@ -2,7 +2,7 @@
   <include file="$(find infrastructure)/launch/all_cameras.launch" />
   <include file="$(find spin)/launch/spin.launch" />
   <include file="$(find comparing_system)/launch/comparing_system.launch" />
-  <include file="$(find expert_system)/launch/expert_system.launch" />
+  <!-- <include file="$(find expert_system)/launch/expert_system.launch" /> -->
   <node name="SpinVis" pkg="backend" type="SpinVis.py" />
 </launch> 
  

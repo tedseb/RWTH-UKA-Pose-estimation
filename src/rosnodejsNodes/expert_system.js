@@ -1,7 +1,9 @@
 var MongoClient = require('mongodb').MongoClient;
+const express = require('express');
 const rosnodejs = require('rosnodejs');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const YAML = require('yaml');
+const config = require('./config');
 
 
 rosnodejs.initNode('/expert_system')
@@ -11,9 +13,18 @@ const nh = rosnodejs.nh;
 const pubex = nh.advertise('/exercises', StringMsg);
 
 //MongoDB path
-const uri = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin";
+const uri = config.db_uri;
+
+//communication between REST Node and Expert
+const express = require('express');
+const app = express();
+const PORT = config.PORT_exp;
+const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
+app.use(express.json);
 
 MongoClient.connect(uri, { useUnifiedTopology: true }, (err, client) => {
+  if (err) throw err;
+
   //get trainerai DB and exercises collection
   const db = client.db("trainerai");
   const exercises = db.collection("exercises");
@@ -30,4 +41,12 @@ MongoClient.connect(uri, { useUnifiedTopology: true }, (err, client) => {
       }
     });
   });
+
+  app.post('/expert/exercises/recordings', (req, res) => {
+      console.log(req);
+      const recordings = db.collection('recordings');
+      recordings.insertOne(req.body)
+      res.status(200);
+  });
+
 });

@@ -77,8 +77,8 @@ class run_spin():
             img_draw = cv2.rectangle(img_draw, start_point2, end_point2, color2, thickness)
         
             
-            if os.path.exists('/trainerai/src/infrastructure/stations/station_coordinate.yaml'):
-                with open(r'/trainerai/src/infrastructure/stations/station_coordinate.yaml') as file:
+            if os.path.exists('/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml'):
+                with open(r'/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml') as file:
                     station_dic = yaml.load(file)
                 print("Content: ",station_dic) 
             else:
@@ -86,9 +86,9 @@ class run_spin():
                 print("Content: ",station_dic) 
 
             station_dic[(inc)] = [(bbox[0]-(incSpace*bbox[2])), (bbox[1]-(incSpace*bbox[3])), ((1+incSpace)*bbox[2]), ((1+incSpace)*bbox[3])]
-            with open('/trainerai/src/infrastructure/stations/station_coordinate.yaml', "w+") as file:  # Safely open the file
+            with open('/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml', "w+") as file:  # Safely open the file
                 documents = yaml.dump(station_dic, file)
-            cv2.imwrite('/trainerai/src/infrastructure/stations/station_ID_'+ str(inc)+'.png',img_draw)
+            cv2.imwrite('/home/trainerai/trainerai-core/src/infrastructure/stations/station_ID_'+ str(inc)+'.png',img_draw)
             
 
 if __name__ == '__main__':

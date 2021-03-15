@@ -114,8 +114,8 @@ if __name__ == '__main__':
     single_person=False 
     with_station=False
 
-    if os.path.exists('/trainerai/src/infrastructure/stations/station_coordinate.yaml'):
-        with open(r'/trainerai/src/infrastructure/stations/station_coordinate.yaml') as file:
+    if os.path.exists('/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml'):
+        with open(r'/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml') as file:
             station_dic = yaml.load(file)
 
     rospy.init_node('objectNode', anonymous=True)

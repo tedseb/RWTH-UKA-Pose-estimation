@@ -58,17 +58,31 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
     });
   });
 
-  app.post('/expert/exercises/recordings', (req, res) => {
+  app.post('/expert/exercise/recordings', (req, res) => {
       console.log(req.body);
       res.status(200).send();
   });
 
-  app.post('/api/expert/exercises/save', (req, res) => {
-    if(req && req.name) {
-      exercises.insertOne(req.body);
-      res.status(200).send(exercises.findOne({name: req.name}));
+  app.post('/api/expert/exercise/save', (req, res) => {
+    if(req && req.body['exercise']) {
+      const exercise = req.body['exercise'];
+      console.log(exercise.name);
+      exercises.insertOne(exercise);
+      res.status(200).send(exercises.findOne({name: exercise.name}));
     } else {
       res.status(500).send('Malformed Exercise');
+    }
+  });
+
+  app.post('/api/expert/recording/save', (req, res) => {
+    console.log(req.body);
+    if(req && req.body['recording']) {
+      const recording = req.body['recording'];
+      console.log(exercise.name);
+      exercises.insertOne(exercise);
+      res.status(200).send();
+    } else {
+      res.status(500).send('Malformed Recording');
     }
   });
 

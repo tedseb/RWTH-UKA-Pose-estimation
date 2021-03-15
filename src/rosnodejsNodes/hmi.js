@@ -22,8 +22,9 @@ const ownpose = config.ownpose;
 // Web App Code:
 const app = express();
 const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
-app.use(bodyParser.json());
+app.use(bodyParser.json({limit: '50mb'}));
 app.use(bodyParser.urlencoded({
+  limit: '50mb',
   extended: true
 }));
 app.use(express.static(process.cwd() + '/dist/'));
@@ -44,6 +45,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   //get trainerai DB and exercises collection
   const db = client.db("trainerai");
   const exercises = db.collection("exercises");
+  const recordings = db.collection("recordings");
 
   nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
     exercises.findOne({ name: msg['data'] }, (err, result) => {
@@ -68,18 +70,20 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
       const exercise = req.body['exercise'];
       console.log(exercise.name);
       exercises.insertOne(exercise);
-      res.status(200).send(exercises.findOne({name: exercise.name}));
+      res.status(200).send();
     } else {
       res.status(500).send('Malformed Exercise');
     }
   });
 
+  //req.body == recording raw
   app.post('/api/expert/recording/save', (req, res) => {
-    console.log(req.body);
-    if(req && req.body['recording']) {
-      const recording = req.body['recording'];
-      console.log(exercise.name);
-      exercises.insertOne(exercise);
+    if(req) {
+      const recording = req.body;
+      const recObj = {
+        recording: recording
+      };
+      recordings.insertOne(recObj);
       res.status(200).send();
     } else {
       res.status(500).send('Malformed Recording');

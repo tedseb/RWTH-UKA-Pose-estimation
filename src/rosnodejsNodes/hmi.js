@@ -57,8 +57,7 @@ const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
 let coordinateClients = [];
 
-rosnodejs.initNode('/RESTApi')
-
+rosnodejs.initNode('/hmi')
 
 // TODO: Shutdown gracefully to app: rosnodejs.on('shutdown', function() {  });
 const nh = rosnodejs.nh;
@@ -68,8 +67,8 @@ var isRecording = false;
 var recordedPoses = [];
 var recordStart = Date.now();
 
-// We use this to advertise the Exercise name, read with the current QR Code
-const pub_qr = nh.advertise('/qr_exercise', StringMsg);
+/* // We use this to advertise the Exercise name, read with the current QR Code
+//const pub_qr = nh.advertise('/qr_exercise', StringMsg);
 
 // We use this user_state and deprecate the very first API structure "repetition"
 const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
@@ -90,7 +89,7 @@ const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
       client.send(JSON.stringify({ topic: "user_correction", data: data }));
     };
   });
-});
+}); */
 
 // Tamers Web-App Code
 const wrong_coordinates = nh.subscribe('/wrongcoordinates', StringMsg, (msg) => {
@@ -186,8 +185,7 @@ app.post('/api/exercise/recording/stop', (req, res) => {
 // Add new client connections
 wss.on('connection', (ws, req) => {
   const location = url.parse(req.url, true);
-
-  if ((location.path.includes('corrections'))) { // Deprecate "corrections" paths
+  /* if ((location.path.includes('corrections'))) { // Deprecate "corrections" paths
     // Arturs connection
     SmartphoneAppClients.push(ws);
     console.log("Orhan hat sich verbunden :)");
@@ -195,9 +193,9 @@ wss.on('connection', (ws, req) => {
       pub_qr.publish({ data: message })  // Refine this
       console.log('received: %s', message); //json squats
     });
-  } else {
+  } else { */
     // Tamers connection
     coordinateClients.push(ws);
-  }
-  ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
+  //}
+  //ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
 });

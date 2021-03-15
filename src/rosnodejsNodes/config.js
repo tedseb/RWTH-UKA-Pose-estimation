@@ -1,5 +1,8 @@
 var config = {};
 
+
+config.MOBILE_SERVER_PORT = 3030;
+
 // webapp constants
 config.PORT = 3000;
 

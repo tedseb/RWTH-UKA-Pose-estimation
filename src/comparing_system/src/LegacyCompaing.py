@@ -118,8 +118,7 @@ def count(current_exercise):
             state = 0
             reps += 1
             rp.loginfo("Legacy Comparing: Reps: " + str(reps))
-            return reps
-    return 
+    return reps
 
 def checkforstate(angles, exercise, state):
     stage = exercise["stages"][state]["angles"]

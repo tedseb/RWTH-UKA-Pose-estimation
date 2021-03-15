@@ -81,7 +81,7 @@ class Comparator(Thread):
 
         updated_repetitions, correction, center_of_body = comparison_info
 
-        if correction != None:
+        if correction != None and SEND_CORRETIONS:
             user_correction_message = {
                 'user_id': 0,
                 'repetition': updated_repetitions,

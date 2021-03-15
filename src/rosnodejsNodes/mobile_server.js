@@ -1,3 +1,35 @@
+/*
+This file describes a RESTful API that for communication between the ROS ecosystem and the "outside world", namely primarely our app.
+*/
+
+/*
+The following structure reflects the REST API between the Comparing System and the Smtartphone App 
+as specified under https://app.getguru.com/card/iGK7zMAT/Tech-Spec-REST-API-ComparingSystem-Smartphone-App
+For questions, refer to Artur
+This is not updated regularely and should only give you a rough idea
+
+user state = {
+  user_id: int16 (später UUID statt int16? USER_ID aus URI Pfad)
+  repetitions: int16
+  seconds_since_last_exercise_start: int16
+  milliseconds_since_last_repetition: int32
+  repetition_score: int8
+  exercise_score: int8
+  user_position:  {
+    x: float32
+    y: float32
+   y: float32
+  }
+}
+
+user correction = {
+  user_id: int16 (später UUID statt int16? USER_ID aus URI Pfad)
+  repetition: int16
+  positive_correction: bool
+  display_text: string
+}
+*/
+
 // Imports:
 const rosnodejs = require('rosnodejs');
 const express = require('express');
@@ -31,7 +63,7 @@ const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
     const data = msg['data'];
     SmartphoneAppClients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ topic: "user_state", data: data }));
+            client.send(data);
         };
     });
 });
@@ -39,10 +71,9 @@ const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
 // We use this user_correction and deprecate the very first API structure "corrections"
 const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
     const data = msg['data'];
-
     SmartphoneAppClients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ topic: "user_correction", data: data }));
+            client.send(data);
         };
     });
 });

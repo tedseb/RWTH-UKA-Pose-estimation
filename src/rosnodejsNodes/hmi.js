@@ -1,35 +1,3 @@
-/*
-This file describes a RESTful API that for communication between the ROS ecosystem and the "outside world", namely primarely our app.
-*/
-
-/*
-The following structure reflects the REST API between the Comparing System and the Smtartphone App 
-as specified under https://app.getguru.com/card/iGK7zMAT/Tech-Spec-REST-API-ComparingSystem-Smartphone-App
-For questions, refer to Artur
-This is not updated regularely and should only give you a rough idea
-
-user state = {
-  user_id: int16 (später UUID statt int16? USER_ID aus URI Pfad)
-  repetitions: int16
-  seconds_since_last_exercise_start: int16
-  milliseconds_since_last_repetition: int32
-  repetition_score: int8
-  exercise_score: int8
-  user_position:  {
-    x: float32
-    y: float32
-   y: float32
-  }
-}
-
-user correction = {
-  user_id: int16 (später UUID statt int16? USER_ID aus URI Pfad)
-  repetition: int16
-  positive_correction: bool
-  display_text: string
-}
-*/
-
 // Imports:
 const rosnodejs = require('rosnodejs');
 const express = require('express');
@@ -41,6 +9,9 @@ const pose_estimation_messages = rosnodejs.require("backend");
 const comparing_system_messages = rosnodejs.require("comparing_system");
 const url = require('url');
 const config = require('./config');
+const YAML = require('yaml');
+var MongoClient = require('mongodb').MongoClient;
+
 
 // Parameters and Constants:
 const PORT = config.PORT;
@@ -52,6 +23,9 @@ const ownpose = config.ownpose;
 const app = express();
 const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 app.use(express.static(process.cwd() + '/dist/'));
 const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
@@ -62,34 +36,48 @@ rosnodejs.initNode('/hmi')
 // TODO: Shutdown gracefully to app: rosnodejs.on('shutdown', function() {  });
 const nh = rosnodejs.nh;
 
+const pubex = nh.advertise('/exercises', StringMsg);
+
+MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) => {
+  if (err) throw err;
+
+  //get trainerai DB and exercises collection
+  const db = client.db("trainerai");
+  const exercises = db.collection("exercises");
+
+  nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
+    exercises.findOne({ name: msg['data'] }, (err, result) => {
+      if (err) throw err;
+      if(result) {
+        const stringified = YAML.stringify(result);
+        nh.setParam('exercise', stringified);
+        pubex.publish({ data: 'exercise' });
+      } else {
+        console.error(`No such exercise  ${msg['data']}`)
+      }
+    });
+  });
+
+  app.post('/expert/exercises/recordings', (req, res) => {
+      console.log(req.body);
+      res.status(200).send();
+  });
+
+  app.post('/api/expert/exercises/save', (req, res) => {
+    if(req && req.name) {
+      exercises.insertOne(req.body);
+      res.status(200).send(exercises.findOne({name: req.name}));
+    } else {
+      res.status(500).send('Malformed Exercise');
+    }
+  });
+
+});
+
 //datastructures for expertsystem
 var isRecording = false;
 var recordedPoses = [];
 var recordStart = Date.now();
-
-/* // We use this to advertise the Exercise name, read with the current QR Code
-//const pub_qr = nh.advertise('/qr_exercise', StringMsg);
-
-// We use this user_state and deprecate the very first API structure "repetition"
-const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
-  const data = msg['data'];
-  SmartphoneAppClients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ topic: "user_state", data: data }));
-    };
-  });
-});
-
-// We use this user_correction and deprecate the very first API structure "corrections"
-const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
-  const data = msg['data'];
-
-  SmartphoneAppClients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ topic: "user_correction", data: data }));
-    };
-  });
-}); */
 
 // Tamers Web-App Code
 const wrong_coordinates = nh.subscribe('/wrongcoordinates', StringMsg, (msg) => {
@@ -166,36 +154,17 @@ app.post('/api/exercise/recording/start', (req, res) => {
     recordStart = Date.now();
     res.status(200).send();
   }
-
 });
 
 app.post('/api/exercise/recording/stop', (req, res) => {
   console.log('saving record requested');
   isRecording = false;
   res.json(recordedPoses);
-  //TODO: send to expertsystem after stop.
-  /* const saveRecordings = https.request(config.exp_api_options, res => {
-    console.log(`statusCode: ${res.statusCode}`);
-  });
-  saveRecordings.write(JSON.stringify(recordedPoses));
-  saveRecordings.end(); */
   recordedPoses = [];
 });
 
 // Add new client connections
 wss.on('connection', (ws, req) => {
   const location = url.parse(req.url, true);
-  /* if ((location.path.includes('corrections'))) { // Deprecate "corrections" paths
-    // Arturs connection
-    SmartphoneAppClients.push(ws);
-    console.log("Orhan hat sich verbunden :)");
-    ws.on('message', function incoming(message) {
-      pub_qr.publish({ data: message })  // Refine this
-      console.log('received: %s', message); //json squats
-    });
-  } else { */
-    // Tamers connection
-    coordinateClients.push(ws);
-  //}
-  //ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
+  coordinateClients.push(ws);
 });

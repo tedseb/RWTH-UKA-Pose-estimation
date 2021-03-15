@@ -28,7 +28,7 @@ class SMPL(_SMPL):
     def __init__(self, *args, **kwargs):
         super(SMPL, self).__init__(*args, **kwargs)
         joints = [constants.JOINT_MAP[i] for i in constants.JOINT_NAMES]
-        JOINT_REGRESSOR_TRAIN_EXTRA = '/trainerai/src/AI/spin/extra_data/body_module/data_from_spin/J_regressor_extra.npy'
+        JOINT_REGRESSOR_TRAIN_EXTRA = '/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/data_from_spin/J_regressor_extra.npy'
         J_regressor_extra = np.load(JOINT_REGRESSOR_TRAIN_EXTRA)
         self.register_buffer('J_regressor_extra', torch.tensor(J_regressor_extra, dtype=torch.float32))
         self.joint_map = torch.tensor(joints, dtype=torch.long)
@@ -56,7 +56,7 @@ class SMPLX(_SMPLX):
         kwargs['ext'] = 'pkl'       #We have pkl file
         super(SMPLX, self).__init__(*args, **kwargs)
         joints = [constants.JOINT_MAP[i] for i in constants.JOINT_NAMES]
-        JOINT_REGRESSOR_TRAIN_EXTRA_SMPLX = '/trainerai/src/AI/spin/extra_data/body_module/J_regressor_extra_smplx.npy'
+        JOINT_REGRESSOR_TRAIN_EXTRA_SMPLX = '/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/J_regressor_extra_smplx.npy'
         J_regressor_extra = np.load(JOINT_REGRESSOR_TRAIN_EXTRA_SMPLX)           #(9, 10475)
         self.register_buffer('J_regressor_extra', torch.tensor(J_regressor_extra, dtype=torch.float32))
         self.joint_map = torch.tensor(joints, dtype=torch.long)

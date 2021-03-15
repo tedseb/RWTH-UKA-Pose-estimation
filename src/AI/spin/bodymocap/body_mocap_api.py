@@ -34,7 +34,7 @@ class BodyMocap(object):
             self.use_smplx = False
             
         #Load pre-trained neural network 
-        SMPL_MEAN_PARAMS = '/trainerai/src/AI/spin/extra_data/body_module/data_from_spin/smpl_mean_params.npz'
+        SMPL_MEAN_PARAMS = '/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/data_from_spin/smpl_mean_params.npz'
         self.model_regressor = hmr(SMPL_MEAN_PARAMS).to(self.device)
         checkpoint = torch.load(regressor_checkpoint)
         self.model_regressor.load_state_dict(checkpoint['model'], strict=False)

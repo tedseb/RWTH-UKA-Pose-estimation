@@ -36,7 +36,7 @@ class BodyPoseEstimator(object):
 
     def __load_body_estimator(self):
         net = PoseEstimationWithMobileNet()
-        pose2d_checkpoint = "/trainerai/src/AI/spin/extra_data/body_module/body_pose_estimator/checkpoint_iter_370000.pth"
+        pose2d_checkpoint = "/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/body_pose_estimator/checkpoint_iter_370000.pth"
         checkpoint = torch.load(pose2d_checkpoint, map_location='cpu')
         load_state(net, checkpoint)
         net = net.eval()

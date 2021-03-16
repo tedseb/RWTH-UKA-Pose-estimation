@@ -111,7 +111,7 @@ if __name__ == '__main__':
     
     # Set bbox detector
     body_bbox_detector = BodyPoseEstimator()
-    single_person=False 
+    single_person=True 
     with_station=False
 
     if os.path.exists('/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml'):

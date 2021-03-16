@@ -5,8 +5,8 @@ This file contains some parameters to our ComparingNode, such as ROS Topic names
 
 DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
 
-ROS_TOPIC_USER_EXERCISE_STATES = '/user_state'
-ROS_TOPIC_USER_CORRECTIONS = '/user_correction'
+ROS_TOPIC_USER_EXERCISE_STATES = 'user_state'
+ROS_TOPIC_USER_CORRECTIONS = 'user_correction'
 
 ROS_JOINTS_TOPIC = 'fused_skelleton' # Shawan's topic choice
 ROS_EXERCISES_CHANGE_TOPIC = 'exercises' # TODO: Change this from tamer
@@ -32,3 +32,6 @@ REDIS_GENERAL_PREFIX = "ComparingSystem:"
 REDIS_SPOT_QUEUE_POSTFIX = ":queue"
 REDIS_SPOT_PAST_QUEUE_POSTFIX = ":queue_past"
 REDIS_SPOT_INFO_POSTFIX = ":info"
+
+LEGACY_COMPARING = True
+SEND_CORRETIONS = False

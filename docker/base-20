@@ -1,0 +1,31 @@
+FROM nvidia/cuda:11.2.1-cudnn8-devel-ubuntu20.04
+
+#RUN useradd -m trainerai && echo "trainerai:esel1212" | chpasswd && usermod -a -G video trainerai 
+RUN adduser trainerai && usermod -a -G video trainerai 
+
+RUN echo "trainerai:esel1212" | chpasswd && usermod -aG sudo trainerai
+
+RUN apt-get update
+RUN apt-get -y install apt-utils
+RUN DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends -y install libasound2 terminator dbus dbus-x11 
+RUN apt-get --no-install-recommends -y install sudo htop mesa-utils wget pylint
+RUN apt-get -y install vim curl
+RUN apt-get -y install python3-pip python3-yaml
+RUN apt-get install -y firefox 
+RUN apt-get install -y x11-xserver-utils
+RUN apt-get install git -y
+
+#Install ROS
+RUN sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
+RUN apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+RUN curl -sSL 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0xC1CF6E31E6BADE8868B172B4F42ED6FBAB17C654' | sudo apt-key add -
+RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install ros-noetic-desktop
+RUN echo "source /opt/ros/noetic/setup.bash" >>  /home/trainerai/.bashrc
+
+#Python
+RUN pip3 install Cython rospkg catkin_pkg
+RUN pip3 install Cython  rospkg catkin_pkg
+#RUN xhost +local: || true
+USER trainerai
+WORKDIR /home/trainerai

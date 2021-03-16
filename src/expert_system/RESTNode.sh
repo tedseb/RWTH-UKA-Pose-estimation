@@ -1,2 +1,2 @@
 #!/bin/bash
-node /trainerai/src/rosnodejsNodes/RESTNode.js
+node /home/trainerai/trainerai-core/src/rosnodejsNodes/RESTNode.js

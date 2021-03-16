@@ -1,0 +1,47 @@
+FROM registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-base-20:latest
+USER root
+
+#System
+RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+RUN echo ". devel/setup.bash" >>  /home/trainerai/.bashrc
+COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
+
+#Software
+RUN apt-get update && apt-get -y install gedit iputils-ping
+RUN apt-get install python-software-properties || true
+RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y python3-opencv
+RUN apt-get install -y redis
+
+#NodeJS
+WORKDIR /home/trainerai/trainerai-core
+RUN apt-get install nodejs
+RUN npm config set unsafe-perm true
+RUN npm install @tensorflow/tfjs-node
+RUN npm install @tensorflow-models/posenet
+
+RUN npm install opencv4nodejs
+RUN npm install rosnodejs
+RUN npm install express
+RUN npm install ws
+RUN npm install nodemon
+RUN npm install socket.io
+RUN npm install yaml
+RUN npm install mongodb
+
+#Python PIP
+#RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==1.14.0 pycocotools
+RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.4.1 pycocotools
+RUN pip3 install msgpack torchvision torchgeometry smplx chumpy
+RUN pip3 install pydrive
+RUN pip3 install pandas
+RUN pip3 install matplotlib
+RUN pip3 install torch==1.8.0+cu111 torchvision==0.9.0+cu111 torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install redis
+RUN pip3 install rospy_message_converter
+RUN pip3 install mps-youtube
+RUN pip3 install pafy -U
+RUN pip3 install youtube-dl
+RUN pip3 install PyYAML==3.12
+
+
+USER trainerai

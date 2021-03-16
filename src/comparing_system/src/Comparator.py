@@ -17,7 +17,7 @@ from src.joint_adapters.spin import *
 from src.config import *
 from src.Queueing import *
 
-import traceback 
+from traceback import print_exc
 
 #Old imports 
 from backend.msg import Persons
@@ -46,17 +46,14 @@ class Comparator(Thread):
     """
     The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     """
-    def __init__(self, message_queue_load_order, user_state_out_queue, user_correction_out_queue, redis_connection_pool, spot_queue_interface=None):
+    def __init__(self, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
         super(Comparator, self).__init__()
 
-        self.message_queue_load_order = message_queue_load_order
-        self.user_state_out_queue = user_state_out_queue
-        self.user_correction_out_queue = user_correction_out_queue
+        self.spot_queue_load_balancer = spot_queue_load_balancer_class()
+        self.message_out_queue_interface = message_out_queue_interface_class()
+        self.spot_queue_interface = spot_queue_interface_class()
         
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
-
-        # TODO: Integrate this interface into the comparator after the alpha
-        self.spot_queue_interface = spot_queue_interface
 
         # This can be set to false by an external entity to stop the loop from running
         self.running = True
@@ -76,62 +73,28 @@ class Comparator(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                traceback.print_exc() 
+                print_exc()
                 rp.logerr("Error getting data in the comparator: " + str(e))
             try:
                 info = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
             except Exception as e:
-                traceback.print_exc() 
+                print_exc() 
                 rp.logerr("Error comparing data in the comparator: " + str(e))
             try:
                 self.send_info(info, spot_info_dict)
             except Exception as e:
-                traceback.print_exc() 
+                print_exc() 
                 rp.logerr("Error sending data in the comparator: " + str(e))    
             
     def get_data(self):
         """
         This method gets information from inbound queues, checks for errors like empty queues and returns information if any is present
         """
-        # TODO: Investigate if these redis instructions can be optimized
         # Fetch all data that is needed for the comparison:
-        try:
-            # Always get the element with the longest queue
-            # TODO: Establish a fair algorithm for this
-            redis_spot_key, redis_spot_queue_length = self.message_queue_load_order.popitem(last=False)
-        except KeyError:
-            # Supposingly, no message queue is holding any value (at the start of the system)
-            raise QueueEmpty
+        redis_spot_key = self.spot_queue_load_balancer.get_queue_key()
 
-        redis_spot_queue_key = redis_spot_key + ':queue'
-        redis_spot_info_key = redis_spot_key + ':info'
-        redis_spot_past_queue_key = redis_spot_queue_key + "_past"
+        return self.spot_queue_interface.dequeue(redis_spot_key)
         
-        try:
-            joinsts_with_timestamp_yaml = self.redis_connection.rpop(redis_spot_queue_key) # self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
-            if not joinsts_with_timestamp_yaml:
-                raise KeyError
-        except KeyError:
-            # Supposingly, no message queue is holding any value (at the start of the system)
-            raise QueueEmpty
-    
-        joints_with_timestamp = yaml.load(joinsts_with_timestamp_yaml)
-
-        redis_spot_info_yaml = self.redis_connection.get(redis_spot_info_key)
-        if redis_spot_info_yaml == None:
-            raise NoSpotInfoAvailable
-
-        spot_info_dict = yaml.load(redis_spot_info_yaml) # TODO: Switch from using yaml to Rejson
-        exercise = spot_info_dict['exercise']
-        start_time = spot_info_dict['start_time']
-
-        self.redis_connection.ltrim(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
-
-        future_joints_with_timestamp_list = None # self.redis_connection.lrange(redis_spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
-        past_joints_with_timestamp_list = None # self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
-
-        return spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
-
     def send_info(self, info, spot_info_dict):
         """
         This method packs information that occurs in the process of analyzing the joint- and exercise-data into messages and enques them into an sending queue.
@@ -142,13 +105,13 @@ class Comparator(Thread):
         global reps
 
         if correction != None:
-            user_info_message = {
+            user_correction_message = {
                 'user_id': 0,
                 'repetition': reps,
                 'positive_correction': False,
                 'display_text': correction
             }
-            self.redis_connection.lpush(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(user_info_message))
+            self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, yaml.dump(user_correction_message))
         
         if updated_repetitions != None:
             user_state_message = {
@@ -161,7 +124,7 @@ class Comparator(Thread):
                 'exercise_score': 100,
                 'user_position': {'x':center_of_body.x, 'y':center_of_body.y, 'z': center_of_body.z}
             }
-            self.redis_connection.lpush(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
+            self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, yaml.dump(user_state_message))
         
 
 
@@ -180,9 +143,9 @@ class Comparator(Thread):
         for index in ownpose_used:
             point = Point()
             # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-            point.x = joints[index].point.x
-            point.y = joints[index].point.z
-            point.z = joints[index].point.y
+            point.x = joints[index]['point']['x']
+            point.y = joints[index]['point']['z']
+            point.z = joints[index]['point']['y']
             pose[joint_labels[index]] = point
 
         # This corresponds to Tamers "save" method
@@ -255,6 +218,7 @@ class Comparator(Thread):
             if (checkforstate(angles, current_exercise, 0)):
                 state = 0
                 reps += 1
+                rp.logerr("Reps: " + str(reps))
                 return reps
         return 
 

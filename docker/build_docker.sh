@@ -1,3 +1,4 @@
+#!/bin/bash
 set -e
 
 push="false"
@@ -19,7 +20,7 @@ case $key in
     build_and_update=true
     ;;
     *)    # Positional parameter
-    positional_parameters+=("$1") # save it in an array for later
+    positional_parameters+=($key) # save it in an array for later
     ;;
 esac
 done
@@ -30,10 +31,11 @@ if [ "$build" = "true" ] ; then
     echo 'building images'
     # build the base image with the general dependencies. 
     # "-t" specifies the name of the image and "-f"the location of the Dockerfile 
-    docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-base -f docker/base docker
+    #docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-base -f docker/base docker
     # build the dev image, which adds dev tools to the image
-    docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-dev -f docker/dev .
+    #docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-dev -f docker/dev .
     # TODO: Include release image here
+    docker build -t registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-dev-update -f docker/dev-update .
 fi
 
 if [ "$build_and_update" = "true" ] ; then
@@ -41,23 +43,28 @@ if [ "$build_and_update" = "true" ] ; then
     echo "Using Dockfile at " $1
     # build the dev image, which adds dev tools to the image
     name=$(echo $1 | sed 's:.*/::')
-    docker build -t registry.git.rwth-aachen.de/trainerai/core/trainerai-"${name}" -f $1 .
+    docker build -t registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-"${name}" -f $1 .
 fi
-
 
 if [ "$push" = "true" ] ; then
 	echo 'Pushing built images to registry'
-	if [ "$build" = "true" ] ; then
-	    docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-base
-	    docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-dev
-	fi
-	if [ "$build_and_update" = "true" ] ; then
-	    docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-"${name}"
-	fi
+    echo "Using Dockfile at " $1
+    name=$(echo $1 | sed 's:.*/::')
+    docker push registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-"${name}"
+	# if [ "$build" = "true" ] ; then
+	#     docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-base
+	#     docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-dev
+	# fi
+	# if [ "$build_and_update" = "true" ] ; then
+	#     docker push registry.git.rwth-aachen.de/trainerai/core/trainerai-"${name}"
+	# fi
 
 fi
 
-
+if [ "$push" = "false" ] && [ "$build_and_update" = "false" ] && [ "$build" = "false" ] ; then 
+    echo 'pull docker image'
+    docker pull registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20
+fi
 
 # Example: bash docker/build_docker.sh --push --dev /home/shawan/PycharmProjects/core/docker/dev-update
 # build the release image, which builds the software and packs all the files in it

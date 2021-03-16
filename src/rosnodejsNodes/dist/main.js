@@ -128,13 +128,17 @@ __webpack_require__.r(__webpack_exports__);
 class CoordinatesService {
     constructor(dataService) {
         this.dataService = dataService;
+        //editor playback attributes
         this.recording = [];
+        this.ri = 1;
+        this.isPlaying = false;
         this.socket = dataService.getWebsocket();
         this.socket.subscribe(message => {
             this.lastPose = message;
             this.update.next(this.lastPose);
         });
         this.update = new rxjs__WEBPACK_IMPORTED_MODULE_1__["BehaviorSubject"](this.lastPose);
+        this.play = new rxjs__WEBPACK_IMPORTED_MODULE_1__["BehaviorSubject"](this.lastPose);
         this.connections = {
             OP_R_Shoulder: ['OP_R_Elbow', 'R_Hip'],
             OP_R_Elbow: ['OP_R_Wrist'],
@@ -174,6 +178,21 @@ class CoordinatesService {
     }
     saveRecording() {
         this.dataService.saveRecording(this.recording);
+    }
+    playRecording() {
+        let time = this.recording[this.ri][0] - this.recording[this.ri - 1][0];
+        if (this.recording) {
+            setInterval(() => {
+                if (this.ri === this.recording.length) {
+                    this.ri = 1;
+                }
+                this.play.next(this.recording[this.ri][1]);
+                this.ri++;
+            }, time);
+        }
+        if (this.isPlaying) {
+            this.playRecording();
+        }
     }
 }
 CoordinatesService.ɵfac = function CoordinatesService_Factory(t) { return new (t || CoordinatesService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_data_service__WEBPACK_IMPORTED_MODULE_2__["DataService"])); };
@@ -789,6 +808,12 @@ class EditorComponent {
         this.coordinatesService = coordinatesService;
         // properties
         this.pixelRatio = window.devicePixelRatio;
+        this.mouse = new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"]();
+        this.touch = new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"]();
+        // skeleton
+        this.dots = [];
+        this.dotsMapping = [];
+        this.lines = [];
         const width = window.innerWidth;
         const height = window.innerHeight - 64;
         this.renderer = new three__WEBPACK_IMPORTED_MODULE_1__["WebGLRenderer"]({ antialias: true });
@@ -826,9 +851,73 @@ class EditorComponent {
         const ambientLight = new three__WEBPACK_IMPORTED_MODULE_1__["AmbientLight"](0xffffff);
         ambientLight.intensity = 2;
         this.scene.add(ambientLight);
+        this.initSkeleton();
     }
     initMenu() {
-        const menu = { save: () => { console.log('saving'); } };
+        const menu = {
+            play: () => { console.log('playing'); this.coordinatesService.playRecording(); },
+            check: () => { console.log(this.coordinatesService.recording); }
+        };
+        const play = this.gui.add(menu, 'play').name('Play');
+        const check = this.gui.add(menu, 'check').name('🤔');
+    }
+    initSkeleton() {
+        // tslint:disable-next-line: forin
+        for (const point in this.coordinatesService.lastPose) {
+            console.log(point);
+            const geometry = new three__WEBPACK_IMPORTED_MODULE_1__["SphereBufferGeometry"](0.1, 32, 32);
+            const material = new three__WEBPACK_IMPORTED_MODULE_1__["MeshBasicMaterial"]({ color: 0xafaab9 });
+            const dot = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"](geometry, material);
+            dot.name = point.toString();
+            this.dots.push({ index: point, dot });
+            this.scene.add(dot);
+        }
+        // tslint:disable-next-line: forin
+        for (const start in this.coordinatesService.connections) {
+            // tslint:disable-next-line: forin
+            for (const end of this.coordinatesService.connections[start]) {
+                const material = new three__WEBPACK_IMPORTED_MODULE_1__["LineBasicMaterial"]({
+                    color: 0x0000ff,
+                    linewidth: 4.0
+                });
+                const geometry = new three__WEBPACK_IMPORTED_MODULE_1__["BufferGeometry"]();
+                const line = new three__WEBPACK_IMPORTED_MODULE_1__["Line"](geometry, material);
+                this.lines.push(line);
+                this.dotsMapping.push([start, end]);
+                this.scene.add(line);
+            }
+        }
+        this.coordinatesService.play.subscribe(pose => {
+            if (pose) {
+                console.log(pose);
+                this.recordingPose = pose;
+                this.renderSkeleton(5, 0, 0, 0);
+            }
+        });
+    }
+    renderSkeleton(scalar, offsetX, offsetY, offsetZ) {
+        const pose = this.recordingPose;
+        for (const dot of this.dots) {
+            dot.dot.position.setX(pose[dot.index].x * scalar + offsetX);
+            dot.dot.position.setY(pose[dot.index].y * scalar + offsetY);
+            dot.dot.position.setZ(pose[dot.index].z * scalar + offsetZ);
+        }
+        // tslint:disable-next-line: forin
+        for (const index in this.lines) {
+            const mapping = this.dotsMapping[index];
+            const line = this.lines[index];
+            const x0 = pose[mapping[0]].x * scalar + offsetX;
+            const x1 = pose[mapping[1]].x * scalar + offsetX;
+            const y0 = pose[mapping[0]].y * scalar + offsetY;
+            const y1 = pose[mapping[1]].y * scalar + offsetY;
+            const z0 = pose[mapping[0]].z * scalar + offsetZ;
+            const z1 = pose[mapping[1]].z * scalar + offsetZ;
+            const start = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](x0, y0, z0);
+            const end = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](x1, y1, z1);
+            line.geometry.setFromPoints([start, end]);
+            line.geometry.computeBoundingBox();
+            line.geometry.computeBoundingSphere();
+        }
     }
 }
 EditorComponent.ɵfac = function EditorComponent_Factory(t) { return new (t || EditorComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_services_data_service__WEBPACK_IMPORTED_MODULE_4__["DataService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_services_coordinates_service__WEBPACK_IMPORTED_MODULE_5__["CoordinatesService"])); };

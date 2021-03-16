@@ -7,7 +7,7 @@
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /home/optimus/PoseEstimation/guihmi/src/main.ts */"zUnb");
+module.exports = __webpack_require__(/*! /home/optimus/TrainerAI-System/guihmi/src/main.ts */"zUnb");
 
 
 /***/ }),
@@ -85,6 +85,16 @@ class DataService {
         });
         //return connections;
     }
+    startRecording() {
+        this.http.post('/api/exercise/recording/start', null).subscribe(val => {
+        });
+    }
+    stopRecording() {
+        return this.http.post('/api/exercise/recording/stop', null);
+    }
+    saveRecording(recording) {
+        this.http.post('/api/expert/recording/save', recording).subscribe(val => { });
+    }
 }
 DataService.ɵfac = function DataService_Factory(t) { return new (t || DataService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_angular_common_http__WEBPACK_IMPORTED_MODULE_2__["HttpClient"])); };
 DataService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineInjectable"]({ token: DataService, factory: DataService.ɵfac, providedIn: 'root' });
@@ -118,6 +128,7 @@ __webpack_require__.r(__webpack_exports__);
 class CoordinatesService {
     constructor(dataService) {
         this.dataService = dataService;
+        this.recording = [];
         this.socket = dataService.getWebsocket();
         this.socket.subscribe(message => {
             this.lastPose = message;
@@ -152,6 +163,18 @@ class CoordinatesService {
             Spine_HM: ['Neck_LSP', 'Pelvis_MPII']
         };
     }
+    startRecording() {
+        this.dataService.startRecording();
+    }
+    stopRecording() {
+        this.dataService.stopRecording().subscribe(res => {
+            this.recording = res;
+            console.log(this.recording);
+        });
+    }
+    saveRecording() {
+        this.dataService.saveRecording(this.recording);
+    }
 }
 CoordinatesService.ɵfac = function CoordinatesService_Factory(t) { return new (t || CoordinatesService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_data_service__WEBPACK_IMPORTED_MODULE_2__["DataService"])); };
 CoordinatesService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineInjectable"]({ token: CoordinatesService, factory: CoordinatesService.ɵfac, providedIn: 'root' });
@@ -178,8 +201,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
 /* harmony import */ var _angular_material_toolbar__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @angular/material/toolbar */ "/t3+");
 /* harmony import */ var _angular_material_button__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @angular/material/button */ "bTqV");
-/* harmony import */ var _angular_material_icon__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @angular/material/icon */ "NFeN");
-/* harmony import */ var _angular_router__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/router */ "tyNb");
+/* harmony import */ var _angular_router__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @angular/router */ "tyNb");
+/* harmony import */ var _angular_material_icon__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/material/icon */ "NFeN");
 
 
 
@@ -192,7 +215,7 @@ class AppComponent {
     }
 }
 AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(); };
-AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 14, vars: 0, consts: [["id", "toolbar-paragraph"], ["mat-button", "", "color", "primary"], [1, "toolbar-spacer"], ["mat-icon-button", "", "color", "primary", "aria-label", "Heart icon"], ["mat-icon-button", "", "color", "primary", "aria-label", "Share icon"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
+AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 16, vars: 0, consts: [["id", "toolbar-paragraph"], ["mat-button", "", "color", "primary", "routerLink", "/renderer"], ["mat-button", "", "color", "primary", "routerLink", "/editor"], [1, "toolbar-spacer"], ["mat-icon-button", "", "color", "primary", "aria-label", "Heart icon"], ["mat-icon-button", "", "color", "primary", "aria-label", "Share icon"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "p", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "mat-toolbar");
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](2, "span");
@@ -201,21 +224,24 @@ AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCompo
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](4, "button", 1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](5, "Renderer");
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](6, "span", 2);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](7, "button", 3);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](8, "mat-icon");
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](9, "favorite");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](6, "button", 2);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](7, "Editor");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](8, "span", 3);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](9, "button", 4);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](10, "mat-icon");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](11, "favorite");
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](10, "button", 4);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](11, "mat-icon");
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](12, "share");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](12, "button", 5);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](13, "mat-icon");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](14, "share");
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](13, "router-outlet");
-    } }, directives: [_angular_material_toolbar__WEBPACK_IMPORTED_MODULE_1__["MatToolbar"], _angular_material_button__WEBPACK_IMPORTED_MODULE_2__["MatButton"], _angular_material_icon__WEBPACK_IMPORTED_MODULE_3__["MatIcon"], _angular_router__WEBPACK_IMPORTED_MODULE_4__["RouterOutlet"]], styles: ["\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IiIsImZpbGUiOiJhcHAuY29tcG9uZW50LnNjc3MifQ== */"] });
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](15, "router-outlet");
+    } }, directives: [_angular_material_toolbar__WEBPACK_IMPORTED_MODULE_1__["MatToolbar"], _angular_material_button__WEBPACK_IMPORTED_MODULE_2__["MatButton"], _angular_router__WEBPACK_IMPORTED_MODULE_3__["RouterLink"], _angular_material_icon__WEBPACK_IMPORTED_MODULE_4__["MatIcon"], _angular_router__WEBPACK_IMPORTED_MODULE_3__["RouterOutlet"]], styles: ["\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IiIsImZpbGUiOiJhcHAuY29tcG9uZW50LnNjc3MifQ== */"] });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](AppComponent, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
         args: [{
@@ -348,26 +374,33 @@ class RendererComponent {
             addMash: () => {
                 const mesh = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"]();
             },
-            renderSkeleton: () => { this.initSkeleton(); }
+            renderSkeleton: () => { this.initSkeleton(); },
+            startRecording: () => { this.coordinatesService.startRecording(); },
+            stopRecording: () => { this.coordinatesService.stopRecording(); },
+            saveRecording: () => { this.coordinatesService.saveRecording(); }
         };
-        const modelswitch = this.gui.add(menu, 'model', {
+        /*const modelswitch = this.gui.add(menu, 'model',
+          {
             dancer: '../../assets/dancer/dancer.gltf',
             basic: '../../assets/basic/low_poly.glb',
             nathan: '../../assets/nathan/nathan.gltf',
             muscle: '../../assets/muschelmann/muschelmann.gltf'
-        })
-            .name('Model');
+          })
+          .name('Model');
         modelswitch.onChange(val => this.loadModel(val));
-        modelswitch.setValue('../../assets/dancer/dancer.gltf');
-        const animateCheck = this.gui.add(menu, 'animate').name('Animate');
+        modelswitch.setValue('../../assets/dancer/dancer.gltf');*/
+        /*const animateCheck = this.gui.add(menu, 'animate').name('Animate');
         animateCheck.onChange(val => {
-            this.setAnimation(val);
-        });
-        const skeletoncheck = this.gui.add(menu, 'skeleton', false).name('Show Skeleton');
-        skeletoncheck.onChange(val => { this.skeletonCheck(val); });
-        const deleteBones = this.gui.add(menu, 'deleteBones').name('Delete Not Used Bones');
+          this.setAnimation(val);
+        }); */
+        //const skeletoncheck = this.gui.add(menu, 'skeleton', false).name('Show Skeleton');
+        //skeletoncheck.onChange(val => { this.skeletonCheck(val); });
+        const startRecording = this.gui.add(menu, 'startRecording').name('🎥');
+        const stopRecording = this.gui.add(menu, 'stopRecording').name('🎬');
+        const saveRecording = this.gui.add(menu, 'saveRecording').name('💾');
+        //const deleteBones = this.gui.add(menu, 'deleteBones').name('Delete Not Used Bones');
         const resetButton = this.gui.add(menu, 'reset').name('Reset');
-        const editButton = this.gui.add(menu, 'edit').name('Edit');
+        //const editButton = this.gui.add(menu, 'edit').name('Edit');
         const renderSceleton = this.gui.add(menu, 'renderSkeleton').name('Render Skeleton');
     }
     deleteBones() {
@@ -518,7 +551,6 @@ class RendererComponent {
         // tslint:disable-next-line: forin
         for (const index in this.lines) {
             const mapping = this.dotsMapping[index];
-            console.log(mapping);
             const line = this.lines[index];
             const x0 = pose[mapping[0]].x * scalar + offsetX;
             const x1 = pose[mapping[1]].x * scalar + offsetX;
@@ -598,6 +630,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _angular_material_select__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! @angular/material/select */ "d3UM");
 /* harmony import */ var _angular_forms__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! @angular/forms */ "3Pt+");
 /* harmony import */ var _angular_material_card__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! @angular/material/card */ "Wp6s");
+/* harmony import */ var _editor_editor_component__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./editor/editor.component */ "xD4D");
 
 
 
@@ -605,6 +638,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 // angular material module imports
+
 
 
 
@@ -637,7 +671,8 @@ AppModule.ɵinj = _angular_core__WEBPACK_IMPORTED_MODULE_1__["ɵɵdefineInjector
             _angular_material_badge__WEBPACK_IMPORTED_MODULE_13__["MatBadgeModule"]
         ]] });
 (function () { (typeof ngJitMode === "undefined" || ngJitMode) && _angular_core__WEBPACK_IMPORTED_MODULE_1__["ɵɵsetNgModuleScope"](AppModule, { declarations: [_app_component__WEBPACK_IMPORTED_MODULE_4__["AppComponent"],
-        _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_5__["RendererComponent"]], imports: [_angular_forms__WEBPACK_IMPORTED_MODULE_15__["FormsModule"],
+        _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_5__["RendererComponent"],
+        _editor_editor_component__WEBPACK_IMPORTED_MODULE_17__["EditorComponent"]], imports: [_angular_forms__WEBPACK_IMPORTED_MODULE_15__["FormsModule"],
         _angular_platform_browser__WEBPACK_IMPORTED_MODULE_0__["BrowserModule"],
         _app_routing_module__WEBPACK_IMPORTED_MODULE_3__["AppRoutingModule"],
         _angular_platform_browser_animations__WEBPACK_IMPORTED_MODULE_6__["BrowserAnimationsModule"],
@@ -656,7 +691,8 @@ AppModule.ɵinj = _angular_core__WEBPACK_IMPORTED_MODULE_1__["ɵɵdefineInjector
         args: [{
                 declarations: [
                     _app_component__WEBPACK_IMPORTED_MODULE_4__["AppComponent"],
-                    _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_5__["RendererComponent"]
+                    _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_5__["RendererComponent"],
+                    _editor_editor_component__WEBPACK_IMPORTED_MODULE_17__["EditorComponent"]
                 ],
                 imports: [
                     _angular_forms__WEBPACK_IMPORTED_MODULE_15__["FormsModule"],
@@ -694,14 +730,17 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AppRoutingModule", function() { return AppRoutingModule; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
 /* harmony import */ var _angular_router__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @angular/router */ "tyNb");
-/* harmony import */ var _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./renderer/renderer.component */ "T1/D");
+/* harmony import */ var _editor_editor_component__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./editor/editor.component */ "xD4D");
+/* harmony import */ var _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./renderer/renderer.component */ "T1/D");
+
 
 
 
 
 
 const routes = [
-    { path: 'renderer', component: _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_2__["RendererComponent"] },
+    { path: 'editor', component: _editor_editor_component__WEBPACK_IMPORTED_MODULE_2__["EditorComponent"] },
+    { path: 'renderer', component: _renderer_renderer_component__WEBPACK_IMPORTED_MODULE_3__["RendererComponent"] },
     { path: '', redirectTo: '/renderer', pathMatch: 'full' }
 ];
 class AppRoutingModule {
@@ -716,6 +755,104 @@ AppRoutingModule.ɵinj = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineI
                 exports: [_angular_router__WEBPACK_IMPORTED_MODULE_1__["RouterModule"]]
             }]
     }], null, null); })();
+
+
+/***/ }),
+
+/***/ "xD4D":
+/*!********************************************!*\
+  !*** ./src/app/editor/editor.component.ts ***!
+  \********************************************/
+/*! exports provided: EditorComponent */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "EditorComponent", function() { return EditorComponent; });
+/* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! three */ "Womt");
+/* harmony import */ var three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! three/examples/jsm/controls/OrbitControls.js */ "RyHr");
+/* harmony import */ var dat_gui__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! dat.gui */ "iZKT");
+/* harmony import */ var _services_data_service__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../services/data.service */ "EnSQ");
+/* harmony import */ var _services_coordinates_service__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../services/coordinates.service */ "Hxsc");
+
+
+
+
+
+
+
+const _c0 = ["editorContainer"];
+class EditorComponent {
+    constructor(dataService, coordinatesService) {
+        this.dataService = dataService;
+        this.coordinatesService = coordinatesService;
+        // properties
+        this.pixelRatio = window.devicePixelRatio;
+        const width = window.innerWidth;
+        const height = window.innerHeight - 64;
+        this.renderer = new three__WEBPACK_IMPORTED_MODULE_1__["WebGLRenderer"]({ antialias: true });
+        this.scene = new three__WEBPACK_IMPORTED_MODULE_1__["Scene"]();
+        this.camera = new three__WEBPACK_IMPORTED_MODULE_1__["PerspectiveCamera"](25, width / height, 0.1, 1000);
+        this.orbitControls = new three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_2__["OrbitControls"](this.camera, this.renderer.domElement);
+        this.orbitControls.update();
+        this.gui = new dat_gui__WEBPACK_IMPORTED_MODULE_3__["GUI"]({ autoPlace: false });
+    }
+    ngAfterViewInit() {
+        this.camera.lookAt(this.scene.position);
+        this.editorContainer.nativeElement.appendChild(this.renderer.domElement);
+        this.renderer.setPixelRatio(this.pixelRatio);
+        this.renderer.setSize(window.innerWidth, (window.innerHeight - 64));
+        this.animate();
+    }
+    animate() {
+        window.requestAnimationFrame(() => this.animate());
+        this.renderer.render(this.scene, this.camera);
+    }
+    ngOnInit() {
+        var _a;
+        (_a = document.getElementById('menuContainer')) === null || _a === void 0 ? void 0 : _a.appendChild(this.gui.domElement);
+        this.initMenu();
+        this.initScene();
+    }
+    initScene() {
+        this.renderer.setClearColor(0xffffff);
+        this.camera.position.set(20, 20, 20);
+        this.orbitControls.enablePan = true;
+        this.orbitControls.enableZoom = true;
+        this.orbitControls.enableKeys = true;
+        const axesHelper = new three__WEBPACK_IMPORTED_MODULE_1__["AxesHelper"](5);
+        this.scene.add(axesHelper);
+        const ambientLight = new three__WEBPACK_IMPORTED_MODULE_1__["AmbientLight"](0xffffff);
+        ambientLight.intensity = 2;
+        this.scene.add(ambientLight);
+    }
+    initMenu() {
+        const menu = { save: () => { console.log('saving'); } };
+    }
+}
+EditorComponent.ɵfac = function EditorComponent_Factory(t) { return new (t || EditorComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_services_data_service__WEBPACK_IMPORTED_MODULE_4__["DataService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_services_coordinates_service__WEBPACK_IMPORTED_MODULE_5__["CoordinatesService"])); };
+EditorComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: EditorComponent, selectors: [["app-editor"]], viewQuery: function EditorComponent_Query(rf, ctx) { if (rf & 1) {
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵviewQuery"](_c0, true);
+    } if (rf & 2) {
+        let _t;
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵqueryRefresh"](_t = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵloadQuery"]()) && (ctx.editorContainer = _t.first);
+    } }, decls: 3, vars: 0, consts: [["id", "editorContainer", 1, "div-editor"], ["editorContainer", ""], ["id", "menuContainer"]], template: function EditorComponent_Template(rf, ctx) { if (rf & 1) {
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0, 1);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](2, "div", 2);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+    } }, styles: [".div-editor[_ngcontent-%COMP%] {\n  position: relative;\n  display: flex;\n  justify-content: center;\n}\n\n#menuContainer[_ngcontent-%COMP%] {\n  position: absolute;\n  top: 0em;\n  right: 0em;\n  z-index: 1;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIi4uLy4uLy4uL2VkaXRvci5jb21wb25lbnQuc2NzcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQTtFQUNJLGtCQUFBO0VBQ0EsYUFBQTtFQUNBLHVCQUFBO0FBQ0o7O0FBRUU7RUFDRSxrQkFBQTtFQUNBLFFBQUE7RUFDQSxVQUFBO0VBQ0EsVUFBQTtBQUNKIiwiZmlsZSI6ImVkaXRvci5jb21wb25lbnQuc2NzcyIsInNvdXJjZXNDb250ZW50IjpbIi5kaXYtZWRpdG9yIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgZGlzcGxheTogZmxleDtcbiAgICBqdXN0aWZ5LWNvbnRlbnQ6IGNlbnRlcjtcbiAgfVxuICBcbiAgI21lbnVDb250YWluZXIge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgICB0b3A6IDBlbTtcbiAgICByaWdodDogMGVtO1xuICAgIHotaW5kZXg6IDE7XG4gIH1cbiAgIl19 */"] });
+/*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](EditorComponent, [{
+        type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
+        args: [{
+                selector: 'app-editor',
+                templateUrl: './editor.component.html',
+                styleUrls: ['./editor.component.scss']
+            }]
+    }], function () { return [{ type: _services_data_service__WEBPACK_IMPORTED_MODULE_4__["DataService"] }, { type: _services_coordinates_service__WEBPACK_IMPORTED_MODULE_5__["CoordinatesService"] }]; }, { editorContainer: [{
+            type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["ViewChild"],
+            args: ['editorContainer']
+        }] }); })();
 
 
 /***/ }),

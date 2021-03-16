@@ -3,39 +3,39 @@ const YAML = require('yaml')
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 
 var squats = {
-    name: 'squats',
-    stages: [
+    'name': 'squats',
+    'stages': [
         {
-            angles: {
-                leftLeg: 165,
-                rightLeg: 165,
-                upperBody: 165
+            'angles': {
+                'leftLeg': 165,
+                'rightLeg': 165,
+                'upperBody': 165
             },
-            rules: {
-                upperBody: ["min", 140, "Bitte achte darauf, dass dein Oberkoerper beim Stehen gerade ist"]
+            'rules': {
+                'upperBody': ["min", 140, "Bitte achte darauf, dass dein Oberkoerper beim Stehen gerade ist"]
             },
-            name: "Anfangsposition"
+            'name': "Anfangsposition"
         },
         {
-            angles: {
-                leftLeg: 125,
-                rightLeg: 125,
-                upperBody: 125
+            'angles': {
+                'leftLeg': 125,
+                'rightLeg': 125,
+                'upperBody': 125
             },
-            rules: {},
-            name: "Transition"
+            'rules': {},
+            'name': "Transition"
         },
         {
-            angles: {
-                leftLeg: 90,
-                rightLeg: 90,
-                upperBody: 90
+            'angles': {
+                'leftLeg': 90,
+                'rightLeg': 90,
+                'upperBody': 90
             },
-            rules: {
-                leftHipKneeToe: ["behind", 160, "Bitte achte darauf, in der Hocke dein linkes Knie nicht ueber deine Zehenspitzen zu lassen"],
-                rightHipKneeToe: ["behind", 160, "Bitte achte darauf, in der Hocke dein rechtes Knie nicht ueber deine Zehenspitzen zu lassen"],
+            'rules': {
+                'leftHipKneeToe': ["behind", 160, "Bitte achte darauf, in der Hocke dein linkes Knie nicht ueber deine Zehenspitzen zu lassen"],
+                'rightHipKneeToe': ["behind", 160, "Bitte achte darauf, in der Hocke dein rechtes Knie nicht ueber deine Zehenspitzen zu lassen"]
             },
-            name: "Hocke"
+            'name': "Hocke"
         }
     ]
 }

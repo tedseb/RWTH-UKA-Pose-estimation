@@ -286,7 +286,6 @@ checkForStretch = (arr) => {
         if (lastAngles) {
             let keys = Object.keys(lastAngles);
             for (const key of keys) {
-                console.log(currentAngles[key] - lastAngles[key]);
                 differences[key].push(currentAngles[key] - lastAngles[key]);
             }
         } else {
@@ -317,7 +316,6 @@ angle3d = (x, y) => {
 threepointangle = (a, b, c) => {
     const ba = vector(b, a);
     const bc = vector(b, c);
-    console.log(angle3d(ba, bc));
     return angle3d(ba, bc);
 };
 vector = (x, y) => {

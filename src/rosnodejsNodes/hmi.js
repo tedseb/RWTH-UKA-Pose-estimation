@@ -59,7 +59,19 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         console.error(`No such exercise  ${msg['data']}`)
       }
     });
+    hmiExercises.findOne({ name: msg['data'] }, (err, result) => {
+      if (err) throw err;
+      if (result) {
+        const stringified = YAML.stringify(result);
+        nh.setParam('hmiExercise', stringified);
+        console.log(result);
+        pubex.publish({ data: 'hmiExercise' });
+      } else {
+        console.error(`No such exercise  ${msg['data']}`)
+      }
+    });
   });
+
 
   app.post('/expert/exercise/recordings', (req, res) => {
     console.log(req.body);

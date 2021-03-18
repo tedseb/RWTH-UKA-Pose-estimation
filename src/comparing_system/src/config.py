@@ -9,7 +9,7 @@ ROS_TOPIC_USER_EXERCISE_STATES = 'user_state'
 ROS_TOPIC_USER_CORRECTIONS = 'user_correction'
 
 ROS_JOINTS_TOPIC = 'fused_skelleton' # Shawan's topic choice
-ROS_EXERCISES_CHANGE_TOPIC = 'exercises' # TODO: Change this from tamer
+ROS_EXPERT_SYSTEM_UPDATE_TOPIC = 'exercises' # TODO: Change this from tamer
 ROS_SKELLETON_DEFINITION = 'skelleton_name'
 
 NUMBER_OF_COMPARATOR_THREADS = 20

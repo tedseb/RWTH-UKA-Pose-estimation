@@ -78,10 +78,8 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   });
 
   app.post('/api/expert/exercises/stages/save', (req, res) => {
-    const stages = req.body;
-    const toSave = {time: Date.now(),
-    stages: stages};
-    hmiExercises.insertOne(toSave);
+    console.log(req.body);
+    hmiExercises.insertOne(req.body);
     res.status(200).send();
   });
 

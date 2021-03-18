@@ -22,7 +22,7 @@ const ownpose = config.ownpose;
 // Web App Code:
 const app = express();
 const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
-app.use(bodyParser.json({limit: '50mb'}));
+app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({
   limit: '50mb',
   extended: true
@@ -46,11 +46,12 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const db = client.db("trainerai");
   const exercises = db.collection("exercises");
   const recordings = db.collection("recordings");
+  const hmiExercises = db.collection("hmiExercises");
 
   nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
     exercises.findOne({ name: msg['data'] }, (err, result) => {
       if (err) throw err;
-      if(result) {
+      if (result) {
         const stringified = YAML.stringify(result);
         nh.setParam('exercise', stringified);
         pubex.publish({ data: 'exercise' });
@@ -61,12 +62,12 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   });
 
   app.post('/expert/exercise/recordings', (req, res) => {
-      console.log(req.body);
-      res.status(200).send();
+    console.log(req.body);
+    res.status(200).send();
   });
 
   app.post('/api/expert/exercise/save', (req, res) => {
-    if(req && req.body['exercise']) {
+    if (req && req.body['exercise']) {
       const exercise = req.body['exercise'];
       console.log(exercise.name);
       exercises.insertOne(exercise);
@@ -76,9 +77,17 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
     }
   });
 
+  app.post('/api/expert/exercises/stages/save', (req, res) => {
+    const stages = req.body;
+    const toSave = {time: Date.now(),
+    stages: stages};
+    hmiExercises.insertOne(toSave);
+    res.status(200).send();
+  });
+
   //req.body == recording raw
   app.post('/api/expert/recording/save', (req, res) => {
-    if(req) {
+    if (req) {
       const recording = req.body;
       const recObj = {
         recording: recording

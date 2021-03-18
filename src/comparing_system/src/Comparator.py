@@ -89,7 +89,7 @@ class Comparator(Thread):
                 'display_text': correction
             }
             self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
-        
+
         if updated_repetitions != None:
             user_state_message = {
                 'user_id': 0,
@@ -98,8 +98,7 @@ class Comparator(Thread):
                 'seconds_since_last_exercise_start': (rp.Time.now() - spot_info_dict.get('start_time')).to_sec(),
                 'milliseconds_since_last_repetition': 0,
                 'repetition_score': 100,
-                'exercise_score': 100,
-                'user_position': {'x':center_of_body.x, 'y':center_of_body.y, 'z': center_of_body.z}
+                'exercise_score': 100
             }
             self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
         

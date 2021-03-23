@@ -14,7 +14,7 @@ from threading import Thread
 
 from src.joint_adapters.spin import *
 from src.config import *
-from src.Queueing import *
+from src.InterCom import *
 from src.LegacyCompaing import compare_legacy
 
 from traceback import print_exc
@@ -30,12 +30,13 @@ class Comparator(Thread):
     """
     The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     """
-    def __init__(self, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
+    def __init__(self, spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
         super(Comparator, self).__init__()
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
         self.message_out_queue_interface = message_out_queue_interface_class()
         self.spot_queue_interface = spot_queue_interface_class()
+        self.spot_info_interface = spot_info_interface_class()
         
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
@@ -53,55 +54,45 @@ class Comparator(Thread):
         """
         while(self.running):
             try:
-                # Get data from queues
-                spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.get_data()
+                # Fetch all data that is needed for the comparison:
+                spot_key = self.spot_queue_load_balancer.get_queue_key()
+
+                spot_info_dict = self.spot_info_interface.get_spot_info_dict(spot_key)
+
+                past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
+                
                 # Compare joints with expert system data
-                comparison_info = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                inrease_reps, correction, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                
                 # Send info back back to outgoing message queue and back into the ROS system
-                self.send_info(comparison_info, spot_info_dict)
+                if inrease_reps:
+                    spot_info_dict['repetitions'] += 1
+                    self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
+                    user_state_message = {
+                        'user_id': 0,
+                        'current_exercise_name': spot_info_dict.get('exercise').get('name'),
+                        'repetitions': spot_info_dict['repetitions'],
+                        'seconds_since_last_exercise_start': (rp.Time.now().secs - spot_info_dict.get('start_time')),
+                        'milliseconds_since_last_repetition': 0,
+                        'repetition_score': 100,
+                        'exercise_score': 100
+                    }
+                    self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
+
+                if correction != None and SEND_CORRETIONS:
+                    user_correction_message = {
+                        'user_id': 0,
+                        'repetition': spot_info_dict['repetitions'],
+                        'positive_correction': False,
+                        'display_text': correction
+                    }
+                    self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
+
             except QueueEmpty:
                 continue
             except Exception as e:
                 print_exc() 
                 rp.logerr("Error sending data in the comparator: " + str(e))    
-            
-    def get_data(self):
-        """
-        This method gets information from inbound queues, checks for errors like empty queues and returns information if any is present
-        """
-        # Fetch all data that is needed for the comparison:
-        redis_spot_key = self.spot_queue_load_balancer.get_queue_key()
-
-        return self.spot_queue_interface.dequeue(redis_spot_key)
-        
-    def send_info(self, comparison_info: dict, spot_info_dict: dict):
-        """
-        This method packs information that occurs in the process of analyzing the joint- and exercise-data into messages and enques them into an sending queue.
-        """
-
-        updated_repetitions, correction, center_of_body = comparison_info
-
-        if correction != None and SEND_CORRETIONS:
-            user_correction_message = {
-                'user_id': 0,
-                'repetition': updated_repetitions,
-                'positive_correction': False,
-                'display_text': correction
-            }
-            self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
-        
-        if updated_repetitions != None:
-            user_state_message = {
-                'user_id': 0,
-                'current_exercise_name': spot_info_dict.get('exercise').get('name'),
-                'repetitions': updated_repetitions,
-                'seconds_since_last_exercise_start': (rp.Time.now() - spot_info_dict.get('start_time')).to_sec(),
-                'milliseconds_since_last_repetition': 0,
-                'repetition_score': 100,
-                'exercise_score': 100,
-                'user_position': {'x':center_of_body.x, 'y':center_of_body.y, 'z': center_of_body.z}
-            }
-            self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
         
     def compare(self, spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
         if LEGACY_COMPARING:

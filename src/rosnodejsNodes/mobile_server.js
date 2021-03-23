@@ -84,8 +84,7 @@ wss.on('connection', (ws, req) => {
     SmartphoneAppClients.push(ws);
     console.log("Orhan hat sich verbunden :)");
     ws.on('message', function incoming(message) {
-        pub_qr.publish({ data: message })  // Refine this
-        console.log('received: %s', message); //json squats
+        pub_qr.publish({user: 1, data: message})  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
 });

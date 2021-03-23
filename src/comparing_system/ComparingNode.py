@@ -23,7 +23,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from src.joint_adapters.spin import *
 from src.Comparator import Comparator
 from src.config import *
-from src.Queueing import *
+from src.InterCom import *
 
 # db 0 is our (comparing node) database
 # TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
@@ -103,26 +103,31 @@ class SpotInfoHandler():
     This class waits for updates on the spots, such as a change of exercises that the spot.
     Such changes are written into the spot information .json via Redis.
     """
-    def __init__(self):
-        self.subscriber = rp.Subscriber(ROS_EXERCISES_CHANGE_TOPIC, String, self.callback)
+    def __init__(self, spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
+        self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
-        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)        
+        self.spot_info_interface = spot_info_interface_class()
+        self.message_queue_interface = message_queue_interface_class()
 
     def callback(self, name_parameter_containing_exercises: str):
         last_spots = self.spots
-        self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data)) # TODO: Fit this to API with tamer
+        self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data))  # TODO: Fit this to API with tamer
 
-        now = rp.get_rostime()
+        now_in_seconds = rp.get_rostime().secs
+        new_nanoseconds = rp.get_rostime().nsecs
+
         for k, v in self.spots.items():
             if (v == last_spots.get(k)) or not last_spots:  # If last_spots is empty, it has not been set yet and we still want to set all spot info
-                exercise_and_start_time = {'exercise': v, 'start_time': now}
-                redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(k)
-                rp.logerr("Updating info for: " + redis_spot_info_key)
-                # Use keys to delete queues and update info on spots
-                self.redis_connection.set(redis_spot_info_key, yaml.dump(exercise_and_start_time))
-                num_deleted_items = self.redis_connection.delete(redis_spot_queue_key)
-                num_deleted_items += self.redis_connection.delete(redis_spot_past_queue_key)
-                rp.loginfo("Deleted " + str(num_deleted_items) + " from " + redis_spot_queue_key + " due to an exercise change at ROS time " + str(now))
+
+                spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(k)
+                rp.logerr("Updating info for: " + spot_info_key)
+
+                num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
+                num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
+                rp.loginfo("Deleted " + str(num_deleted_items) + " from " + spot_queue_key + " due to an exercise change at second " + str(now_in_seconds))
+                
+                spot_info_dict = {'exercise': v, 'start_time': now_in_seconds, 'repetitions': 0}
+                self.spot_info_interface.set_spot_info_dict(k, spot_info_dict)
                 
 
 if __name__ == '__main__':
@@ -157,7 +162,7 @@ if __name__ == '__main__':
 
     if int(os.environ.get('COMPARING_SYSTEM_DEVELOPER_MODE') or 0) == 1:
         # This code is executed to not depend on the expert system
-        publisher = rp.Publisher(ROS_EXERCISES_CHANGE_TOPIC, String, queue_size=10)
+        publisher = rp.Publisher(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, queue_size=10)
         message = 'exercise'
         import time
         time.sleep(0.3)

@@ -95,9 +95,10 @@ class DataService {
     saveRecording(recording) {
         this.http.post('/api/expert/recording/save', recording).subscribe(val => { });
     }
-    saveExerciseWithStages(stages, name) {
+    saveExerciseWithStages(stages, name, recording) {
         const toSave = {
-            'recording': stages,
+            'stages': stages,
+            'recording': recording,
             'name': name
         };
         console.log(toSave);
@@ -231,8 +232,7 @@ class CoordinatesService {
         // this.playRecording();
     }
     saveRecordingWithStages(stages, name) {
-        this.saveRecording();
-        this.dataService.saveExerciseWithStages(stages, name);
+        this.dataService.saveExerciseWithStages(stages, name, this.recording);
     }
 }
 CoordinatesService.ɵfac = function CoordinatesService_Factory(t) { return new (t || CoordinatesService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_data_service__WEBPACK_IMPORTED_MODULE_2__["DataService"])); };

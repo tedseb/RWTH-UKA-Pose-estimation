@@ -113,6 +113,8 @@ class SpotInfoHandler():
         last_spots = self.spots
         self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data))  # TODO: Fit this to API with tamer
 
+        rp.logerr(self.spots)
+
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs
 

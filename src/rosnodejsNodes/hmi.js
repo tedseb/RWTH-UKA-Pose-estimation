@@ -49,25 +49,27 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const hmiExercises = db.collection("hmiExercises");
 
   nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
-    exercises.findOne({ name: msg['data'] }, (err, result) => {
+    const qr = JSON.parse(msg['data']);
+    console.log(qr);
+    exercises.findOne({ name: qr['data'] }, (err, result) => {
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
-        nh.setParam('exercise', stringified);
+        nh.setParam('exercise' + qr['station'], stringified);
         pubex.publish({ data: 'exercise' });
       } else {
-        console.error(`No such exercise  ${msg['data']}`)
+        console.error(`No such exercise  ${qr['data']}`)
       }
     });
-    hmiExercises.findOne({ name: msg['data'] }, (err, result) => {
+    hmiExercises.findOne({ name: qr['data'] }, (err, result) => {
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
-        nh.setParam('hmiExercise', stringified);
+        nh.setParam('hmiExercise' + qr['station'], stringified);
         console.log(result);
         pubex.publish({ data: 'hmiExercise' });
       } else {
-        console.error(`No such exercise  ${msg['data']}`)
+        console.error(`No such exercise  ${qr['data']}`)
       }
     });
   });

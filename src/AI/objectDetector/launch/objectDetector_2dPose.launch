@@ -1,0 +1,3 @@
+<launch>
+  <node name="objectDetector2DPose" pkg="spin" type="object_detection.py" />
+</launch> 

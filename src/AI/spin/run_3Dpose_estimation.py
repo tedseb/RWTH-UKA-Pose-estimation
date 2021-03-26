@@ -51,7 +51,10 @@ class run_spin():
 
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
-        rospy.Subscriber('image', Image, self.callback_setImage)
+        #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
+
+        rospy.Subscriber('image', Image, self.callback_setImage)       
+        #srospy.Subscriber('image1', Image, self.callback_setImage)
         self.spin()
 
 

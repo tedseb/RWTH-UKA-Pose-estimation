@@ -56,7 +56,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
       if (result) {
         const stringified = YAML.stringify(result);
         nh.setParam('exercise' + qr['station'], stringified);
-        pubex.publish({ data: 'exercise' });
+        pubex.publish({ data: 'exercise' + qr['station'] });
       } else {
         console.error(`No such exercise  ${qr['data']}`)
       }
@@ -67,7 +67,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         const stringified = YAML.stringify(result);
         nh.setParam('hmiExercise' + qr['station'], stringified);
         console.log(result);
-        pubex.publish({ data: 'hmiExercise' });
+        pubex.publish({ data: 'hmiExercise' + qr['station'] });
       } else {
         console.error(`No such exercise  ${qr['data']}`)
       }

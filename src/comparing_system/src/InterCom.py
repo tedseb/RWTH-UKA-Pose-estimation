@@ -11,6 +11,7 @@ import yaml
 import msgpack
 from traceback import print_exc
 from collections import OrderedDict
+from abc import ABC, abstractmethod
 
 from typing import Tuple, Any
 
@@ -30,16 +31,18 @@ class QueueTimeout(QueueingException):
     pass
 
 
-class SpotQueueInterface:
+class SpotQueueInterface(ABC):
     """
     We need to queue different data for our spots.
     Said data is primarely defined by the joints and their timestamps.
     We assume that every spot, at any given time, has only one active user.
     Therefore, we assume that we can sort data from multiple views into the same spot-queue, providing their timestamps
     """
+    @abstractmethod
     def __init__(self):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def dequeue(self, spot_key: str) -> Tuple[list, list, list]:
         """
         Dequeue spot data from queues and return it as a tuple:
@@ -53,6 +56,7 @@ class SpotQueueInterface:
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def blocking_dequeue(self, spot_key: str, timeout: int = 0) -> Tuple[list, list, list]:
         """ 
         Returns three a spot-info dictionary and three lists:
@@ -62,56 +66,67 @@ class SpotQueueInterface:
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def enqueue(self, spot_key: str, message: Any) -> None:
         """ 
         Enqueue a list of joints, possibly with additional data.
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-        
-class MessageQueueInterface:
+
+class MessageQueueInterface(ABC):
     def __init__(self):
         raise NotImplementedError("This is an interface and shold not be called directly")
-    
+
+    @abstractmethod
     def enqueue(self, spot_key: str, message: Any) -> None:
         """ 
         Enqueue a dictionary, which can be sent as a message somewhere else.
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def dequeue(self, spot_key: str) -> dict:
         """ 
         Dequeue a dictionary, which can be sent as a message somewhere else.
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def delete(self, spot_key: str) -> None:
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def size(self, spot_key) -> Tuple[int, int, int]:
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class QueueLoadBalancerInterface:
+class QueueLoadBalancerInterface(ABC):
+    @abstractmethod
     def __init__(self):
         raise NotImplementedError("This is an interface and shold not be called directly")
-    
+
+    @abstractmethod
     def get_queue_key(self) -> str:
         """ Get the key for the spot that needs our attention the most """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def set_queue_size(self, key: str, queue_size: int) -> None:
         """ Set the size of a queue """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class SpotInfoInterface:
+class SpotInfoInterface(ABC):
+    @abstractmethod
     def __init__(self):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def get_spot_info_dict(self, key: str):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    @abstractmethod
     def set_spot_info_dict(self, key: str, spot_info_dict: dict):
         raise NotImplementedError("This is an interface and shold not be called directly")
 

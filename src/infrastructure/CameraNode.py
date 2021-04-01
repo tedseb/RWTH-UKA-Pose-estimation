@@ -6,7 +6,7 @@ import numpy as np
 import pafy
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
-url = "https://www.youtube.com/watch?v=QifjltKUMCk"             #"https://www.youtube.com/watch?v=C_VtOYc6j5c"
+url = "https://youtu.be/Rz-KiN1RPrw"             #"https://www.youtube.com/watch?v=C_VtOYc6j5c"  https://www.youtube.com/watch?v=QifjltKUMCk
 video = pafy.new(url)
 best = video.getbest(preftype="mp4")
 def camera():

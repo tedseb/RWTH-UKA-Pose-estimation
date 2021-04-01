@@ -42,8 +42,9 @@ class run_spin():
         '''
         This function will be called everytime whenever a message is received by the subscriber
         '''
+        print("Detection: ", body_bbox_list_station.data)
         bbox=np.array(body_bbox_list_station.data).reshape(-1,4)[0]
-
+        print("Detection_reshaped: ", bbox)
         station_end_x= bbox[2]+bbox[0]
         station_end_y= bbox[3]+bbox[1]
         x1=bbox[0]
@@ -85,7 +86,8 @@ class run_spin():
             station_dic={}
             print("Content: ",station_dic) 
 
-        station_dic[(self.station_ID)] = [(bbox[0]-(self.incSpace*bbox[2])), (bbox[1]-(self.incSpace*bbox[3])), ((1+self.incSpace)*bbox[2]), ((1+self.incSpace)*bbox[3])]
+        #station_dic[(self.station_ID)] = [(bbox[0]-(self.incSpace*bbox[2])), (bbox[1]-(self.incSpace*bbox[3])), ((1+self.incSpace)*bbox[2]), ((1+self.incSpace)*bbox[3])]
+        station_dic[(self.station_ID)] = [start_point2[0], start_point2[1], end_point2[0], end_point2[1]]
         with open('/home/trainerai/trainerai-core/src/infrastructure/stations/'+ str(self.sensor_name)+'.yaml', "w+") as file:  # Safely open the file
             documents = yaml.dump(station_dic, file)
         cv2.imwrite('/home/trainerai/trainerai-core/src/infrastructure/stations/' + str(self.sensor_name) + '_station_ID_'+ str(self.station_ID)+'.png',img_draw)
@@ -93,7 +95,7 @@ class run_spin():
 
 if __name__ == '__main__':
     #global station_ID
-    station_ID=3
+    station_ID=1
     incSpace=0.25
 
     rospy.init_node('spin', anonymous=True)

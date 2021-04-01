@@ -16,19 +16,22 @@ import yaml
 class getBoxesInStation:
     def __init__(self):
         self.station_dic=[]
-        self.run_BoxStationChk([])
-        if os.path.exists('/home/trainerai/trainerai-core/src/infrastructure/stations/dev0.yaml'):
-            with open(r'/home/trainerai/trainerai-core/src/infrastructure/stations/dev0.yaml') as file:
-                self.station_dic = yaml.load(file,Loader=yaml.Loader)   #Cam0
-
-    def run_BoxStationChk(self,box):
-        current_exercise = yaml.safe_load(rospy.get_param('exercise'))
-        print(self.station_dic)
-        for stationID in [3]: # only station 3
-            station_end_x= self.station_dic[station][2]
-            station_end_y= self.station_dic[station][3]
-            if (box[0]>=self.station_dic[station][0]) and (detection[1]>=self.station_dic[station][1])  and (box[2]<=station_end_x) and (box[3]<=station_end_y): #X0 Y0 X1 Y1
-                return True
-        return False
-
-obj_detect=getBoxesInStation()
+        result = rospy.get_param('param_server')
+        self.station_dic =yaml.load(result, Loader=yaml.Loader) 
+    def run_BoxStationChk(self,box, frame_id,stationChk):
+        info_station=[]
+        if stationChk == True:
+            for stationID, stationXY in self.station_dic[frame_id].items(): # only stations of camera 0
+                station_end_x= stationXY[0]+stationXY[2]
+                station_end_y= stationXY[1]+stationXY[3]
+                print("stationCoord: ",stationXY[0], stationXY[1], station_end_x, station_end_y)
+                #print("stationID: ",stationID)
+                #print("-------------------------------------------------")
+                #print("Detection: ",box[0], box[1], box[2], box[3])
+                if (box[0]>=stationXY[0]) and (box[1]>=stationXY[1])  and (box[2]<=station_end_x) and (box[3]<=station_end_y): #X0 Y0 X1 Y1
+                    return True,stationID
+                else:
+                    return False,0
+        else:
+            return True,0
+    

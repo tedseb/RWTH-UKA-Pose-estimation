@@ -3,12 +3,13 @@
 import rospy
 import json
 from std_msgs.msg import String
+import yaml
 
 def talker():
     pub = rospy.Publisher('test_pub', String, queue_size=10)
     rospy.init_node('talker', anonymous=True)
     rate = rospy.Rate(1)
-    msg = json.dump({"id" : 0, "station" : 3})
+    msg = json.dumps({'id' : 2, 'state' : True})
     while not rospy.is_shutdown():
         pub.publish(msg)
         rate.sleep()

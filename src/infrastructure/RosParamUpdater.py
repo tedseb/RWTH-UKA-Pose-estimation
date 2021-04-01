@@ -16,29 +16,38 @@ class paramUpdater():
         rospy.spin()
 
     def callback_setStation(self, msg):
-        set_station_json = json.loads(msg)
-        station_id = set_station_json["id"]
-        station_state = set_station_json["state"]
+        result = str(msg).replace("\\", "")
+        #print(result)
+        #result = "{id': 3, 'state': true}"
+        #set_station_json = json.loads(result)
+        station_id = 2 # set_station_json["id"]
+        station_state = True #set_station_json["state"]
         if station_state == True: 
             for i, camera in enumerate(self._camera_list):
-                if id in camera:
-                    self._parameters[i][id] = camera[id]
+                if station_id in camera:
+                    self._parameters[i][station_id] = camera[station_id]
         else:
             for stations in self._parameters.values(): 
                 if station_id in stations:
                     stations.pop(station_id, None)
-
+        print(self._parameters)
         rospy.set_param('param_server', yaml.dump(self._parameters))
+
+        result = rospy.get_param('param_server')
+        results_test= yaml.load(result, Loader=yaml.Loader)
+        print(results_test[0])
+        
         
 
 if __name__ == '__main__':
+    rospy.init_node('param_updater', anonymous=True)
     camera_list = []
     for filename in glob.glob("./stations/*.yaml"):
         with open(filename) as file:
             station_dic = yaml.load(file, Loader=yaml.Loader)
             camera_list.append(station_dic)
     
-    print(camera_list)
+    #print(camera_list)
     updater = paramUpdater(camera_list)
     updater.spin()
     

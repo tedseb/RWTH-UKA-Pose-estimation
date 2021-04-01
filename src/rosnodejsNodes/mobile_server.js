@@ -47,7 +47,6 @@ const PORT = config.MOBILE_SERVER_PORT;
 const app = express();
 const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
 const wss = new WebSocket.Server({ server });
-var stationCounter = 1;
 
 let SmartphoneAppClients = [];
 
@@ -85,7 +84,9 @@ wss.on('connection', (ws, req) => {
     SmartphoneAppClients.push(ws);
     console.log("Orhan hat sich verbunden :)");
     ws.on('message', function incoming(message) {
-        pub_qr.publish({data: JSON.stringify({station: stationCounter++, data: message})})  // Refine this
+        console.log(message, typeof message);
+        const msgJSON = JSON.parse(message);
+        pub_qr.publish({data: JSON.stringify({station: msgJSON['station'], exercise: msgJSON['exercise']})})  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
 });

@@ -94,6 +94,7 @@ class run_spin():
         msg = Persons()
         msg.header = img_msg.header
         msg.persons = list()
+
         cropImage=[]
         for detection in results:
             joints=detection["pred_joints_img"]

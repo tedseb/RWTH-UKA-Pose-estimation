@@ -11,6 +11,7 @@ const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
 var MongoClient = require('mongodb').MongoClient;
+const { stringify } = require('querystring');
 
 
 // Parameters and Constants:
@@ -55,8 +56,14 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
-        nh.setParam('exercise' + qr['station'], stringified);
-        pubex.publish({ data: 'exercise' + qr['station'] });
+        nh.setParam('exercise' + qr['id'], stringified);
+        const obj = {
+          id: qr['id'],
+          state: qr['state'],
+          exercise: qr['exercise'],
+          param: 'exercise' + qr['id']
+        }
+        pubex.publish({'data': JSON.stringify(obj)});
       } else {
         console.error(`No such exercise  ${qr['exercise']}`)
       }
@@ -65,9 +72,15 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
-        nh.setParam('hmiExercise' + qr['station'], stringified);
+        nh.setParam('hmiExercise' + qr['id'], stringified);
         console.log(result);
-        pubex.publish({ data: 'hmiExercise' + qr['station'] });
+        const obj = {
+          id: qr['id'],
+          state: qr['state'],
+          exercise: qr['exercise'],
+          param: 'hmiExercise' + qr['id']
+        }
+        pubex.publish({'data': JSON.stringify(obj)});
       } else {
         console.error(`No such exercise  ${qr['exercise']}`)
       }

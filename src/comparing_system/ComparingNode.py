@@ -98,7 +98,7 @@ class Sender(Thread):
                 rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
                 
 
-class SpotInfoHandler():
+class HMIInfoHandler():
     """
     This class waits for updates on the spots, such as a change of exercises that the spot.
     Such changes are written into the spot information .json via Redis.
@@ -109,11 +109,13 @@ class SpotInfoHandler():
         self.spot_info_interface = spot_info_interface_class()
         self.message_queue_interface = message_queue_interface_class()
 
-    def callback(self, name_parameter_containing_exercises: str):
+    def callback(self, spot_info_yaml_message: str):
         last_spots = self.spots
-        self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data))  # TODO: Fit this to API with tamer
+        spot_info_dict = yaml.safe_load(spot_info_yaml_message.data)
 
-        rp.logerr(self.spots)
+        exercise = rp.get_param("hmiExercise" + str(spot_info_dict["id"]))
+
+        rp.logerr(exercise)
 
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs
@@ -152,7 +154,7 @@ if __name__ == '__main__':
 
     receiver = Receiver()
 
-    spot_info_handler = SpotInfoHandler()
+    spot_info_handler = HMIInfoHandler()
 
     def kill_threads():
         all_threads = comparators + [user_state_sender, user_correction_sender]

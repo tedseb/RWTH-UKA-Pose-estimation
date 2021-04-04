@@ -6,7 +6,8 @@ import glob
 
 class paramUpdater():
     def __init__(self, cameras):
-        #------ channel Name? 
+        #------ channel Name?
+        # in hmi.js, config file? 
         rospy.Subscriber('test_pub', String, self.callback_setStation)
         self._camera_list = cameras
         self._num_cameras = len(cameras)
@@ -16,11 +17,15 @@ class paramUpdater():
         rospy.spin()
 
     def callback_setStation(self, msg):
+        # kommentar von tamer sry
+        # node.js StringMsg Type {data: string}
+        # python StringMsg ? 
+        # take parse this -> msg['data'] into JSON
         result = str(msg).replace("\\", "")
         #print(result)
         #result = "{id': 3, 'state': true}"
         #set_station_json = json.loads(result)
-        station_id = 2 # set_station_json["id"]
+        station_id = 2                  #set_station_json["id"]
         station_state = True #set_station_json["state"]
         if station_state == True: 
             for i, camera in enumerate(self._camera_list):

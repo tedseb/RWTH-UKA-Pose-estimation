@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import yaml
 import json
 import rospy
@@ -8,7 +9,7 @@ class paramUpdater():
     def __init__(self, cameras):
         #------ channel Name?
         # in hmi.js, config file? 
-        rospy.Subscriber('test_pub', String, self.callback_setStation)
+        rospy.Subscriber('exercises', String, self.callback_setStation)
         self._camera_list = cameras
         self._num_cameras = len(cameras)
         self._parameters = {i : {} for i in range(self._num_cameras)}
@@ -21,12 +22,15 @@ class paramUpdater():
         # node.js StringMsg Type {data: string}
         # python StringMsg ? 
         # take parse this -> msg['data'] into JSON
-        result = str(msg).replace("\\", "")
-        #print(result)
+        result =  str(msg.data).replace("\\", "")
         #result = "{id': 3, 'state': true}"
         #set_station_json = json.loads(result)
-        station_id = 2                  #set_station_json["id"]
-        station_state = True #set_station_json["state"]
+        spot_info_dict = yaml.load(result, Loader=yaml.Loader)
+        print(spot_info_dict)
+        station_id = spot_info_dict["id"]                 #set_station_json["id"]
+        station_state = spot_info_dict["state"]
+        print("station_id: ",station_id)
+        print("station_state: ",station_state)
         if station_state == True: 
             for i, camera in enumerate(self._camera_list):
                 if station_id in camera:
@@ -40,7 +44,7 @@ class paramUpdater():
 
         result = rospy.get_param('param_server')
         results_test= yaml.load(result, Loader=yaml.Loader)
-        print(results_test[0])
+        #print(results_test[0])
         
         
 

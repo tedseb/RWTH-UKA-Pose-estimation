@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from PIL import Image as ImagePil
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from backend.msg import Bboxes
 from scheduler import getBoxesInStation
 import time
@@ -27,6 +28,7 @@ class ObjectDetectionPipeline:
         self.threshold = threshold # Confidence threshold for displaying boxes.
         self.renderer=renderer
         rospy.Subscriber('image', Image, self.run_objectdetector)
+        rospy.Subscriber('exercises', String, self.setStation)
         if self.renderer==True:
             self.publisher_img = rospy.Publisher('imageYOLO', Image , queue_size=2)
         self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
@@ -34,8 +36,8 @@ class ObjectDetectionPipeline:
         self.info_station=[]
         self.frame_id=0
         self.spin() #Dont write any line of code after self.spin!
-
-
+    def setStation(self,msg):
+        self.stationBoxesChk = getBoxesInStation()
     def spin(self):
             '''
             We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
@@ -71,7 +73,7 @@ class ObjectDetectionPipeline:
         left_top.stationID=self.info_station  
         left_top.sensorID=self.frame_id       
         self.publisher_boxes.publish(left_top)
-
+        #print("left_top: ",left_top)
 
     def obj_detectYolo(self, img):
         """
@@ -114,6 +116,7 @@ class ObjectDetectionPipeline:
                         h=box[3]-y
                         self.body_bbox.append([x,y,w,h])
                         self.info_station.append(stationID)
+                        print("self.info_station: ",self.info_station)
                 else:
                     if resul_np[count,4]>tmp_conf:
                         self.body_bbox= [None] * 1

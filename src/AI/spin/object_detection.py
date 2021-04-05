@@ -17,6 +17,7 @@ from bodymocap import constants
 import yaml
 
 
+
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -42,8 +43,8 @@ def run_objectdetector(img_msg):
     info_station=[]
 
     body_pose_list, body_bbox_list = body_bbox_detector.detect_body_pose(img_original_bgr)
-    hand_bbox_list = [None, ] * len(body_bbox_list)
-
+    bbox_list = [None, ] * len(body_bbox_list)
+    print("Box: ", body_bbox_list)
     #Sort the bbox using bbox size 
     # (to make the order as consistent as possible without tracking)           
     bbox_size =  [ (x[2] * x[3]) for x in body_bbox_list]
@@ -116,7 +117,7 @@ if __name__ == '__main__':
 
     if os.path.exists('/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml'):
         with open(r'/home/trainerai/trainerai-core/src/infrastructure/stations/station_coordinate.yaml') as file:
-            station_dic = yaml.load(file)
+            station_dic = yaml.load(file,Loader=yaml.Loader)
 
     rospy.init_node('objectNode', anonymous=True)
     rospy.Subscriber('image', Image, run_objectdetector)

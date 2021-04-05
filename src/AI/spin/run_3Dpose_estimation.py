@@ -51,7 +51,10 @@ class run_spin():
 
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
-        rospy.Subscriber('image', Image, self.callback_setImage)
+        #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
+
+        rospy.Subscriber('image', Image, self.callback_setImage)       
+        #srospy.Subscriber('image1', Image, self.callback_setImage)
         self.spin()
 
 
@@ -81,10 +84,10 @@ class run_spin():
         fps = int(1/(time.time()-tmpTime))
 
         print("FPS : ",fps)
-        self.publish_results(pred_output_list, self.msg_image,  body_bbox_list_station.stationID )
+        self.publish_results(pred_output_list, self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
 
 
-    def publish_results(self,results, img_msg, stationID):  
+    def publish_results(self,results, img_msg, stationID,sensorID):  
         if len(results) == 0:
             return
         inc=0
@@ -100,6 +103,7 @@ class run_spin():
             person_msg = Person()
             if len(stationID) >0:
                 person_msg.stationID = stationID[inc]
+                person_msg.sensorID = sensorID
             person_msg.bodyParts = [None]*lenPoints
             for idx in range(lenPoints):
                 person_msg.bodyParts[idx] = Bodypart()

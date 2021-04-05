@@ -39,10 +39,6 @@ class SpotQueueInterface(ABC):
     Therefore, we assume that we can sort data from multiple views into the same spot-queue, providing their timestamps
     """
     @abstractmethod
-    def __init__(self):
-        raise NotImplementedError("This is an interface and shold not be called directly")
-
-    @abstractmethod
     def dequeue(self, spot_key: str) -> Tuple[list, list, list]:
         """
         Dequeue spot data from queues and return it as a tuple:
@@ -57,27 +53,23 @@ class SpotQueueInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def blocking_dequeue(self, spot_key: str, timeout: int = 0) -> Tuple[list, list, list]:
-        """ 
-        Returns three a spot-info dictionary and three lists:
-        * The first is a list of lists of joints, possibly with additional data, representing the past.
-        * The second is a list of joints, possibly with additional data.
-        * The third is a list of lists of joints, possibly with additional data, representing the future.
-        """
-        raise NotImplementedError("This is an interface and shold not be called directly")
-
-    @abstractmethod
     def enqueue(self, spot_key: str, message: Any) -> None:
         """ 
         Enqueue a list of joints, possibly with additional data.
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-
-class MessageQueueInterface(ABC):
-    def __init__(self):
+    @abstractmethod
+    def size(self, spot_key: str):
+        """ Returns the size of the Spot Queue. """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
+    def delete(self, spot_key: str):
+        """ Deletes the content of a spot queue. """
+        raise NotImplementedError("This is an interface and shold not be called directly")
+
+
+class MessageQueueInterface(ABC):
     @abstractmethod
     def enqueue(self, spot_key: str, message: Any) -> None:
         """ 

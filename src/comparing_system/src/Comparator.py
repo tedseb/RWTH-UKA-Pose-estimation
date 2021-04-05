@@ -66,6 +66,7 @@ class Comparator(Thread):
                 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if inrease_reps:
+                    rp.logerr(spot_info_dict)
                     spot_info_dict['repetitions'] += 1
                     self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
                     user_state_message = {

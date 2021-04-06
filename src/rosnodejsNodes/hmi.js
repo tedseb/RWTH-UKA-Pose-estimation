@@ -58,7 +58,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         const stringified = YAML.stringify(result);
         nh.setParam('exercise' + qr['id'], stringified);
         const obj = {
-          id: qr['id'],
+          id: qr['stationID'],
           state: qr['state'],
           exercise: qr['exercise'],
           param: 'exercise' + qr['id']
@@ -75,7 +75,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         nh.setParam('hmiExercise' + qr['id'], stringified);
         console.log(result);
         const obj = {
-          id: qr['id'],
+          id: qr['stationID'],
           state: qr['state'],
           exercise: qr['exercise'],
           param: 'hmiExercise' + qr['id']

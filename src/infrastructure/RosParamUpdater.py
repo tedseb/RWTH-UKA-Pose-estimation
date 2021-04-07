@@ -18,6 +18,7 @@ class paramUpdater():
         rospy.spin()
 
     def callback_setStation(self, msg):
+        rospy.loginfo("In Callback", logger_name="my_logger_name")
         # kommentar von tamer sry
         # node.js StringMsg Type {data: string}
         # python StringMsg ? 
@@ -29,8 +30,12 @@ class paramUpdater():
         print(spot_info_dict)
         station_id = spot_info_dict["id"]                 #set_station_json["id"]
         station_state = spot_info_dict["state"]
+
         print("station_id: ",station_id)
         print("station_state: ",station_state)
+        rospy.loginfo(f"station_id: {station_id}", logger_name="RosParam")
+        rospy.loginfo(f"station_state: {station_state}", logger_name="RosParam")
+
         if station_state == True: 
             for i, camera in enumerate(self._camera_list):
                 if station_id in camera:
@@ -39,9 +44,11 @@ class paramUpdater():
             for stations in self._parameters.values(): 
                 if station_id in stations:
                     stations.pop(station_id, None)
-        print(self._parameters)
-        rospy.set_param('param_server', yaml.dump(self._parameters))
 
+        print(self._parameters)
+        rospy.loginfo(str(self._parameters), logger_name="RosParam")
+
+        rospy.set_param('param_server', yaml.dump(self._parameters))
         result = rospy.get_param('param_server')
         results_test= yaml.load(result, Loader=yaml.Loader)
         #print(results_test[0])
@@ -50,13 +57,14 @@ class paramUpdater():
 
 if __name__ == '__main__':
     rospy.init_node('param_updater', anonymous=True)
+    
     camera_list = []
-    for filename in glob.glob("./stations/*.yaml"):
+    for filename in glob.glob("/home/trainerai/trainerai-core/src/infrastructure/stations/*.yaml"):
         with open(filename) as file:
             station_dic = yaml.load(file, Loader=yaml.Loader)
             camera_list.append(station_dic)
     
-    #print(camera_list)
+    print(camera_list)
+    rospy.loginfo(str(camera_list), logger_name="RosParam")
     updater = paramUpdater(camera_list)
     updater.spin()
-    

@@ -87,15 +87,18 @@ class Sender(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name))
-                traceback.print_exc()
+                if HIGH_VERBOSITY:
+                    rp.logerr("Issue getting message from Queue: " + str(self.redis_sending_queue_name))
+                    traceback.print_exc()
             try:
                 message = json.dumps({'topic': self.publisher_topic, 'data': data})
                 self.publisher.publish(message)
-                rp.logerr("ComparingNode.py sent message: " + str(message))
+                if HIGH_VERBOSITY:
+                    rp.logerr("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)
-                rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
+                if HIGH_VERBOSITY:
+                    rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
                 
 
 class SpotInfoHandler():
@@ -112,7 +115,7 @@ class SpotInfoHandler():
     def callback(self, name_parameter_containing_exercises: str):
         last_spots = self.spots
         self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data))  # TODO: Fit this to API with tamer
-
+        
         rp.logerr(self.spots)
 
         now_in_seconds = rp.get_rostime().secs

@@ -66,7 +66,8 @@ class Comparator(Thread):
                 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if inrease_reps:
-                    rp.logerr(spot_info_dict)
+                    if HIGH_VERBOSITY:
+                        rp.logerr(spot_info_dict)
                     spot_info_dict['repetitions'] += 1
                     self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
                     user_state_message = {
@@ -92,8 +93,9 @@ class Comparator(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                print_exc() 
-                rp.logerr("Error sending data in the comparator: " + str(e))    
+                if HIGH_VERBOSITY:
+                    print_exc() 
+                    rp.logerr("Error sending data in the comparator: " + str(e))    
         
     def compare(self, spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
         if LEGACY_COMPARING:

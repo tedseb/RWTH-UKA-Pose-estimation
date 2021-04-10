@@ -84,7 +84,13 @@ wss.on('connection', (ws, req) => {
     SmartphoneAppClients.push(ws);
     console.log("Orhan hat sich verbunden :)");
     ws.on('message', function incoming(message) {
-        pub_qr.publish({data: message})  // Refine this
+        const qr = JSON.parse(message);
+        const params = {
+            stationID: qr['stationID'],
+            isActive: qr['isActive'],
+            exercise: qr['exercise']
+        }
+        pub_qr.publish({data: YAML.stringify(params)})  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
 });

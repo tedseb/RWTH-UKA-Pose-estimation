@@ -201,8 +201,10 @@ class RedisMessageQueueInterface(MessageQueueInterface):
         except QueueEmpty:
             raise QueueEmpty
         except Exception as e:
-            rp.logerr("Issue getting message from Queue: " + str(key))
-            print_exc()
+            if HIGH_VERBOSITY:
+                rp.logerr("Issue getting message from Queue: " + str(key))
+                print_exc()
+            pass
         
         return message
 
@@ -263,7 +265,8 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         queue_size = self.redis_connection.rpush(redis_spot_queue_key, msgpack.packb(data))
 
         if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-            rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
+            if HIGH_VERBOSITY:
+                rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
             self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
 
         return queue_size

@@ -5,6 +5,7 @@ const https = require('https');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
+const StationUsage = rosnodejs.require("backend").msg.StationUsage;
 const pose_estimation_messages = rosnodejs.require("backend");
 const comparing_system_messages = rosnodejs.require("comparing_system");
 const url = require('url');
@@ -49,40 +50,39 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const recordings = db.collection("recordings");
   const hmiExercises = db.collection("hmiExercises");
 
-  nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
-    const qr = JSON.parse(msg['data']);
-    console.log(qr);
-    exercises.findOne({ name: qr['exercise'] }, (err, result) => {
+  nh.subscribe('/station_usage', StationUsage, async (msg) => {
+    console.log(msg);
+    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
-        nh.setParam('exercise' + qr['id'], stringified);
+        nh.setParam('exercise' + msg['stationID'], stringified);
         const obj = {
-          id: qr['stationID'],
-          state: qr['state'],
-          exercise: qr['exercise'],
-          param: 'exercise' + qr['id']
+          id: msg['stationID'],
+          state: msg['isActive'],
+          exercise: msg['exerciseName'],
+          param: 'exercise' + msg['stationID']
         }
         pubex.publish({'data': YAML.stringify(obj)});
       } else {
-        console.error(`No such exercise  ${qr['exercise']}`)
+        console.error(`No such exercise  ${msg['exerciseName']}`)
       }
     });
-    hmiExercises.findOne({ name: qr['exercise'] }, (err, result) => {
+    hmiExercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
-        nh.setParam('hmiExercise' + qr['id'], stringified);
+        nh.setParam('hmiExercise' + msg['stationID'], stringified);
         console.log(result);
         const obj = {
-          id: qr['stationID'],
-          state: qr['state'],
-          exercise: qr['exercise'],
-          param: 'hmiExercise' + qr['id']
+          id: msg['stationID'],
+          state: msg['isActive'],
+          exercise: msg['exerciseName'],
+          param: 'exercise' + msg['stationID']
         }
         pubex.publish({'data': YAML.stringify(obj)});
       } else {
-        console.error(`No such exercise  ${qr['exercise']}`)
+        console.error(`No such exercise  ${msg['exerciseName']}`)
       }
     });
   });

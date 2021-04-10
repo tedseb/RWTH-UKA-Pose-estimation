@@ -58,7 +58,8 @@ rosnodejs.initNode('/mobile_server')
 const nh = rosnodejs.nh;
 
 // We use this to advertise the Exercise name, read with the current QR Code
-const pub_qr = nh.advertise('/qr_exercise', StationUsage);
+const station_usage_publisher = nh.advertise('/station_usage', StationUsage);
+
 
 // We use this user_state and deprecate the very first API structure "repetition"
 const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
@@ -92,8 +93,7 @@ wss.on('connection', (ws, req) => {
             stationID: qr['stationID'],
             isActive: qr['isActive'],
             exerciseName: qr['exerciseName']});
-            console.log(msg)
-        pub_qr.publish(msg)  // Refine this
+            station_usage_publisher.publish(msg)  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
 });

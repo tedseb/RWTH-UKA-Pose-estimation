@@ -28,7 +28,7 @@ MongoClient.connect(uri, { useUnifiedTopology: true }, (err, client) => {
   const db = client.db("trainerai");
   const exercises = db.collection("exercises");
 
-  nh.subscribe('/qr_exercise', StringMsg, async (msg) => {
+  nh.subscribe('/station_usage', StringMsg, async (msg) => {
     exercises.findOne({ name: msg['data'] }, (err, result) => {
       if (err) throw err;
       if(result) {

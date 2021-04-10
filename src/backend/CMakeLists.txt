@@ -56,6 +56,7 @@ add_message_files(
   Persons.msg
   Commands.msg
   Bboxes.msg
+  StationUsage.msg
 )
 
 ## Generate services in the 'srv' folder

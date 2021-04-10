@@ -1,4 +1,2 @@
 <launch>
-  <node name="RestNode" pkg="expert_system" type="RESTNode.sh" />
-  <node name="ExpertNode" pkg="expert_system" type="expert.sh" />
 </launch> 

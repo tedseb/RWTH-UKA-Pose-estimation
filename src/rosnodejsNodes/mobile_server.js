@@ -37,10 +37,12 @@ const https = require('https');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-const pose_estimation_messages = rosnodejs.require("backend");
+const StationUsage = rosnodejs.require("backend").msg.StationUsage;
 const comparing_system_messages = rosnodejs.require("comparing_system");
+const pose_estimation_messages = rosnodejs.require("backend");
 const url = require('url');
 const config = require('./config');
+const YAML = require('yaml');
 
 // Parameters and Constants:
 const PORT = config.MOBILE_SERVER_PORT;
@@ -56,7 +58,7 @@ rosnodejs.initNode('/mobile_server')
 const nh = rosnodejs.nh;
 
 // We use this to advertise the Exercise name, read with the current QR Code
-const pub_qr = nh.advertise('/qr_exercise', StringMsg);
+const pub_qr = nh.advertise('/qr_exercise', StationUsage);
 
 // We use this user_state and deprecate the very first API structure "repetition"
 const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
@@ -85,12 +87,13 @@ wss.on('connection', (ws, req) => {
     console.log("Orhan hat sich verbunden :)");
     ws.on('message', function incoming(message) {
         const qr = JSON.parse(message);
-        const params = {
+        console.log(qr);
+        const msg = new StationUsage({
             stationID: qr['stationID'],
             isActive: qr['isActive'],
-            exercise: qr['exercise']
-        }
-        pub_qr.publish({data: YAML.stringify(params)})  // Refine this
+            exerciseName: qr['exerciseName']});
+            console.log(msg)
+        pub_qr.publish(msg)  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));
 });

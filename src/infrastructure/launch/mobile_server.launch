@@ -1,0 +1,3 @@
+<launch>
+  <node name="RestNode" pkg="infrastructure" type="mobile_server.sh" />
+</launch> 

@@ -3,13 +3,14 @@ import yaml
 import json
 import rospy
 from std_msgs.msg import String
+from backend.msg import StationUsage
 import glob
 
 class paramUpdater():
     def __init__(self, cameras):
         #------ channel Name?
         # in hmi.js, config file? 
-        rospy.Subscriber('exercises', String, self.callback_setStation)
+        rospy.Subscriber('station_usage', StationUsage, self.callback_setStation)
         self._camera_list = cameras
         self._num_cameras = len(cameras)
         self._parameters = {i : {} for i in range(self._num_cameras)}
@@ -23,13 +24,13 @@ class paramUpdater():
         # node.js StringMsg Type {data: string}
         # python StringMsg ? 
         # take parse this -> msg['data'] into JSON
-        result =  str(msg.data).replace("\\", "")
+        #result =  str(msg.data).replace("\\", "")
         #result = "{id': 3, 'state': true}"
         #set_station_json = json.loads(result)
-        spot_info_dict = yaml.load(result, Loader=yaml.Loader)
-        print(spot_info_dict)
-        station_id = spot_info_dict["id"]                 #set_station_json["id"]
-        station_state = spot_info_dict["state"]
+        #spot_info_dict = yaml.load(result, Loader=yaml.Loader)
+        #print(StationUsage)
+        station_id = msg.stationID#spot_info_dict["id"]                 #set_station_json["id"]
+        station_state = msg.isActive#spot_info_dict["state"]
 
         print("station_id: ",station_id)
         print("station_state: ",station_state)

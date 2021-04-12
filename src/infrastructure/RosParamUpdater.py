@@ -53,7 +53,6 @@ class paramUpdater():
         results_test= yaml.load(result, Loader=yaml.Loader)
         #print(results_test[0])
         
-        
 
 if __name__ == '__main__':
     rospy.init_node('param_updater', anonymous=True)

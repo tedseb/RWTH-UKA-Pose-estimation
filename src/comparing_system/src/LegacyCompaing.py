@@ -24,9 +24,7 @@ angles = {}
 alpha = 20 # Beschreibt eine Art Schmidt-Trigger
 
 state = 0
-corrections = dict()
 reps = 0
-
 
 def compare_legacy(spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
     global lastPose
@@ -34,9 +32,6 @@ def compare_legacy(spot_info_dict: dict, past_joints_with_timestamp_list: list, 
     
     joints = joints_with_timestamp['joints']
     timestamp = joints_with_timestamp['timestamp']
-
-    if current_exercise['name'] not in corrections.keys():
-        corrections[current_exercise['name']] = dict()
 
     pose = {}
 
@@ -58,48 +53,12 @@ def compare_legacy(spot_info_dict: dict, past_joints_with_timestamp_list: list, 
         angles[angle] = calculateAngle(points)
 
     updated_repetitions = count(current_exercise)
-    correction = correct(angles, current_exercise, state)
 
     # We define the center of the body as the pelvis
     center_of_body = pose[center_of_body_label]
 
-    return updated_repetitions, correction, center_of_body
+    return updated_repetitions, center_of_body
 
-
-def correct(angles, exercise, state):
-    messages = checkForCorrection(angles, exercise['stages'], state)
-    if (messages != corrections[exercise['name']].get(state)):
-        corrections[exercise['name']][state] = messages
-        if (len(messages) > 0):
-            return messages
-
-
-def checkForCorrection(angles, stages, state):
-    """
-    As of now, the default arguments to this function are: angles, squats, state
-    """
-    rules = stages[state]["rules"]
-    corrections = ""
-    for key in rules.keys():
-        rule = rules[key][0]
-        if rule == "max":
-            if (angles[key] >= rules[key][1] + alpha):
-                corrections += rules[key][2] + ". "
-        elif rule == "min":
-            if (angles[key] <= rules[key][1] - alpha):
-                corrections += rules[key][2] + ". "
-                # console.log(JSON.stringify(angle_points[k]))
-        elif rule == "behind":
-            # a: 0, b: 1, p: 1, x: 2
-            a = lastPose[angle_joints_mapping[key][0]]
-            b = lastPose[angle_joints_mapping[key][1]]
-            p = lastPose[angle_joints_mapping[key][1]]
-            x = lastPose[angle_joints_mapping[key][2]]
-            val_x = plane3d(a, b, p, x)
-            val_a = plane3d(a, b, p, a)
-            if (math.copysign(1, val_x) == math.copysign(1, val_a)):
-                corrections += rules[key][2] + ". "
-    return corrections
 
 def count(current_exercise):
     """

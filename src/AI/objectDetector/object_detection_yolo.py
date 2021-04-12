@@ -10,6 +10,7 @@ from backend.msg import Bboxes
 from scheduler import getBoxesInStation
 import time
 import rospy
+import yaml
 
 import torch
 from torch import nn
@@ -126,5 +127,6 @@ class ObjectDetectionPipeline:
 
 if __name__ == '__main__':  
     rospy.init_node('objectNodeYOLO', anonymous=True)
+    rospy.set_param('param_server', yaml.dump({0 : {}}))
     # instantiate the Comparator class
     obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.85, renderer=True, stationChk =True)                  #Later on, we can choose a specific detector. We have to write a new class for each detector

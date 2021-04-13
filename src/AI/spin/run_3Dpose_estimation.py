@@ -103,8 +103,8 @@ class run_spin():
             lenPoints=len(joints)       #ToDo use fix number of joints to save calculation time
             person_msg = Person()
             if len(stationID) >0:
-                person_msg.stationID = stationID[inc]
-                person_msg.sensorID = sensorID
+                person_msg.stationID = int(stationID[inc])
+                person_msg.sensorID = int(sensorID)
             person_msg.bodyParts = [None]*lenPoints
             for idx in range(lenPoints):
                 person_msg.bodyParts[idx] = Bodypart()

@@ -132,7 +132,7 @@ class RedisSpotInfoInterface(SpotInfoInterface):
         _, _, spot_info_key = generate_redis_key_names(key)
         spot_info_dict_string = self.redis_connection.get(spot_info_key)
         if not spot_info_dict_string:
-            raise QueueingException("Trying to process queue which has no spot information set (maybe no exercise was set?)")
+            raise QueueingException("Trying to process queue with key " + spot_info_key + " which has no spot information set (maybe no exercise was set?)")
         return yaml.load(spot_info_dict_string)
 
     def set_spot_info_dict(self, key: str, spot_info_dict: dict):

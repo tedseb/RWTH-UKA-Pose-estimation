@@ -69,8 +69,9 @@ def count(current_exercise):
     global state
     global reps
 
-    if state < len(current_exercise['stages']) -1 and checkforstate(angles, current_exercise, state + 1):
+    if state < len(current_exercise['stages']) - 1 and checkforstate(angles, current_exercise, state + 1):
         state += 1
+        rp.logerr("state" + str(state) + "reps" + str(reps))
 
     if (state >= len(current_exercise['stages']) - 1):
         if (checkforstate(angles, current_exercise, 0)):
@@ -78,6 +79,7 @@ def count(current_exercise):
             reps += 1
             rp.loginfo("Legacy Comparing: Reps: " + str(reps))
             return True
+            
 
 def checkforstate(angles, exercise, state):
     stage = exercise["stages"][state]["angles"]

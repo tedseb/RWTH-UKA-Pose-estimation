@@ -115,7 +115,7 @@ class SpotInfoHandler():
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
 
-        exercise_data = rp.get_param(spot_update_data['parameterServerKey'])
+        exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs
@@ -129,7 +129,6 @@ class SpotInfoHandler():
         
         spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0}
         self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
-        rp.logerr(spot_info_dict)
             
 
 if __name__ == '__main__':

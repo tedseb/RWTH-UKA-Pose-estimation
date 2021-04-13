@@ -58,10 +58,10 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         const stringified = YAML.stringify(result);
         nh.setParam('exercise' + msg['stationID'], stringified);
         const obj = {
-          id: msg['stationID'],
-          state: msg['isActive'],
-          exercise: msg['exerciseName'],
-          param: 'exercise' + msg['stationID']
+          stationID: msg['stationID'],
+          isActive: msg['isActive'],
+          exerciseName: msg['exerciseName'],
+          parameterServerKey: 'exercise' + msg['stationID']
         }
         pubex.publish({'data': YAML.stringify(obj)});
       } else {
@@ -75,10 +75,10 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         nh.setParam('hmiExercise' + msg['stationID'], stringified);
         console.log(result);
         const obj = {
-          id: msg['stationID'],
-          state: msg['isActive'],
-          exercise: msg['exerciseName'],
-          param: 'exercise' + msg['stationID']
+          stationID: msg['stationID'],
+          isActive: msg['isActive'],
+          exerciseName: msg['exerciseName'],
+          parameterServerKey:'hmiExercise' + msg['stationID']
         }
         pubex.publish({'data': YAML.stringify(obj)});
       } else {

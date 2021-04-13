@@ -113,27 +113,25 @@ class SpotInfoHandler():
         self.message_queue_interface = message_queue_interface_class()
 
     def callback(self, name_parameter_containing_exercises: str):
-        last_spots = self.spots
-        self.spots = yaml.safe_load(rp.get_param(name_parameter_containing_exercises.data))  # TODO: Fit this to API with tamer
-        
-        rp.logerr(self.spots)
+        spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
 
+        rp.logerr(spot_update_data)
+        exercise_data = rp.get_param(spot_update_data['parameterServerKey'])
+        
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs
 
-        for k, v in self.spots.items():
-            if (v == last_spots.get(k)) or not last_spots:  # If last_spots is empty, it has not been set yet and we still want to set all spot info
+        spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
+        if HIGH_VERBOSITY:
+            rp.logerr("Updating info for: " + spot_info_key)
 
-                spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(k)
-                rp.logerr("Updating info for: " + spot_info_key)
-
-                num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
-                num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
-                rp.loginfo("Deleted " + str(num_deleted_items) + " from " + spot_queue_key + " due to an exercise change at second " + str(now_in_seconds))
-                
-                spot_info_dict = {'exercise': v, 'start_time': now_in_seconds, 'repetitions': 0}
-                self.spot_info_interface.set_spot_info_dict(k, spot_info_dict)
-                
+        num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
+        num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
+        
+        spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0}
+        self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
+        rp.logerr(spot_info_dict)
+            
 
 if __name__ == '__main__':
     # initialize ros node

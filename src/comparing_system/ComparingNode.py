@@ -50,6 +50,7 @@ class Receiver():
         It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
         '''
         # For every person in the image, sort their data into the correction spot queue in redis
+
         for p in message.persons:
             p_dict = message_converter.convert_ros_message_to_dictionary(p)
             timestamp = message_converter.convert_ros_message_to_dictionary(message.header.stamp)
@@ -192,14 +193,6 @@ if __name__ == '__main__':
             t.running = False
     
     rp.on_shutdown(kill_threads)
-
-    if int(os.environ.get('COMPARING_SYSTEM_DEVELOPER_MODE') or 0) == 1:
-        # This code is executed to not depend on the expert system
-        publisher = rp.Publisher(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, queue_size=10)
-        message = 'exercise'
-        import time
-        time.sleep(0.3)
-        publisher.publish(message)
 
     rp.spin()
 

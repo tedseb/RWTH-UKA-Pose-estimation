@@ -147,6 +147,7 @@ class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
     def get_queue_key(self):
         # For now, simply take the key corresponding to the spot with the highest load, NO ACTUALY LOAD BALANCING!
         spot_key_list = self.redis_connection.zrange(REDIS_LOAD_BALANCER_LIST_KEY, 0, 0)
+
         if not spot_key_list:
            raise QueueEmpty
         spot_key = spot_key_list[0]
@@ -155,10 +156,17 @@ class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
         except Exception:
             # Catch cases where we can an byte encoded string back (ROS Melodic's Python 2.7 does that to us)
             pass
+                
+        new_score = self.redis_connection.zadd(REDIS_LOAD_BALANCER_LIST_KEY, {spot_key: -1}, incr=True)
+
+        if new_score < 0:
+            self.redis_connection.zrem(REDIS_LOAD_BALANCER_LIST_KEY, spot_key)
+
         return spot_key
 
     def set_queue_size(self, key: str, queue_size: int) -> None:
         """ Set the size of a queue """
+
         if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
             # The queue_size serves as our score
             self.redis_connection.zadd(REDIS_LOAD_BALANCER_LIST_KEY, {key: queue_size})

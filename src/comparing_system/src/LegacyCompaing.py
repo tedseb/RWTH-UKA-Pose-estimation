@@ -16,12 +16,13 @@ from geometry_msgs.msg import Point, Vector3
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
+from src.config import *
 from src.joint_adapters.spin import *
 
 last_30_poses = deque()
 lastPose = {}
 angles = {}
-alpha = 20 # Beschreibt eine Art Schmidt-Trigger
+alpha = 10 # Beschreibt eine Art Schmidt-Trigger
 
 state = 0
 reps = 0
@@ -61,35 +62,23 @@ if BETA_EXERCISE_FORMAT:
         """
         Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
         """
-        
         # TODO: Get these global Variables into a class
         global state
-        global reps
 
-        for stage in current_exercise['stages']:
-            for angle in stage:
-                points = angle['points']
-                angle = calculateAngle(points)
+        stage_data = current_exercise['stages'][state]
 
-                if stage
-
-        if state < len(current_exercise['stages']) - 1 and checkforstate(angles, current_exercise, state + 1):
-            state += 1
-            rp.logerr("state" + str(state) + "reps" + str(reps))
-
-        if (state >= len(current_exercise['stages']) - 1):
-            if (checkforstate(angles, current_exercise, 0)):
+        for angle_data in stage_data:
+            points = angle_data['points']
+            this_angle = calculateAngle(points)
+            if checkforstate(this_angle, angle_data['angle'], state + 1):
+                state += 1
+            
+            if ((state >= len(stage_data)) and checkforstate(this_angle, angle_data['angle'], 0)):
                 state = 0
-                reps += 1
-                rp.loginfo("Legacy Comparing: Reps: " + str(reps))
                 return True
-    
-    def checkforstate(angles, exercise, state):
-        stage = exercise["stages"][state]["angles"]
-        _pass = True
-        for key in stage.keys():
-            _pass = _pass and (angles[key] >= stage[key] - alpha and angles[key] <= stage[key] + alpha)
-        return _pass
+
+    def checkforstate(this_angle, angle, state):
+        return (this_angle >= angle - alpha and this_angle <= angle + alpha)
 
     def calculateAngle(array):
         # Tamer used this function to calculate the angle between left hip, l knee and big toe

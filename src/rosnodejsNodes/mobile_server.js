@@ -86,7 +86,10 @@ wss.on('connection', (ws, req) => {
     const location = url.parse(req.url, true);
     SmartphoneAppClients.push(ws);
     console.log("Orhan hat sich verbunden :)");
+    
     ws.on('message', function incoming(message) {
+        console.log(message);
+        //console.log(JSON.parse(message));
         const qr = JSON.parse(message);
         console.log(qr);
         const msg = new StationUsage({

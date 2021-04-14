@@ -62,12 +62,10 @@ class Comparator(Thread):
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
                 
                 # Compare joints with expert system data
-                inrease_reps, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                increase_reps, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
                 
                 # Send info back back to outgoing message queue and back into the ROS system
-                if inrease_reps:
-                    if HIGH_VERBOSITY:
-                        rp.logerr(spot_info_dict)
+                if increase_reps:
                     spot_info_dict['repetitions'] += 1
                     self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
                     user_state_message = {

@@ -138,11 +138,9 @@ class SpotInfoHandler():
                     point.z = joints[label]['y']
                     pose[label] = point
 
+                new_angles = list()
                 for rule_joints in stage['angles']:
-                    new_angles = list()
-                    for angle, points in angle_joints_mapping.items():
-                        if set(rule_joints) == set(points):
-                            new_angles.append({'points': points, 'angle': calculateAngle(points, pose), 'rules': {}})
+                    new_angles.append({'points': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
                 new_stages.append(new_angles)
             exercise_data['stages'] = new_stages
             if EXTRACT_BOUNDARIES:
@@ -158,8 +156,6 @@ class SpotInfoHandler():
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
         
-        rp.logerr("Updating info for: " + spot_info_key)
-
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
         

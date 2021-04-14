@@ -95,7 +95,7 @@ class run_spin():
 
 if __name__ == '__main__':
     #global station_ID
-    station_ID=1
+    station_ID=2
     incSpace=0.25
 
     rospy.init_node('spin', anonymous=True)

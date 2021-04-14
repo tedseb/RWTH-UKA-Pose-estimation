@@ -9,6 +9,7 @@ import pickle
 import time
 import rospy
 from sensor_msgs.msg import Image
+from backend.msg import StationUsage
 from std_msgs.msg import String
 from backend.msg import Bboxes
 import yaml
@@ -18,7 +19,7 @@ class getBoxesInStation:
     def __init__(self):
         result = rospy.get_param('param_server')
         self.station_dic =yaml.load(result, Loader=yaml.Loader) 
-        rospy.Subscriber('exercises', String, self.setStation)
+        rospy.Subscriber('station_usage', StationUsage, self.setStation)
     def setStation(self,msg):
         result = rospy.get_param('param_server')
         self.station_dic =yaml.load(result, Loader=yaml.Loader)  

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 import math
 import numpy as np
 from geometry_msgs.msg import Point, Vector3
+import rospy as rp
 
 from src.joint_adapters.spin import *
 
@@ -90,3 +91,33 @@ def dot_product(a, b):
 
 def length_of_vector(x):
     return math.sqrt(math.pow(x.x, 2) + math.pow(x.y, 2) + math.pow(x.z, 2))
+
+
+def extract_angle_boundaries(exercise_data):
+    boundaries = dict()
+    angles_of_interest = set()
+    for stage in exercise_data['stages']:
+        for rule_joints in stage['angles']:
+            for angle, points in angle_joints_mapping.items():
+                if set(rule_joints) == set(points):
+                    angles_of_interest.update(angle)
+
+    for step in exercise_data['recording']:
+        skeleton = step[1]
+
+        pose = {}
+        angles = {}
+
+        for angle, points in angle_joints_mapping.items():
+            if angle in angles_of_interest:
+                for point_label in points: 
+                    point = Point()
+                    # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
+                    point.x = skeleton[point_label]['x']
+                    point.y = skeleton[point_label]['z']
+                    point.z = skeleton[point_label]['y']
+                    pose[point_label] = point
+                
+            angles[angle] = calculateAngle(points, pose)
+
+    return boundaries

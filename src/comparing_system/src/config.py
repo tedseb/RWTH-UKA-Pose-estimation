@@ -41,3 +41,4 @@ HIGH_VERBOSITY = False
 
 # Beta exercise format
 BETA_EXERCISE_FORMAT = True
+EXTRACT_BOUNDARIES = False

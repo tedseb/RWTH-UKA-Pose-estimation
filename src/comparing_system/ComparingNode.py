@@ -138,14 +138,17 @@ class SpotInfoHandler():
                     point.z = joints[label]['y']
                     pose[label] = point
 
-                for angle, points in angle_joints_mapping.items():
-                    angles[angle] = calculateAngle(points, pose)
-                
                 for rule_joints in stage['angles']:
+                    new_angles = list()
                     for angle, points in angle_joints_mapping.items():
                         if set(rule_joints) == set(points):
-                            new_stages.append({'angles': {angle: angles[angle], 'rules': {}}})
+                            new_angles.append({'points': points, 'angle': calculateAngle(points, pose), 'rules': {}})
+                new_stages.append(new_angles)
             exercise_data['stages'] = new_stages
+            if EXTRACT_BOUNDARIES:
+                exercise_data['boundaries'] = extract_angle_boundaries(exercise_data)
+            else:
+                exercise_data['boundaries'] = {}
             exercise_data['recording'] = []
                 
         now_in_seconds = rp.get_rostime().secs

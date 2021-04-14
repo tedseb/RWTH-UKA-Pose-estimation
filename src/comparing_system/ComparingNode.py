@@ -121,34 +121,33 @@ class SpotInfoHandler():
         
 
         # We need to transform the exercise in this case, so that it matches to old format
-        if BETA_EXERCISE_FORMAT:
-            new_stages = list()
-            for stage in exercise_data['stages']:
-                # Calculate the pose per stage and extract the angles
+        new_stages = list()
+        for stage in exercise_data['stages']:
+            # Calculate the pose per stage and extract the angles
 
-                joints = stage['skeleton']
-                
-                pose = {}
-                angles = {}
-                for index in ownpose_used:
-                    label = joint_labels[index]
-                    point = Point()
-                    # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-                    point.x = joints[label]['x']
-                    point.y = joints[label]['z']
-                    point.z = joints[label]['y']
-                    pose[label] = point
+            joints = stage['skeleton']
+            
+            pose = {}
+            angles = {}
+            for index in ownpose_used:
+                label = joint_labels[index]
+                point = Point()
+                # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
+                point.x = joints[label]['x']
+                point.y = joints[label]['z']
+                point.z = joints[label]['y']
+                pose[label] = point
 
-                new_angles = list()
-                for rule_joints in stage['angles']:
-                    new_angles.append({'points': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
-                new_stages.append(new_angles)
-            exercise_data['stages'] = new_stages
-            if EXTRACT_BOUNDARIES:
-                exercise_data['boundaries'] = extract_angle_boundaries(exercise_data)
-            else:
-                exercise_data['boundaries'] = {}
-            exercise_data['recording'] = []
+            new_angles = list()
+            for rule_joints in stage['angles']:
+                new_angles.append({'points': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
+            new_stages.append(new_angles)
+        exercise_data['stages'] = new_stages
+        if EXTRACT_BOUNDARIES:
+            exercise_data['boundaries'] = extract_angle_boundaries(exercise_data)
+        else:
+            exercise_data['boundaries'] = {}
+        exercise_data['recording'] = []
                 
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs
@@ -160,7 +159,7 @@ class SpotInfoHandler():
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
         
-        spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0}
+        spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': 0}
         self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
             
 

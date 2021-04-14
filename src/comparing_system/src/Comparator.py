@@ -62,12 +62,15 @@ class Comparator(Thread):
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
                 
                 # Compare joints with expert system data
-                increase_reps, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
-                
+                increase_reps, new_state, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+
+                if increase_reps:
+                    rp.logerr("+rep")
+                spot_info_dict['state'] = new_state
+
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
                     spot_info_dict['repetitions'] += 1
-                    self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
                     user_state_message = {
                         'user_id': 0,
                         'current_exercise_name': spot_info_dict.get('exercise').get('name'),
@@ -78,6 +81,8 @@ class Comparator(Thread):
                         'exercise_score': 100
                     }
                     self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
+                
+                self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
 
                 # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
                 correction = None

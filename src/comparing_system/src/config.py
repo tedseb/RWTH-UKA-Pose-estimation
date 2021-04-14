@@ -40,5 +40,4 @@ SEND_CORRETIONS = False
 HIGH_VERBOSITY = True
 
 # Beta exercise format
-BETA_EXERCISE_FORMAT = True
 EXTRACT_BOUNDARIES = False

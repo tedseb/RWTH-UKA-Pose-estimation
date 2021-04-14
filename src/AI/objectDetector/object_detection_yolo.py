@@ -49,7 +49,7 @@ class ObjectDetectionPipeline:
         self.frame_id=int(img_msg.header.frame_id[3:])
         tmpTime = time.time()
 
-        img = self.obj_detectYolo(img_original_bgr)[:,:,::-1] 
+        img = self.obj_detectYolo(img_original_bgr)
 
         fps = int(1/(time.time()-tmpTime))
         print("FPS : ",fps)

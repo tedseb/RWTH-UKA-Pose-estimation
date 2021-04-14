@@ -36,4 +36,8 @@ REDIS_SPOT_INFO_POSTFIX = ":info"
 LEGACY_COMPARING = True
 SEND_CORRETIONS = False
 
-HIGH_VERBOSITY = True
+# Comparing system talks lots if this is set to true
+HIGH_VERBOSITY = False
+
+# Beta exercise format
+BETA_EXERCISE_FORMAT = True

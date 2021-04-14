@@ -6,7 +6,7 @@ This file contains the adapter data for the spin paper.
 ditw = ['nose', 'leftShoulder', 'rightShoulder',
     'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
     'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle',
-    'rightAnkle'];
+    'rightAnkle']
 
 ownpose_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43];
 
@@ -17,15 +17,21 @@ ownpose = [
 ]
 
 angle_joints_mapping = {
-    'leftHipKneeToe': ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Big_Toe'],
-    'rightHipKneeToe': ['OP_R_Hip', 'OP_R_Knee', 'OP_R_Big_Toe'],
+    'OPleftHipKneeToe': ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Big_Toe'],
+    'OPrightHipKneeToe': ['OP_R_Hip', 'OP_R_Knee', 'OP_R_Big_Toe'],
     'leftLeg': ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Ankle'],
     'leftArm': ['OP_L_Shoulder', 'OP_L_Elbow', 'OP_L_Wrist'],
     'leftShin': ['OP_L_Knee', 'OP_L_Ankle'],
     'rightLeg': ['OP_R_Hip', 'OP_R_Knee', 'OP_R_Ankle'],
     'rightArm': ['OP_R_Shoulder', 'OP_R_Elbow', 'OP_R_Wrist'],
     'rightShin': ['OP_R_Knee', 'OP_R_Ankle'],
-    'upperBody': ['OP_R_Shoulder', 'OP_R_Hip', 'OP_R_Knee', 'OP_L_Shoulder', 'OP_L_Hip', 'OP_L_Knee']
+    'upperBody': ['OP_R_Shoulder', 'OP_R_Hip', 'OP_R_Knee', 'OP_L_Shoulder', 'OP_L_Hip', 'OP_L_Knee'],
+    'leftHipKneeAnkle': ['L_Hip', 'OP_L_Knee', 'OP_L_Big_Toe'],
+    'rightHipKneeAnkle': ['R_Hip', 'OP_R_Knee', 'OP_R_Big_Toe'],
+    'leftHipKneeToe': ['L_Hip', 'OP_L_Knee', 'OP_L_Ankle'],
+    'leftHipKneeToe': ['R_Hip', 'OP_R_Knee', 'OP_R_Ankle'],
+    'OPleftHipKneeAnkle': ['OP_L_Hip', 'OP_L_Knee', 'OP_L_Ankle'],
+    'OPrightHipKneeAnkle': ['OP_R_Hip', 'OP_R_Knee', 'OP_R_Ankle'],
 }
 
 center_of_body_label = 'Pelvis_MPII'

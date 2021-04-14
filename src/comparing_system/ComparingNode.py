@@ -24,6 +24,7 @@ from src.joint_adapters.spin import *
 from src.Comparator import Comparator
 from src.config import *
 from src.InterCom import *
+from src.FeatureExtraction import *
 
 # db 0 is our (comparing node) database
 # TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
@@ -117,12 +118,44 @@ class SpotInfoHandler():
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
+
+        # We need to transform the exercise in this case, so that it matches to old format
+        if BETA_EXERCISE_FORMAT:
+            new_stages = list()
+            for stage in exercise_data['stages']:
+                # Calculate the pose per stage and extract the angles
+
+                joints = stage['skeleton']
+                
+                pose = {}
+                angles = {}
+                for index in ownpose_used:
+                    label = joint_labels[index]
+                    point = Point()
+                    # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
+                    point.x = joints[label]['x']
+                    point.y = joints[label]['z']
+                    point.z = joints[label]['y']
+                    pose[label] = point
+
+                for angle, points in angle_joints_mapping.items():
+                    angles[angle] = calculateAngle(points, pose)
+                
+                for rule_joints in stage['angles']:
+                    for angle, points in angle_joints_mapping.items():
+                        if set(rule_joints) == set(points):
+                            new_stages.append({'angles': {angle: angles[angle], 'rules': {}}})
+            exercise_data['stages'] = new_stages
+            exercise_data['recording'] = []
+                
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs
 
         spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
+        
+        rp.logerr("Updating info for: " + spot_info_key)
 
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)

@@ -7,6 +7,7 @@ TODO: Use msgpack at Shawans end do extract features there already? https://pypi
 from abc import ABC, abstractmethod
 import math
 import numpy as np
+from geometry_msgs.msg import Point, Vector3
 
 from src.joint_adapters.spin import *
 
@@ -45,15 +46,15 @@ class SpinFeatureExtractor(ABC):
         return angles
 
 
-def calculateAngle(array):
+def calculateAngle(array, pose):
     # Tamer used this function to calculate the angle between left hip, l knee and big toe
     if len(array) == 2:
-        newPoint = Point(lastPose[array[1]].x, lastPose[array[1]].y - 1, lastPose[array[1]].z)
-        return threepointangle(lastPose[array[0]], lastPose[array[1]], newPoint)
+        newPoint = Point(pose[array[1]].x, pose[array[1]].y - 1, pose[array[1]].z)
+        return threepointangle(pose[array[0]], pose[array[1]], newPoint)
     elif len(array) == 3:
-        return threepointangle(lastPose[array[0]], lastPose[array[1]], lastPose[array[2]])
+        return threepointangle(pose[array[0]], pose[array[1]], pose[array[2]])
     elif len(array) == 6:
-        return (threepointangle(lastPose[array[0]], lastPose[array[1]], lastPose[array[2]]) + threepointangle(lastPose[array[3]], lastPose[array[4]], lastPose[array[5]])) / 2
+        return (threepointangle(pose[array[0]], pose[array[1]], pose[array[2]]) + threepointangle(pose[array[3]], pose[array[4]], pose[array[5]])) / 2
     return 0
 
 

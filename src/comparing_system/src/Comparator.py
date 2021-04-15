@@ -64,8 +64,6 @@ class Comparator(Thread):
                 # Compare joints with expert system data
                 increase_reps, new_state, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
 
-                if increase_reps:
-                    rp.logerr("+rep")
                 spot_info_dict['state'] = new_state
 
                 # Send info back back to outgoing message queue and back into the ROS system

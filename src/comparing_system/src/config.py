@@ -37,7 +37,8 @@ LEGACY_COMPARING = True
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = True
+HIGH_VERBOSITY = False
 
 # Beta exercise format
 EXTRACT_BOUNDARIES = False
+DEBUG_ORHAN = True

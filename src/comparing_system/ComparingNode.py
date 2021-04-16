@@ -95,7 +95,7 @@ class Sender(Thread):
             try:
                 message = json.dumps({'topic': self.publisher_topic, 'data': data})
                 self.publisher.publish(message)
-                if HIGH_VERBOSITY or DEBUG_ORHAN:
+                if HIGH_VERBOSITY:
                     rp.logerr("ComparingNode.py sent message: " + str(message))
             except Exception as e:
                 raise(e)
@@ -162,8 +162,6 @@ class SpotInfoHandler():
         spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': 0}
         self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
 
-        
-            
 
 if __name__ == '__main__':
     # initialize ros node

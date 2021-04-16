@@ -41,4 +41,3 @@ HIGH_VERBOSITY = False
 
 # Beta exercise format
 EXTRACT_BOUNDARIES = False
-DEBUG_ORHAN = True

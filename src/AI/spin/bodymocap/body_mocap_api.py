@@ -101,6 +101,7 @@ class BodyMocap(object):
                 pred_joints_3d = pred_joints_3d[0].cpu().numpy() # (1,49,3)
                 pred_joints_vis = pred_joints_3d[:,:3]  # (49,3)
                 pred_joints_vis_bbox = convert_smpl_to_bbox(pred_joints_vis, camScale, camTrans) 
+                # ToDo: delete this part
                 pred_joints_vis_img = convert_bbox_to_oriIm(
                     pred_joints_vis_bbox, boxScale_o2n, bboxTopLeft, img_original.shape[1], img_original.shape[0]) 
 

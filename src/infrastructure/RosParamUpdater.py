@@ -14,21 +14,12 @@ class paramUpdater():
         self._camera_list = cameras
         self._num_cameras = len(cameras)
         self._parameters = {i : {} for i in range(self._num_cameras)}
-
+        self.publisher_pullParam = rospy.Publisher('pullparam', String , queue_size=2)
     def spin(self):
         rospy.spin()
 
     def callback_setStation(self, msg):
         rospy.loginfo("In Callback", logger_name="my_logger_name")
-        # kommentar von tamer sry
-        # node.js StringMsg Type {data: string}
-        # python StringMsg ? 
-        # take parse this -> msg['data'] into JSON
-        #result =  str(msg.data).replace("\\", "")
-        #result = "{id': 3, 'state': true}"
-        #set_station_json = json.loads(result)
-        #spot_info_dict = yaml.load(result, Loader=yaml.Loader)
-        #print(StationUsage)
         station_id = msg.stationID#spot_info_dict["id"]                 #set_station_json["id"]
         station_state = msg.isActive#spot_info_dict["state"]
 
@@ -53,6 +44,7 @@ class paramUpdater():
         result = rospy.get_param('param_server')
         results_test= yaml.load(result, Loader=yaml.Loader)
         #print(results_test[0])
+        self.publisher_pullParam.publish("True")
         
 
 if __name__ == '__main__':

@@ -37,7 +37,7 @@ def compare_legacy(spot_info_dict: dict, past_joints_with_timestamp_list: list, 
 
     pose = {}
 
-    for index in ownpose_used:
+    for index in joints_used:
         point = Point()
         # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
         point.x = joints[index]['point']['x']
@@ -68,8 +68,8 @@ def count(current_exercise, state):
     old_state = state
 
     for angle_data in stage_data:
-        points = angle_data['points']
-        this_angle = calculateAngle(points)
+        joint_names = angle_data['joint_names']
+        this_angle = calculateAngle(joint_names)
         if checkforstate(this_angle, angle_data['angle'], state + 1):
             state = old_state + 1
         

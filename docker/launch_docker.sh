@@ -66,7 +66,6 @@ docker run -it -d --rm \
         -e DISPLAY=$display \
 	    -p 3000:3000 \
         --privileged \
-        --net=host \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         -v $(pwd):/home/trainerai/trainerai-core \
         -v /home/trainerai/trainerai-core/node_modules \

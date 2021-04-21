@@ -33,11 +33,11 @@ REDIS_SPOT_QUEUE_POSTFIX = ":queue"
 REDIS_SPOT_PAST_QUEUE_POSTFIX = ":queue_past"
 REDIS_SPOT_INFO_POSTFIX = ":info"
 
-LEGACY_COMPARING = True
+LEGACY_COMPARING = False
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = False
+HIGH_VERBOSITY = True
 
 # Beta exercise format
 EXTRACT_BOUNDARIES = False

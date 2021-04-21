@@ -120,34 +120,49 @@ class SpotInfoHandler():
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
 
-        # We need to transform the exercise in this case, so that it matches to old format
-        new_stages = list()
-        for stage in exercise_data['stages']:
-            # Calculate the pose per stage and extract the angles
+        if LEGACY_COMPARING:
+            # We need to transform the exercise in this case, so that it matches to old format
+            new_stages = list()
+            for stage in exercise_data['stages']:
+                # Calculate the pose per stage and extract the angles
 
-            joints = stage['skeleton']
-            
-            pose = {}
-            angles = {}
-            for index in ownpose_used:
-                label = joint_labels[index]
-                point = Point()
-                # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-                point.x = joints[label]['x']
-                point.y = joints[label]['z']
-                point.z = joints[label]['y']
-                pose[label] = point
+                joints = stage['skeleton']
+                
+                pose = {}
+                angles = {} # Do not only caluclate angles here, but also 
+                for index in joints_used:
+                    label = joint_labels[index]
+                    point = Point()
+                    # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
+                    point.x = joints[label]['x']
+                    point.y = joints[label]['z']
+                    point.z = joints[label]['y']
+                    pose[label] = point
 
-            new_angles = list()
-            for rule_joints in stage['angles']:
-                new_angles.append({'points': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
-            new_stages.append(new_angles)
-        exercise_data['stages'] = new_stages
-        if EXTRACT_BOUNDARIES:
-            exercise_data['boundaries'] = extract_angle_boundaries(exercise_data)
+                new_angles = list()
+                for rule_joints in stage['angles']:
+                    new_angles.append({'joint_names': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
+                new_stages.append(new_angles)
+            exercise_data['stages'] = new_stages
+            del exercise_data['recording']
         else:
-            exercise_data['boundaries'] = {}
-        exercise_data['recording'] = []
+            angles_of_interest = set()
+            # TODO: This needs to be changed as soon as Tamer stops sending stages but sends angles of interest
+            for stage in exercise_data['stages']:
+                for rule_joints in stage['angles']:
+                    # Use a frozenset so that we can use it for indexing
+                    angles_of_interest.update({frozenset(rule_joints)})
+            
+            # TODO: Get Tamer to implement distances, too
+            # distances_of_interest = set()
+            # for stage in exercise_data['points']:
+            #     for rule_joints in stage['distances']:
+            #         # Use a frozenset so that we can use it for indexing
+            #         distances_of_interest.update(frozenset(rule_joints))
+            # (...)
+
+            exercise_data['boundaries'] = extract_boundaries(exercise_data, angles_of_interest)
+            del exercise_data['stages']
                 
         now_in_seconds = rp.get_rostime().secs
         new_nanoseconds = rp.get_rostime().nsecs

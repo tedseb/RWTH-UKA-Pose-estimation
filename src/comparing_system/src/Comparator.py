@@ -16,6 +16,7 @@ from src.joint_adapters.spin import *
 from src.config import *
 from src.InterCom import *
 from src.LegacyCompaing import compare_legacy
+from src.FeatureExtraction import *
 
 from traceback import print_exc
 
@@ -105,4 +106,78 @@ class Comparator(Thread):
         if LEGACY_COMPARING:
             return compare_legacy(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
         else:
-            raise NotImplementedError
+            return compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+
+
+
+def compare(spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
+    current_exercise = spot_info_dict['exercise']
+    state = spot_info_dict['state']
+    
+    joints = joints_with_timestamp['joints']
+    timestamp = joints_with_timestamp['timestamp']
+
+    pose = {}
+
+    rp.logerr(spot_info_dict)
+
+    for index in joints_used:
+        point = Point()
+        # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
+        point.x = joints[index]['point']['x']
+        point.y = joints[index]['point']['z']
+        point.z = joints[index]['point']['y']
+        pose[joint_labels[index]] = point
+
+    # This corresponds to Tamers "save" method
+    last_30_poses.append(pose)
+    if (len(last_30_poses) >= 30):
+        last_30_poses.popleft()
+
+    repetition_counted, new_state = count(current_exercise, state, pose)
+
+    # We define the center of the body as the pelvis
+    center_of_body = pose[center_of_body_label]
+
+    return repetition_counted, new_state, center_of_body
+
+def count(current_exercise, state, pose):
+    """
+    Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
+    """
+    boundaries = current_exercise['boundaries']
+
+    old_state = state
+
+    for angle_data in stage_data:
+        joint_names = angle_data['joint_names']
+        this_angle = threepointangle(pose[joint_names[0]], pose[joint_names[1]], pose[joint_names[2]])
+
+        if checkforstate(this_angle, angle_data['angle'], state + 1):
+            state = old_state + 1
+        
+        if ((state >= len(stage_data)) and checkforstate(this_angle, angle_data['angle'], 0)):
+            state = 0
+            return True, state
+    return False, state
+
+def checkforstate(this_angle, angle, state):
+    return (this_angle >= angle - alpha and this_angle <= angle + alpha)
+
+def angle3d(a, b):
+    x = dot_product(a, b) / (length_of_vector(a) * length_of_vector(b))
+    return math.acos(x) * 180 / math.pi
+
+def threepointangle(a, b, c):
+    ba = create_vector_from_two_points(b, a)
+    bc = create_vector_from_two_points(b, c)
+    return angle3d(ba, bc)
+
+def create_vector_from_two_points(a, b):
+    return Vector3(b.x - a.x, b.y - a.y, b.z - a.z)
+
+def dot_product(a, b):
+    return a.x * b.x + a.y * b.y + a.z * b.z
+
+def length_of_vector(x):
+    return math.sqrt(math.pow(x.x, 2) + math.pow(x.y, 2) + math.pow(x.z, 2))

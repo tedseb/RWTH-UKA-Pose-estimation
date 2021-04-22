@@ -119,6 +119,8 @@ class SpotInfoHandler():
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
+        now_in_seconds = rp.get_rostime().secs
+        new_nanoseconds = rp.get_rostime().nsecs
 
         if LEGACY_COMPARING:
             # We need to transform the exercise in this case, so that it matches to old format
@@ -145,36 +147,24 @@ class SpotInfoHandler():
                 new_stages.append(new_angles)
             exercise_data['stages'] = new_stages
             del exercise_data['recording']
+            spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': 0}
         else:
-            angles_of_interest = set()
-            # TODO: This needs to be changed as soon as Tamer stops sending stages but sends angles of interest
-            for stage in exercise_data['stages']:
-                for rule_joints in stage['angles']:
-                    # Use a frozenset so that we can use it for indexing
-                    angles_of_interest.update({frozenset(rule_joints)})
-            
-            # TODO: Get Tamer to implement distances, too
-            # distances_of_interest = set()
-            # for stage in exercise_data['points']:
-            #     for rule_joints in stage['distances']:
-            #         # Use a frozenset so that we can use it for indexing
-            #         distances_of_interest.update(frozenset(rule_joints))
-            # (...)
-
-            exercise_data['boundaries'] = extract_boundaries(exercise_data, angles_of_interest)
+            angles_of_interest = extract_angles_of_interest(exercise_data)
+            inner_and_outer_joints_dict_dict = extract_inner_and_outer_joints(angles_of_interest)
+            exercise_data['boundaries'] = extract_boundaries(exercise_data, inner_and_outer_joints_dict_dict)
             del exercise_data['stages']
+            beginning_state = extract_beginning_state(exercise_data, exercise_data['boundaries'], inner_and_outer_joints_dict_dict)
+            spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': beginning_state}
                 
-        now_in_seconds = rp.get_rostime().secs
-        new_nanoseconds = rp.get_rostime().nsecs
-
         spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
+
         
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
         
-        spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': 0}
+        
         self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
 
 

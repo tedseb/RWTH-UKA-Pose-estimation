@@ -3,6 +3,7 @@
 This file contains some parameters to our ComparingNode, such as ROS Topic names and queueing limits.
 """
 
+# GENERAL COMPARING SYSTEM CONFIGURATION (not algorithmic)
 DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
 
 ROS_TOPIC_USER_EXERCISE_STATES = 'user_state'
@@ -37,7 +38,19 @@ LEGACY_COMPARING = False
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = True
+HIGH_VERBOSITY = False
 
 # Beta exercise format
 EXTRACT_BOUNDARIES = False
+
+
+# ALGORITHMIC COMFIGURATION
+
+# 0 means that user has to reach angle at least as high/low as performed by expert
+# 1 means that the boundaries are swapped (and makes no sense)
+REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER = 0.3
+REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER = 0.3
+REDUCED_RANGE_OF_MOTION_TOLERANCE_MINIMAL_DISTANCE_HIGHER_LOWER = 0.3
+
+
+assert REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER + REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER <= 1 - REDUCED_RANGE_OF_MOTION_TOLERANCE_MINIMAL_DISTANCE_HIGHER_LOWER

@@ -119,8 +119,6 @@ def compare(spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_
 
     pose = {}
 
-    rp.logerr(spot_info_dict)
-
     for index in joints_used:
         point = Point()
         # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
@@ -128,11 +126,6 @@ def compare(spot_info_dict: dict, past_joints_with_timestamp_list: list, joints_
         point.y = joints[index]['point']['z']
         point.z = joints[index]['point']['y']
         pose[joint_labels[index]] = point
-
-    # This corresponds to Tamers "save" method
-    last_30_poses.append(pose)
-    if (len(last_30_poses) >= 30):
-        last_30_poses.popleft()
 
     repetition_counted, new_state = count(current_exercise, state, pose)
 

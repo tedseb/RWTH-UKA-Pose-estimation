@@ -54,6 +54,9 @@ class Comparator(Thread):
         # This can be set to false by an external entity to stop the loop from running
         self.running = True
 
+        self.times = 0
+        self.nr = 0
+
         self.start()
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
@@ -69,54 +72,44 @@ class Comparator(Thread):
         """
         while(self.running):
             try:
-                start = time.time()
-                
                 # Fetch all data that is needed for the comparison:
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
+                start = time.time_ns()
+                "kek"
 
                 spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_key)
-
-                _1 = time.time()
-                
 
                 # Construct spot info dict, possibly from chache
                 spot_info_dict = self.spot_info_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "state", "repetitions"])
                 exercise_data = self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"])
                 spot_info_dict.update(exercise_data) 
                 
-                _2 = time.time()
-                print("start:" + str(start))
-                print("Getting the spot key:" + str(_1 - start))
-                print("Getting the spot info dict:" + str(_2 - _1))
-
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
-                
-                _3 = time.time()
-                print("Dequeueing from the spot queue interface:" + str(_3 - _2))
-                
+
                 # Compare joints with expert system data
                 increase_reps, new_state, center_of_body = self.compare(spot_info_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
-
-                _4 = time.time()
-                print("Comparing:" + str(_4 - _3))
 
                 spot_info_dict['state'] = new_state
 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
-                    spot_info_dict['repetitions'] += 1
+                    spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
                     user_state_message = {
                         'user_id': 0,
-                        'current_exercise_name': spot_info_dict.get('exercise').get('name'),
+                        'current_exercise_name': spot_info_dict.get('exercise_data').get('name'),
                         'repetitions': spot_info_dict['repetitions'],
-                        'seconds_since_last_exercise_start': (rp.Time.now().secs - spot_info_dict.get('start_time')),
+                        'seconds_since_last_exercise_start': (rp.Time.now().secs - int(spot_info_dict.get('start_time'))),
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
                         'exercise_score': 100
                     }
                     self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
-                
-                self.spot_info_interface.set_spot_info_dict(spot_key, spot_info_dict)
+
+                del spot_info_dict["exercise_data"]
+                del spot_info_dict["exercise_data_hash"]
+                del spot_info_dict['start_time']
+
+                self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
                 # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -129,7 +122,13 @@ class Comparator(Thread):
                         'display_text': correction
                     }
                     self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
+                
+                this_time = start - time.time_ns()
+                self.times += this_time
+                self.nr += 1
 
+                print("avg:", self.times / self.nr)
+            
             except QueueEmpty:
                 continue
             except Exception as e:
@@ -191,21 +190,3 @@ def count(exercise_data, state, pose):
 
 def checkforstate(this_angle, angle, state):
     return (this_angle >= angle - alpha and this_angle <= angle + alpha)
-
-def angle3d(a, b):
-    x = dot_product(a, b) / (length_of_vector(a) * length_of_vector(b))
-    return math.acos(x) * 180 / math.pi
-
-def threepointangle(a, b, c):
-    ba = create_vector_from_two_points(b, a)
-    bc = create_vector_from_two_points(b, c)
-    return angle3d(ba, bc)
-
-def create_vector_from_two_points(a, b):
-    return Vector3(b.x - a.x, b.y - a.y, b.z - a.z)
-
-def dot_product(a, b):
-    return a.x * b.x + a.y * b.y + a.z * b.z
-
-def length_of_vector(x):
-    return math.sqrt(math.pow(x.x, 2) + math.pow(x.y, 2) + math.pow(x.z, 2))

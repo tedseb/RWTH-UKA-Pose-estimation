@@ -131,8 +131,6 @@ class RedisSpotInfoInterface(SpotInfoInterface):
 
     def get_spot_info_dict(self, key: str, info_keys: list):
         spot_info_list = self.redis_connection.hmget(key, info_keys)
-        print(spot_info_list)
-
         if not spot_info_list:
             raise QueueingException("Trying to process queue with key " + spot_info_key + " which has incomplete information set (maybe no exercise was set?)")
         spot_info_dict = dict(zip(info_keys, spot_info_list))
@@ -145,7 +143,7 @@ class RedisSpotInfoInterface(SpotInfoInterface):
             yaml_string = yaml.dump(spot_info_dict["exercise_data"])
             spot_info_dict["exercise_data"] = yaml_string
             spot_info_dict["exercise_data_hash"] = hashlib.md5(yaml_string.encode('utf-8')).hexdigest()
-        return self.redis_connection.hmset(key, spot_info_dict)
+        self.redis_connection.hset(key, mapping=spot_info_dict)
 
 
 class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):

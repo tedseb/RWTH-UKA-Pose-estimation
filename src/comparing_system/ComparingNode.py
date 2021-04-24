@@ -162,7 +162,7 @@ class SpotInfoHandler():
             beginning_state = extract_beginning_state(exercise_data, exercise_data['boundaries'], inner_and_outer_joints_dict_dict)
             exercise_data['beginning_state'] = beginning_state
             del exercise_data['stages']
-            # del exercise_data['recording']
+            del exercise_data['recording']
             spot_info_dict = {'start_time': now_in_seconds, "exercise_data": exercise_data, 'state': beginning_state, 'repetitions': 0}
 
         if HIGH_VERBOSITY:

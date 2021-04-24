@@ -115,8 +115,8 @@ def extract_boundaries_with_tolerances(exercise_data, inner_and_outer_joints_dic
 
         range_of_motion = abs(higher_angle - lower_angle)
 
-        boundaries["angles"]["angles_low"][joint_names]["angle"] = lower_angle * (1 + REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER)
-        boundaries["angles"]["angles_high"][joint_names]["angle"] = higher_angle * (1 - REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER)
+        boundaries["angles"]["angles_low"][joint_names]["angle"] = lower_angle + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
+        boundaries["angles"]["angles_high"][joint_names]["angle"] = higher_angle - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
 
     return boundaries
 
@@ -164,7 +164,6 @@ def dot_product(a, b):
 
 def length_of_vector(x):
     return math.sqrt(math.pow(x.x, 2) + math.pow(x.y, 2) + math.pow(x.z, 2))
-
 
 def extract_beginning_state(exercise_data, boundaries, inner_and_outer_joints_dict_dict):
     """

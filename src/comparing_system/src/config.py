@@ -42,7 +42,7 @@ LEGACY_COMPARING = False
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = False
+HIGH_VERBOSITY = True
 
 # Beta exercise format
 EXTRACT_BOUNDARIES = False

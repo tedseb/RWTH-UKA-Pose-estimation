@@ -8,6 +8,8 @@ import operator
 import traceback
 import os
 
+from random import randint
+from sys import maxsize
 from rospy_message_converter import message_converter
 from threading import Thread
 from importlib import import_module
@@ -108,7 +110,10 @@ class SpotInfoHandler():
     This class waits for updates on the spots, such as a change of exercises that the spot.
     Such changes are written into the spot information .json via Redis.
     """
-    def __init__(self, spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
+    def __init__(self, 
+    spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, 
+    message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
+
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
         self.spot_info_interface = spot_info_interface_class()
@@ -116,6 +121,8 @@ class SpotInfoHandler():
 
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
+
+        spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
@@ -151,21 +158,20 @@ class SpotInfoHandler():
         else:
             angles_of_interest = extract_angles_of_interest(exercise_data)
             inner_and_outer_joints_dict_dict = extract_inner_and_outer_joints(angles_of_interest)
-            exercise_data['boundaries'] = extract_boundaries(exercise_data, inner_and_outer_joints_dict_dict)
-            del exercise_data['stages']
+            exercise_data['boundaries'] = extract_boundaries_with_tolerances(exercise_data, inner_and_outer_joints_dict_dict)
             beginning_state = extract_beginning_state(exercise_data, exercise_data['boundaries'], inner_and_outer_joints_dict_dict)
-            spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': beginning_state}
-                
-        spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
+            exercise_data['beginning_state'] = beginning_state
+            del exercise_data['stages']
+            # del exercise_data['recording']
+            spot_info_dict = {'start_time': now_in_seconds, "exercise_data": exercise_data, 'state': beginning_state, 'repetitions': 0}
+
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
 
-        
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
-        
-        
-        self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
+
+        self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
 
 if __name__ == '__main__':

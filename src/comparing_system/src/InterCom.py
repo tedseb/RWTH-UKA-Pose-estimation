@@ -12,6 +12,7 @@ import msgpack
 from traceback import print_exc
 from collections import OrderedDict
 from abc import ABC, abstractmethod
+import hashlib
 
 from typing import Tuple, Any
 
@@ -125,19 +126,26 @@ class SpotInfoInterface(ABC):
 
 class RedisSpotInfoInterface(SpotInfoInterface):
     def __init__(self):
-        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
+        self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, charset="utf-8", decode_responses=True)
         # TODO: Stop using msgpack here and use something easier
 
-    def get_spot_info_dict(self, key: str):
-        _, _, spot_info_key = generate_redis_key_names(key)
-        spot_info_dict_string = self.redis_connection.get(spot_info_key)
-        if not spot_info_dict_string:
-            raise QueueingException("Trying to process queue with key " + spot_info_key + " which has no spot information set (maybe no exercise was set?)")
-        return yaml.load(spot_info_dict_string, Loader=yaml.Loader)
+    def get_spot_info_dict(self, key: str, info_keys: list):
+        spot_info_list = self.redis_connection.hmget(key, info_keys)
+        print(spot_info_list)
+
+        if not spot_info_list:
+            raise QueueingException("Trying to process queue with key " + spot_info_key + " which has incomplete information set (maybe no exercise was set?)")
+        spot_info_dict = dict(zip(info_keys, spot_info_list))
+        if "exercise_data" in spot_info_dict.keys() and spot_info_dict["exercise_data"]:
+            spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)
+        return spot_info_dict
 
     def set_spot_info_dict(self, key: str, spot_info_dict: dict):
-        _, _, spot_info_key = generate_redis_key_names(key)
-        return self.redis_connection.set(spot_info_key, yaml.dump(spot_info_dict))
+        if "exercise_data" in spot_info_dict.keys():
+            yaml_string = yaml.dump(spot_info_dict["exercise_data"])
+            spot_info_dict["exercise_data"] = yaml_string
+            spot_info_dict["exercise_data_hash"] = hashlib.md5(yaml_string.encode('utf-8')).hexdigest()
+        return self.redis_connection.hmset(key, spot_info_dict)
 
 
 class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):

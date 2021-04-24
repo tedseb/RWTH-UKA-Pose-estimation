@@ -11,6 +11,7 @@ from geometry_msgs.msg import Point, Vector3
 import rospy as rp
 from itertools import combinations
 
+from src.config import *
 from src.joint_adapters.spin import *
 
 class FeatureExtractorException(Exception):
@@ -68,7 +69,7 @@ def extract_angles_of_interest(exercise_data):
     return angles_of_interest
 
 
-def extract_boundaries(exercise_data, inner_and_outer_joints_dict_dict):
+def extract_boundaries_with_tolerances(exercise_data, inner_and_outer_joints_dict_dict):
     """
     Extracts the boundaries of angles (and in the future possibly distances).
     """
@@ -103,6 +104,19 @@ def extract_boundaries(exercise_data, inner_and_outer_joints_dict_dict):
                 angles_high[joint_names] = {'angle': angle, "inner_joint": inner_joint, "outer_joints": outer_joints}
     
     boundaries = {"angles": {"angles_low": angles_low, "angles_high": angles_high}, "distances":{}}
+
+    for joint_names, inner_and_outer_joints_dict in inner_and_outer_joints_dict_dict.items():
+        inner_joint, outer_joints = inner_and_outer_joints_dict["inner_joint"], inner_and_outer_joints_dict["outer_joints"]
+
+        angle = calculateAngle(inner_joint, outer_joints, pose)
+
+        lower_angle = boundaries["angles"]["angles_low"][joint_names]["angle"]
+        higher_angle = boundaries["angles"]["angles_high"][joint_names]["angle"]
+
+        range_of_motion = abs(higher_angle - lower_angle)
+
+        boundaries["angles"]["angles_low"][joint_names]["angle"] = lower_angle * (1 + REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER)
+        boundaries["angles"]["angles_high"][joint_names]["angle"] = higher_angle * (1 - REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER)
 
     return boundaries
 

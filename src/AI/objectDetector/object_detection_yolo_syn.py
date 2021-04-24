@@ -80,7 +80,7 @@ class ObjectDetectionPipeline:
         left_top.header.frame_id = img_msg.header.frame_id #From which camera
         left_top.data=array1D_body_bbox[0]
         left_top.stationID=self.info_station  
-        left_top.stationID=self.info_frameID     
+        left_top.sensorID=self.info_frameID     
         self.publisher_boxes.publish(left_top)
 
     def obj_detectYolo(self, img):
@@ -122,6 +122,7 @@ class ObjectDetectionPipeline:
         tmp_conf=0
         for count, label in enumerate(labels):
             box=resul_np[count,:4]
+            print("frame_id: ",frame_id)
             if label==0:
                 if self.stationChk:
                     chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box,frame_id , self.stationChk)

@@ -54,7 +54,7 @@ class run_spin():
         #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
         rospy.Subscriber('image', Image, self.callback_setImage)       
-        #srospy.Subscriber('image1', Image, self.callback_setImage)
+        srospy.Subscriber('image1', Image, self.callback_setImage)
         self.spin()
 
 

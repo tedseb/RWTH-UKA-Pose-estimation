@@ -33,6 +33,7 @@ class ObjectDetectionPipeline:
         self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
         self.body_bbox=[]
         self.info_station=[]
+        self.info_frameID=[]
         self.frame_id=0
         self.spin() #Dont write any line of code after self.spin!
 
@@ -69,7 +70,8 @@ class ObjectDetectionPipeline:
         left_top.header.frame_id = img_msg.header.frame_id #From which camera
         left_top.data=array1D_body_bbox[0]
         left_top.stationID=self.info_station  
-        left_top.sensorID=self.frame_id       
+        left_top.sensorID=self.frame_id 
+        left_top.sensorID=self.info_frameID       
         self.publisher_boxes.publish(left_top)
 
     def obj_detectYolo(self, img):
@@ -83,6 +85,11 @@ class ObjectDetectionPipeline:
             results.render()  # updates results.imgs with boxes and labels
         
         results.imgs # array of original images (as np array) passed to model for inference
+
+        self.body_bbox=[]
+        self.info_station=[]
+        self.info_frameID=[]
+
         resul_np=results.xyxy[0].cpu().detach().numpy()
         
         bbox_size =  [ ((x[2]-x[0]) * (x[3]-x[1])) for x in resul_np]
@@ -95,9 +102,7 @@ class ObjectDetectionPipeline:
         return results.imgs[0]
     
     def _get_Person_boxes(self, labels, resul_np):
-        """Plot boxes on an image"""
-        self.body_bbox=[]
-        self.info_station=[]  
+        """Plot boxes on an image""" 
         tmp_conf=0
         for count, label in enumerate(labels):
             box=resul_np[count,:4]
@@ -112,7 +117,7 @@ class ObjectDetectionPipeline:
                         h=box[3]-y
                         self.body_bbox.append([x,y,w,h])
                         self.info_station.append(stationID)
-                        print("self.info_station: ",self.info_station)
+                        self.info_frameID.append(frame_id)
                 else:
                     if resul_np[count,4]>tmp_conf:
                         self.body_bbox= [None] * 1

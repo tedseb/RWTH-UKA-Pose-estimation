@@ -104,7 +104,7 @@ class run_spin():
             person_msg = Person()
             if len(stationID) >0:
                 person_msg.stationID = int(stationID[inc])
-                person_msg.sensorID = int(sensorID)
+                person_msg.sensorID = sensorID[inc]
             person_msg.bodyParts = [None]*lenPoints
             for idx in range(lenPoints):
                 person_msg.bodyParts[idx] = Bodypart()

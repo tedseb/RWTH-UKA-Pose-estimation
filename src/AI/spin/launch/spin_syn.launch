@@ -1,0 +1,3 @@
+<launch>
+  <node name="spin3D" pkg="spin" type="run_3Dpose_estimation_syn.py" />
+</launch> 

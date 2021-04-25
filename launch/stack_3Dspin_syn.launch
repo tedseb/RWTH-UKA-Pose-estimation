@@ -1,5 +1,5 @@
 <launch>
-  <include file="$(find infrastructure)/launch/all_cameras.launch" />
+  <include file="$(find infrastructure)/launch/all_cameras_syn.launch" />
   <include file="$(find infrastructure)/launch/param_updater.launch" />
   <include file="$(find infrastructure)/launch/mobile_server.launch" />
   <include file="$(find spin)/launch/spin_syn.launch" />

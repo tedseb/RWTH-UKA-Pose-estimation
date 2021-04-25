@@ -98,10 +98,10 @@ class ObjectDetectionPipeline:
         resul_np = np.array(resul_np)
         
         labels = resul_np[:,5]
-        self._get_Person_boxes(labels,resul_np)
+        self._get_Person_boxes(labels,resul_np,self.frame_id)
         return results.imgs[0]
     
-    def _get_Person_boxes(self, labels, resul_np):
+    def _get_Person_boxes(self, labels, resul_np,frame_id):
         """Plot boxes on an image""" 
         tmp_conf=0
         for count, label in enumerate(labels):

@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   message_generation
   std_msgs
+  sensor_msgs
   geometry_msgs
 )
 
@@ -57,6 +58,7 @@ add_message_files(
   Commands.msg
   Bboxes.msg
   StationUsage.msg
+  Images.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -77,6 +79,7 @@ add_message_files(
 generate_messages(
    DEPENDENCIES
    std_msgs
+   sensor_msgs
    geometry_msgs
 )
 

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import numpy as np
 from sensor_msgs.msg import Image
+from backend.msg import Images
 
 import time
 import rospy
@@ -10,9 +11,9 @@ class cam_syn:
     def __init__(self):
         img_sub = message_filters.Subscriber('image', Image)
         img1_sub  =message_filters.Subscriber('image1', Image)
-        ts = message_filters.ApproximateTimeSynchronizer([img_sub, img1_sub], 10, 0.04, allow_headerless=True)
-        ts.registerCallback(self.run_objectdetector)
-        publish_syn_imgs = rospy.Publisher('syn_image', Image, queue_size=2)
+        ts = message_filters.ApproximateTimeSynchronizer([img_sub, img1_sub], 10, 0.1, allow_headerless=True)
+        ts.registerCallback(self.addImages)
+        self.publish_syn_imgs = rospy.Publisher('syn_image', Images, queue_size=2)
         self.spin() 
     def spin(self):
             '''
@@ -20,21 +21,16 @@ class cam_syn:
             '''
             rospy.spin()
 
-    def run_objectdetector(self, img_msg,img1_msg):  
+    def addImages(self, img1_msg,img2_msg):  
         syn_imgs=[]
-
-        shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
-        img = np.frombuffer(img_msg.data, dtype=np.uint8)
-        img_original_bgr_0 = img.reshape(shape)
-        self.frame_id_0=int(img_msg.header.frame_id[3:])
-        imgs.append(img_original_bgr_1)
-
-        shape = img1_msg.height, img1_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
-        img = np.frombuffer(img1_msg.data, dtype=np.uint8)
-        img_original_bgr_1 = img.reshape(shape)
-        self.frame_id_1=int(img1_msg.header.frame_id[3:])
-        imgs.append(img_original_bgr_1)
+ 
         
+        image_msgs = Images()
+        image_msgs.number = 2
+        image_msgs.img1 = img1_msg
+        image_msgs.img2 = img2_msg
+        """
+        imgs.append(img_original_bgr_1) 
         syn_imgs=cv2.vconcat(imgs)  
         msg_cropImage = Image()
         msg_cropImage.header.stamp = rospy.Time.now()
@@ -43,8 +39,8 @@ class cam_syn:
         msg_cropImage.data = np.array(syn_imgs, dtype=np.uint8).tostring()
         msg_cropImage.height, msg_cropImage.width = syn_imgs.shape[:-1]
         msg_cropImage.step = syn_imgs.shape[-1]*syn_imgs.shape[0]
-
-        self.publish_syn_imgs.publish(msg_cropImage)
+        """
+        self.publish_syn_imgs.publish(image_msgs)
 
 if __name__ == '__main__':  
     rospy.init_node('cam_syn', anonymous=True)

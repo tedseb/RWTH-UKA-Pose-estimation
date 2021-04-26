@@ -48,7 +48,6 @@ class run_spin():
         self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
         self.publisher_crop = rospy.Publisher('cropImage', Image, queue_size=2)   
 
-
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
         #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
@@ -112,7 +111,7 @@ class run_spin():
                 person_msg.bodyParts[idx].score = 0.8
                 person_msg.bodyParts[idx].pixel.x = joints[idx,0]
                 person_msg.bodyParts[idx].pixel.y = joints[idx,1]
-                person_msg.bodyParts[idx].point.x =joints[idx,0]/200-3
+                person_msg.bodyParts[idx] =joints[idx,0]/200-3
                 person_msg.bodyParts[idx].point.y =joints[idx,2]/200
                 person_msg.bodyParts[idx].point.z = -joints[idx,1]/200+3.2          #ToDo: Normalisierung ins Backend
             inc=inc+1

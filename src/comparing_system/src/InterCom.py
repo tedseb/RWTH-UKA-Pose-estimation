@@ -8,7 +8,7 @@ import threading
 import redis
 import rospy as rp
 import yaml
-import msgpack
+import msgpack # TODO: Use Protobufs
 from traceback import print_exc
 from collections import OrderedDict
 from abc import ABC, abstractmethod
@@ -125,9 +125,13 @@ class SpotInfoInterface(ABC):
 
 
 class RedisSpotInfoInterface(SpotInfoInterface):
+    """
+    The information for a spot consists of the following data fields:
+    
+    """
     def __init__(self):
+        # TODO: Use Messagepack here
         self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, charset="utf-8", decode_responses=True)
-        # TODO: Stop using msgpack here and use something easier
 
     def get_spot_info_dict(self, key: str, info_keys: list):
         spot_info_list = self.redis_connection.hmget(key, info_keys)
@@ -138,6 +142,12 @@ class RedisSpotInfoInterface(SpotInfoInterface):
             spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)
         return spot_info_dict
 
+    def get_spot_state_dict(self, key: str):
+        spot_state_dict = self.redis_connection.hgetall(key)
+        if not spot_state_dict:
+            raise QueueingException("Trying to process queue with key " + spot_info_key + " which has incomplete information set (maybe no exercise was set?)")
+        return spot_state_dict
+
     def set_spot_info_dict(self, key: str, spot_info_dict: dict):
         if "exercise_data" in spot_info_dict.keys():
             yaml_string = yaml.dump(spot_info_dict["exercise_data"])
@@ -145,13 +155,16 @@ class RedisSpotInfoInterface(SpotInfoInterface):
             spot_info_dict["exercise_data_hash"] = hashlib.md5(yaml_string.encode('utf-8')).hexdigest()
         self.redis_connection.hset(key, mapping=spot_info_dict)
 
+    def set_spot_state_dict(self, key: str, spot_state_dict: dict):
+        self.redis_connection.hset(key, mapping=spot_state_dict)
+
 
 class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
     def __init__(self):
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
     def get_queue_key(self):
-        # For now, simply take the key corresponding to the spot with the highest load, NO ACTUALY LOAD BALANCING!
+        # For now, simply take the key corresponding to the spot with the highest load, NO PROPER LOAD BALANCING!
         spot_key_list = self.redis_connection.zrange(REDIS_LOAD_BALANCER_LIST_KEY, 0, 0)
 
         if not spot_key_list:
@@ -192,7 +205,7 @@ class RedisMessageQueueInterface(MessageQueueInterface):
         if not message:
             raise QueueEmpty
         message = message[1]
-        message = msgpack.unpackb(message) # TODO: Python 2.7 bytestrings anywhere?
+        message = msgpack.unpackb(message)
         try:
             message = message.decode('utf-8')
         except Exception:
@@ -238,7 +251,6 @@ class RedisSpotQueueInterface(SpotQueueInterface):
     * The 'queue' for a spot is expected to contain a list of of dictionaries '{'bodyParts': <Bodyparts>, 'time_stamp': <header.stamp>}'.
     These dictionaries represent data not yet processed by the comparator, or 'the future'.
     * The 'past queue' for a spot is expected to contains the dictionaries already processed, or 'the past'.
-    * The info for a spot contains additional information like timing data in a dictionary.
     """
 
     def __init__(self):
@@ -252,10 +264,10 @@ class RedisSpotQueueInterface(SpotQueueInterface):
         """
         # TODO: Investigate if these redis instructions can be optimized, possibly use a distributed lock
 
-        redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(spot_key)
+        spot_queue_key, spot_past_queue_key, _, _ = generate_redis_key_names(spot_key)
 
         try:
-            joints_with_timestame_bytes = self.redis_connection.rpoplpush(redis_spot_queue_key, redis_spot_past_queue_key)
+            joints_with_timestame_bytes = self.redis_connection.rpoplpush(spot_queue_key, spot_past_queue_key)
             if not joints_with_timestame_bytes:
                 raise QueueEmpty
             joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes) 
@@ -265,29 +277,29 @@ class RedisSpotQueueInterface(SpotQueueInterface):
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise QueueEmpty
 
-        self.redis_connection.ltrim(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        self.redis_connection.ltrim(spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
 
-        future_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
-        past_joints_with_timestamp_list = self.redis_connection.lrange(redis_spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        future_joints_with_timestamp_list = self.redis_connection.lrange(spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        past_joints_with_timestamp_list = self.redis_connection.lrange(spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
 
         return past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
 
     def enqueue(self, spot_key: str, data: Any) -> int:
         """ Return queue size """
-        redis_spot_queue_key, _, _ = generate_redis_key_names(spot_key)
+        spot_queue_key, _, _, _ = generate_redis_key_names(spot_key)
 
-        queue_size = self.redis_connection.rpush(redis_spot_queue_key, msgpack.packb(data))
+        queue_size = self.redis_connection.rpush(spot_queue_key, msgpack.packb(data))
 
         if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
             if HIGH_VERBOSITY:
                 rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
-            self.redis_connection.ltrim(redis_spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+            self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
 
         return queue_size
 
     def size(self, spot_key: str):
-        redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key = generate_redis_key_names(key)
-        return self.redis_connection.llen(redis_spot_queue_key), self.redis_connection.llen(redis_spot_past_queue_key), self.redis_connection.llen(redis_spot_info_key)
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key = generate_redis_key_names(key)
+        return self.redis_connection.llen(spot_queue_key), self.redis_connection.llen(spot_past_queue_key), self.redis_connection.llen(spot_info_key), self.redis_connection.llen(spot_state_key)
 
     def delete(self, spot_key: str):
         # TODO: Try and catch
@@ -299,19 +311,21 @@ class RedisSpotQueueInterface(SpotQueueInterface):
 def generate_redis_key_names(spot_key: str):
     """ 
     This method simplifies handling of key names.
-    Return: redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key
+    Return: redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key
 
     Data that is expected by the comparator is listed below.
 
     The redis keys and values are as follows:
-        * Spot with ID N is:                <spot_key>               :(prefix for other data)
-        * Queue for spot with ID N is       <spot_key:queue>         :Redis FIFO Queue
-        * Past queue for spot with ID N is  <spot_key:queue_past>    :Redis FIFO Queue
-        * Info for spot with ID N is        <spot_key:info>          :stringified YAML
+        * Spot with ID N is:                    <spot_key>               :(prefix for other data)
+        * Queue for spot with ID N is           <spot_key:queue>         :Redis FIFO Queue
+        * Past queue for spot with ID N is      <spot_key:queue_past>    :Redis FIFO Queue
+        * Info for spot with ID N is            <spot_key:info>          :Redis Hashmap
+        * Exercise-state of spot with ID N is   <spot_key:state>         :Redis Hashmap
     """
     redis_spot_queue_key = REDIS_GENERAL_PREFIX + str(spot_key) + REDIS_SPOT_QUEUE_POSTFIX
     redis_spot_past_queue_key = REDIS_GENERAL_PREFIX + redis_spot_queue_key + REDIS_SPOT_PAST_QUEUE_POSTFIX
     redis_spot_info_key = REDIS_GENERAL_PREFIX + str(spot_key) + REDIS_SPOT_INFO_POSTFIX
+    redis_spot_state_key = REDIS_GENERAL_PREFIX + str(spot_key) + REDIS_SPOT_STATE_POSTFIX
 
-    return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key
+    return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key
 

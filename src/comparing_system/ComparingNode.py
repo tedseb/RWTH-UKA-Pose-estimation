@@ -7,6 +7,7 @@ import json
 import operator
 import traceback
 import os
+import time
 
 from random import randint
 from sys import maxsize
@@ -27,6 +28,7 @@ from src.Comparator import Comparator
 from src.config import *
 from src.InterCom import *
 from src.FeatureExtraction import *
+from src.Util import *
 
 # db 0 is our (comparing node) database
 # TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
@@ -47,10 +49,10 @@ class Receiver():
         self.skelleton_adapter = None
 
     def callback(self, message):
-        '''
+        """
         This function will be called everytime whenever a message is received by the subscriber.
         It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
-        '''
+        """
         # For every person in the image, sort their data into the correction spot queue in redis
 
         for p in message.persons:
@@ -82,9 +84,9 @@ class Sender(Thread):
         self.start()
 
     def run(self):
-        '''
+        """
         We publish messages indefinately. If there are none, we wait for the queue to fill and report back every 5 seconds.
-        '''
+        """
         while(self.running):
             try:
                 data = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
@@ -122,48 +124,18 @@ class SpotInfoHandler():
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
 
-        spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key = generate_redis_key_names(spot_update_data["stationID"])
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
-        now_in_seconds = rp.get_rostime().secs
-        new_nanoseconds = rp.get_rostime().nsecs
-
-        if LEGACY_COMPARING:
-            # We need to transform the exercise in this case, so that it matches to old format
-            new_stages = list()
-            for stage in exercise_data['stages']:
-                # Calculate the pose per stage and extract the angles
-
-                joints = stage['skeleton']
-                
-                pose = {}
-                angles = {} # Do not only caluclate angles here, but also 
-                for index in joints_used:
-                    label = joint_labels[index]
-                    point = Point()
-                    # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-                    point.x = joints[label]['x']
-                    point.y = joints[label]['z']
-                    point.z = joints[label]['y']
-                    pose[label] = point
-
-                new_angles = list()
-                for rule_joints in stage['angles']:
-                    new_angles.append({'joint_names': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
-                new_stages.append(new_angles)
-            exercise_data['stages'] = new_stages
-            del exercise_data['recording']
-            spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': 0}
-        else:
-            angles_of_interest = extract_angles_of_interest(exercise_data)
-            inner_and_outer_joints_dict_dict = extract_inner_and_outer_joints(angles_of_interest)
-            exercise_data['boundaries'] = extract_boundaries_with_tolerances(exercise_data, inner_and_outer_joints_dict_dict)
-            beginning_state = extract_beginning_state(exercise_data, exercise_data['boundaries'], inner_and_outer_joints_dict_dict)
-            exercise_data['beginning_state'] = beginning_state
-            del exercise_data['stages']
-            del exercise_data['recording']
-            spot_info_dict = {'start_time': now_in_seconds, "exercise_data": exercise_data, 'state': beginning_state, 'repetitions': 0}
+        angles_of_interest = extract_angles_of_interest(exercise_data)
+        inner_and_outer_joints_dict_dict = extract_inner_and_outer_joints(angles_of_interest)
+        exercise_data['boundaries'] = extract_boundaries_with_tolerances(exercise_data, inner_and_outer_joints_dict_dict)
+        spot_state_dict = extract_beginning_state(exercise_data, exercise_data['boundaries'], inner_and_outer_joints_dict_dict)
+        exercise_data['beginning_state_dict'] = spot_state_dict
+        del exercise_data['stages']
+        del exercise_data['recording']
+        spot_info_dict = {'start_time': time.time(), "exercise_data": exercise_data, 'repetitions': 0}
 
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
@@ -171,7 +143,9 @@ class SpotInfoHandler():
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
 
+        
         self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
+        self.spot_info_interface.set_spot_state_dict(spot_state_key, spot_state_dict)
 
 
 if __name__ == '__main__':

@@ -38,14 +38,10 @@ REDIS_SPOT_INFO_POSTFIX = ":info"
 REDIS_SPOT_STATE_POSTFIX = ":state"
 REDIS_SPOT_EXERCISE_POSTFIX = ":exercise"
 
-LEGACY_COMPARING = False
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = True
-
-# Beta exercise format
-EXTRACT_BOUNDARIES = False
+HIGH_VERBOSITY = False
 
 # ALGORITHMIC COMFIGURATION
 

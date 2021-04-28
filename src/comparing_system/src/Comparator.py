@@ -15,7 +15,6 @@ from importlib import import_module
 from threading import Thread
 from functools import lru_cache
 
-from src.joint_adapters.spin import *
 from src.config import *
 from src.InterCom import *
 from src.FeatureExtraction import *
@@ -42,7 +41,8 @@ class Comparator(Thread):
     spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, 
     spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, 
     message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, 
-    spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
+    spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
         super(Comparator, self).__init__()
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
@@ -72,15 +72,17 @@ class Comparator(Thread):
             try:
                 # Fetch all data that is needed for the comparison:
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
-                
+
                 _, _, spot_info_key, spot_state_key = generate_redis_key_names(spot_key)
 
                 # Construct spot info dict, possibly from chache
                 spot_info_dict = self.spot_info_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "state", "repetitions"])
-                spot_state_dict = self.spot_info_interface.get_spot_state_dict(spot_state_key)
-                exercise_data = self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"])
-                spot_info_dict.update(exercise_data) 
                 
+                # Use LRU Caching to update the spot info dict
+                spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
+
+                spot_state_dict = self.spot_info_interface.get_spot_state_dict(spot_state_key, spot_info_dict['exercise_data']['feature_of_interest_specification'])
+
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
                 # Compare joints with expert system data
@@ -132,7 +134,11 @@ def compare(spot_info_dict: dict, spot_state_dict: dict, past_joints_with_timest
     exercise_data = spot_info_dict['exercise_data']
     
     joints = joints_with_timestamp['joints']
-    timestamp = joints_with_timestamp['timestamp']
+    timestamp = joints_with_timestamp['ros_timestamp']
+
+    
+    print(joints_with_timestamp)
+    print(spot_state_dict)
 
     pose = {}
 
@@ -159,8 +165,8 @@ def count(exercise_data, state_dict, pose):
 
     new_state_dict = {}
 
-    print(boundaries)
-    print(state_dict)
+    # print(boundaries)
+    # print(state_dict)
 
     # CALCULATE NEW STATES HERE AND COMPARE THEM TO OLD STATES
 

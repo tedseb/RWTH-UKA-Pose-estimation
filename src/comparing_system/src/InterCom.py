@@ -9,6 +9,7 @@ import redis
 import rospy as rp
 import yaml
 import msgpack # TODO: Use Protobufs
+import msgpack_numpy as m
 from traceback import print_exc
 from collections import OrderedDict
 from abc import ABC, abstractmethod
@@ -17,6 +18,8 @@ import hashlib
 from typing import Tuple, Any
 
 from src.config import *
+
+m.patch()
 
 redis_connection_pool = redis.ConnectionPool(host='localhost', port=5678, db=0)
 
@@ -125,10 +128,6 @@ class SpotInfoInterface(ABC):
 
 
 class RedisSpotInfoInterface(SpotInfoInterface):
-    """
-    The information for a spot consists of the following data fields:
-    
-    """
     def __init__(self):
         # TODO: Use Messagepack here
         self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, charset="utf-8", decode_responses=True)
@@ -136,17 +135,27 @@ class RedisSpotInfoInterface(SpotInfoInterface):
     def get_spot_info_dict(self, key: str, info_keys: list):
         spot_info_list = self.redis_connection.hmget(key, info_keys)
         if not spot_info_list:
-            raise QueueingException("Trying to process queue with key " + spot_info_key + " which has incomplete information set (maybe no exercise was set?)")
+            raise QueueingException("Trying to process queue with key " + key + " which has incomplete information set (maybe no exercise was set?)")
         spot_info_dict = dict(zip(info_keys, spot_info_list))
         if "exercise_data" in spot_info_dict.keys() and spot_info_dict["exercise_data"]:
             spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)
         return spot_info_dict
 
-    def get_spot_state_dict(self, key: str):
-        spot_state_dict = self.redis_connection.hgetall(key)
-        if not spot_state_dict:
-            raise QueueingException("Trying to process queue with key " + spot_info_key + " which has incomplete information set (maybe no exercise was set?)")
-        return spot_state_dict
+    def get_spot_state_dict(self, spot_state_key: str, feature_of_interest_specification):
+        redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key = generate_redis_spot_state_keys(spot_state_key)
+        state_dict = dict()
+
+        for feature_type, feature_state_dict in feature_of_interest_specification.items():
+            if feature_type == 'angles':
+                feature_state_dict = self.redis_connection.hgetall(redis_angles_key)
+            else:
+                raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
+
+            if not feature_state_dict:
+                raise QueueingException("Trying to process queue with key " + key + " which has incomplete information set (maybe no exercise was set?)")
+            state_dict[feature_type] = feature_state_dict
+
+        return state_dict
 
     def set_spot_info_dict(self, key: str, spot_info_dict: dict):
         if "exercise_data" in spot_info_dict.keys():
@@ -155,9 +164,15 @@ class RedisSpotInfoInterface(SpotInfoInterface):
             spot_info_dict["exercise_data_hash"] = hashlib.md5(yaml_string.encode('utf-8')).hexdigest()
         self.redis_connection.hset(key, mapping=spot_info_dict)
 
-    def set_spot_state_dict(self, key: str, spot_state_dict: dict):
-        self.redis_connection.hset(key, mapping=spot_state_dict)
-
+    def set_spot_state_dict(self, spot_state_key: str, spot_state_dict: dict):
+        redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key = generate_redis_spot_state_keys(spot_state_key)
+        
+        for feature_type, feature_state_dict in spot_state_dict.items():
+            if feature_type == 'angles':
+                self.redis_connection.hset(redis_angles_key, mapping=feature_state_dict)
+            else:
+                raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
+        
 
 class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
     def __init__(self):
@@ -309,9 +324,10 @@ class RedisSpotQueueInterface(SpotQueueInterface):
             
 
 def generate_redis_key_names(spot_key: str):
-    """ 
-    This method simplifies handling of key names.
-    Return: redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key
+    """ This method simplifies handling of general key names.
+
+    Returns: 
+        redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key
 
     Data that is expected by the comparator is listed below.
 
@@ -329,3 +345,25 @@ def generate_redis_key_names(spot_key: str):
 
     return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key
 
+def generate_redis_spot_state_keys(redis_spot_state_key: str):
+    """This method simplifies handling of redis spot state keys names.
+
+    Returns: 
+        redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key
+
+    Data that is expected by the comparator is listed below.
+
+    The redis keys and values are as follows:
+        * Distances is      <spot_key:state:distances>      :Redis Hashmap
+        * Angles is         <spot_key:state:angles>         :Redis Hashmap
+        * Rotations is      <spot_key:state:rotations>      :Redis Hashmap
+        * Speed is          <spot_key:state:speeds>         :Redis Hashmap
+        * Accaleration is   <spot_key:state:accalerations>  :Redis Hashmap
+    """
+    redis_distances_key = redis_spot_state_key + ":distances"
+    redis_angles_key = redis_spot_state_key + ":angles"
+    redis_rotation_key = redis_spot_state_key + ":rotations"
+    redis_speed_key = redis_spot_state_key + ":speeds"
+    redis_rotation_key = redis_spot_state_key + ":accalerations"
+
+    return redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key

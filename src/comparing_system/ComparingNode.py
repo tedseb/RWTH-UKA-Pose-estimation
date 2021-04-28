@@ -23,7 +23,6 @@ from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
 # ComparingNode imports
-from src.joint_adapters.spin import *
 from src.Comparator import Comparator
 from src.config import *
 from src.InterCom import *
@@ -40,13 +39,16 @@ class Receiver():
     The Receiver subscribes to the ROS topic that contains joints (or 'skelletons') and puts them into separate queues.
     Each queue corresponds to one spot. Therefore, multiple views of the same spot go into the same queue.
     """
-    def __init__(self, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
+    def __init__(self, 
+    spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, 
+    spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
         self.spot_queue_interface = spot_queue_interface_class()
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
-        self.skelleton_adapter = None
+        self.feature_extractor = feature_extractor_class()
 
     def callback(self, message):
         """
@@ -56,10 +58,12 @@ class Receiver():
         # For every person in the image, sort their data into the correction spot queue in redis
 
         for p in message.persons:
-            p_dict = message_converter.convert_ros_message_to_dictionary(p)
-            timestamp = message_converter.convert_ros_message_to_dictionary(message.header.stamp)
 
-            joints_with_timestamp = {'joints': p_dict["bodyParts"], 'timestamp': timestamp}   # Get away from messages here, towards a simple dict
+            array = self.feature_extractor.body_parts_to_ndarray(p.bodyParts)
+
+            p_dict = message_converter.convert_ros_message_to_dictionary(p)
+
+            joints_with_timestamp = {'used_joint_ndarray': array, 'joints': p_dict["bodyParts"], 'ros_timestamp': message.header.stamp.to_time()}   # Get away from messages here, towards a simple dict
 
             queue_size = self.spot_queue_interface.enqueue(p.stationID, joints_with_timestamp)
 
@@ -114,12 +118,14 @@ class SpotInfoHandler():
     """
     def __init__(self, 
     spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, 
-    message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
+    message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface,
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
 
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
         self.spot_info_interface = spot_info_interface_class()
         self.message_queue_interface = message_queue_interface_class()
+        self.feature_extractor = feature_extractor_class()
 
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
@@ -128,13 +134,18 @@ class SpotInfoHandler():
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
-        angles_of_interest = extract_angles_of_interest(exercise_data)
-        inner_and_outer_joints_dict_dict = extract_inner_and_outer_joints(angles_of_interest)
-        exercise_data['boundaries'] = extract_boundaries_with_tolerances(exercise_data, inner_and_outer_joints_dict_dict)
-        spot_state_dict = extract_beginning_state(exercise_data, exercise_data['boundaries'], inner_and_outer_joints_dict_dict)
-        exercise_data['beginning_state_dict'] = spot_state_dict
+        exercise_data['recording'] = self.feature_extractor.recording_to_ndarray(exercise_data['recording'])
+
+        exercise_data['feature_of_interest_specification'] = self.feature_extractor.extract_feature_of_interest_specification_dictionary(exercise_data)
+
+        exercise_data['boundaries'] = self.feature_extractor.extract_boundaries_with_tolerances(exercise_data['recording'], exercise_data['feature_of_interest_specification'])
+        
+        beginning_pose = exercise_data['recording'][0]
+        beginning_state_dict = self.feature_extractor.extract_states(beginning_pose, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
+        exercise_data['beginning_state_dict'] = beginning_state_dict
+
         del exercise_data['stages']
-        del exercise_data['recording']
+        
         spot_info_dict = {'start_time': time.time(), "exercise_data": exercise_data, 'repetitions': 0}
 
         if HIGH_VERBOSITY:
@@ -145,7 +156,7 @@ class SpotInfoHandler():
 
         
         self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
-        self.spot_info_interface.set_spot_state_dict(spot_state_key, spot_state_dict)
+        self.spot_info_interface.set_spot_state_dict(spot_state_key, beginning_state_dict)
 
 
 if __name__ == '__main__':

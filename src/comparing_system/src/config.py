@@ -41,7 +41,7 @@ REDIS_SPOT_EXERCISE_POSTFIX = ":exercise"
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = False
+HIGH_VERBOSITY = True
 
 # ALGORITHMIC COMFIGURATION
 

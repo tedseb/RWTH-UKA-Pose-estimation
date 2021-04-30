@@ -30,6 +30,7 @@ import numpy as np
 from backend.msg import Bodypart
 import rospy as rp
 from itertools import combinations
+import msgpack
 
 from src.config import *
 
@@ -192,7 +193,7 @@ class FeatureExtractor(ABC):
             except FeatureExtractorException as e:
                 exceptions['FeatureExtractorException'] = e
             # Hash frozenset of joints so that we can use them for indexing, also in Redis
-            inner_and_outer_joints[hash(joint_names)] = {"inner_joint": inner_joint, "outer_joints": outer_joints}
+            inner_and_outer_joints[str(joint_names)] = {"inner_joint": inner_joint, "outer_joints": outer_joints}
         
         if exceptions:
             rp.logerr("Errors occured while parsing the provided exercise:" + str(exceptions))

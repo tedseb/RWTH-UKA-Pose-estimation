@@ -111,19 +111,19 @@ class Sender(Thread):
                     rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
                 
 
-class SpotInfoHandler():
+class SpotMetaDataHandler():
     """
     This class waits for updates on the spots, such as a change of exercises that the spot.
     Such changes are written into the spot information .json via Redis.
     """
     def __init__(self, 
-    spot_info_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
+    spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
     message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface,
     feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
 
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
-        self.spot_info_interface = spot_info_interface_class()
+        self.spot_metadata_interface = spot_metadata_interface_class()
         self.message_queue_interface = message_queue_interface_class()
         self.feature_extractor = feature_extractor_class()
 
@@ -146,16 +146,17 @@ class SpotInfoHandler():
 
         del exercise_data['stages']
         
-        spot_info_dict = {'start_time': time.time(), "exercise_data": exercise_data, 'repetitions': 0}
+        spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
 
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
 
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
-        
-        self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
-        self.spot_info_interface.set_spot_state_dict(spot_state_key, beginning_state_dict)
+
+        self.spot_metadata_interface.delete(spot_state_key)
+        self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
+        self.spot_metadata_interface.set_spot_state_dict(spot_state_key, beginning_state_dict)
 
 
 if __name__ == '__main__':
@@ -178,7 +179,7 @@ if __name__ == '__main__':
 
     receiver = Receiver()
 
-    spot_info_handler = SpotInfoHandler()
+    spot_info_handler = SpotMetaDataHandler()
 
     def kill_threads():
         all_threads = comparators + [user_state_sender, user_correction_sender]

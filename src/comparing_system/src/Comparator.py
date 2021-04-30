@@ -98,7 +98,7 @@ class Comparator(Thread):
                         'user_id': 0,
                         'current_exercise_name': spot_info_dict.get('exercise_data').get('name'),
                         'repetitions': spot_info_dict['repetitions'],
-                        'seconds_since_last_exercise_start': (time.time() - int(spot_info_dict.get('start_time'))),
+                        'seconds_since_last_exercise_start': (time.time_ns() - int(spot_info_dict.get('start_time'))) / 1e+9,
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
                         'exercise_score': 100
@@ -125,9 +125,9 @@ class Comparator(Thread):
 
             except QueueEmpty:
                 continue
-            except SpotMetaDataException:
+            except SpotMetaDataException as e:
                 if HIGH_VERBOSITY:
-                    rp.logerr("Trying to process skelletons from spot that has no proper spot metadata set.")    
+                    rp.logerr(e)    
             except Exception as e:
                 if HIGH_VERBOSITY:
                     print_exc() 
@@ -141,38 +141,24 @@ class Comparator(Thread):
         timestamp = joints_with_timestamp['ros_timestamp']
 
         new_spot_state_dict = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
+
+        increase_reps = True
+
+        for feature_type, features in new_spot_state_dict.items():
+            for k, v in features.items():
+                if spot_state_dict[feature_type][k] == "done":
+                    new_spot_state_dict[feature_type][k] = "done"
+                    continue
+                if v == spot_info_dict['exercise_data']['beginning_state_dict'][feature_type][k] and v != spot_state_dict[feature_type][k]:
+                    new_spot_state_dict[feature_type][k] = "done"
+                else:
+                    increase_reps = False
         
-        repetition_counted = new_spot_state_dict == spot_state_dict
-
-        print(new_spot_state_dict)
-
         # TODO: We define the center of the body as the pelvis
         center_of_body = None
 
-        return repetition_counted, new_spot_state_dict, center_of_body
+        if increase_reps:
+            new_spot_state_dict = spot_info_dict['exercise_data']['beginning_state_dict']
 
-    def count(self, exercise_data, state_dict, pose):
-        """
-        Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
-        """
-        boundaries = exercise_data['boundaries']
+        return increase_reps, new_spot_state_dict, center_of_body
 
-        new_state_dict = {}
-
-
-        for joint_names, angle_info_dict in boundaries["angles"]["angles_high"].items():
-            if calculateAngle(angle_info_dict["inner_joint"], angle_info_dict["outer_joints"], pose) > angle_info_dict["angle"]:
-                
-                return "high" == exercise_data['beginning_state_dict'], "high"
-        else:
-            return False, "low"
-
-        for joint_names, angle_info_dict in boundaries["angles"]["angles_low"].items():
-            if calculateAngle(angle_info_dict["inner_joint"], angle_info_dict["outer_joints"], pose) < angle_info_dict["angle"]:
-                return "low" == exercise_data['beginning_state_dict'], "low"
-        else:
-            return False, "high"
-        
-
-    def checkforstate(this_angle, angle, state):
-        return (this_angle >= angle - alpha and this_angle <= angle + alpha)

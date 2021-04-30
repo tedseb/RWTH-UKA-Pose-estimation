@@ -130,10 +130,19 @@ class SpotMetaDataInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class RedisSpotMetaDataInterface(SpotMetaDataInterface):
+class RedisInterface:
+    def __init__(self):
+        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
+
+    def delete(self, key: str) -> None:
+        return self.redis_connection.delete(key)
+        
+
+class RedisSpotMetaDataInterface(RedisInterface, SpotMetaDataInterface):
     def __init__(self):
         # TODO: Use Messagepack here
-        self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, charset="utf-8", decode_responses=True)
+        # We need a separate constructor in order to force decode_responses=True for this Redis connection
+        self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=True)
 
     def get_spot_info_dict(self, key: str, info_keys: list):
         spot_info_list = self.redis_connection.hmget(key, info_keys)
@@ -144,8 +153,8 @@ class RedisSpotMetaDataInterface(SpotMetaDataInterface):
             spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)
         return spot_info_dict
 
-    def get_spot_state_dict(self, spot_state_key: str, feature_of_interest_specification):
-        redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key = generate_redis_spot_state_keys(spot_state_key)
+    def get_spot_state_dict(self, key: str, feature_of_interest_specification):
+        redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key = generate_redis_spot_state_keys(key)
         state_dict = dict()
 
         for feature_type, feature_state_dict in feature_of_interest_specification.items():
@@ -155,7 +164,8 @@ class RedisSpotMetaDataInterface(SpotMetaDataInterface):
                 raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
 
             if not feature_state_dict:
-                raise QueueingException("Trying to process queue with key " + key + " which has incomplete information set (maybe no exercise was set?)")
+                raise SpotMetaDataException("Trying to get state from spot with key " + key + " which has incomplete information set (maybe no exercise was set?)")
+
             state_dict[feature_type] = feature_state_dict
 
         return state_dict
@@ -175,12 +185,15 @@ class RedisSpotMetaDataInterface(SpotMetaDataInterface):
                 self.redis_connection.hset(redis_angles_key, mapping=feature_state_dict)
             else:
                 raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
+    
+    def delete(self, key: str) -> None:
+        keys = generate_redis_spot_state_keys(key)
+        self.redis_connection.delete(key)
+        for k in keys:
+            self.redis_connection.delete(k)
         
 
-class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
-    def __init__(self):
-        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
-
+class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface):
     def get_queue_key(self):
         # For now, simply take the key corresponding to the spot with the highest load, NO PROPER LOAD BALANCING!
         spot_key_list = self.redis_connection.zrange(REDIS_LOAD_BALANCER_LIST_KEY, 0, 0)
@@ -211,10 +224,7 @@ class RedisQueueLoadBalancerInterface(QueueLoadBalancerInterface):
             self.redis_connection.zrem(REDIS_LOAD_BALANCER_LIST_KEY, key)
         
 
-class RedisMessageQueueInterface(MessageQueueInterface):
-    def __init__(self):
-        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
-
+class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
     def enqueue(self, key, message):
         message = self.redis_connection.lpush(key, msgpack.packb(message))
 
@@ -253,14 +263,11 @@ class RedisMessageQueueInterface(MessageQueueInterface):
         
         return message
 
-    def delete(self, key: str) -> None:
-        return self.redis_connection.delete(key)
-
     def size(self, key: str) -> Tuple[int, int, int]:
         return self.redis_connection.llen(key)
 
 
-class RedisSpotQueueInterface(SpotQueueInterface):
+class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
     """
     This class helps with enqueue and dequeueing from and to a redis database enqueue and dequeue data that the comparator needs with Redis.
 

@@ -77,12 +77,12 @@ class Comparator(Thread):
                 _, _, spot_info_key, spot_state_key = generate_redis_key_names(spot_key)
 
                 # Construct spot info dict, possibly from chache
-                spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "state", "repetitions"])
+                spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
                 
                 # Use LRU Caching to update the spot info dict
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
 
-                spot_state_dict = self.spot_metadata_interface.get_spot_state_dict(spot_state_key, spot_info_dict.get('exercise_data', {}).get('feature_of_interest_specification'))
+                spot_state_dict = self.spot_metadata_interface.get_spot_state_dict(spot_state_key, spot_info_dict['exercise_data']['feature_of_interest_specification'])
 
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
@@ -125,6 +125,9 @@ class Comparator(Thread):
 
             except QueueEmpty:
                 continue
+            except SpotMetaDataException:
+                if HIGH_VERBOSITY:
+                    rp.logerr("Trying to process skelletons from spot that has no proper spot metadata set.")    
             except Exception as e:
                 if HIGH_VERBOSITY:
                     print_exc() 
@@ -140,6 +143,8 @@ class Comparator(Thread):
         new_spot_state_dict = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
         
         repetition_counted = new_spot_state_dict == spot_state_dict
+
+        print(new_spot_state_dict)
 
         # TODO: We define the center of the body as the pelvis
         center_of_body = None

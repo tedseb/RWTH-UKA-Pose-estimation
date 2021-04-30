@@ -137,7 +137,7 @@ class RedisSpotMetaDataInterface(SpotMetaDataInterface):
 
     def get_spot_info_dict(self, key: str, info_keys: list):
         spot_info_list = self.redis_connection.hmget(key, info_keys)
-        if not spot_info_list:
+        if None in spot_info_list:
             raise SpotMetaDataException("Trying to get spot_info_dict at key " + key + ", but no spot_info_dict is set.")
         spot_info_dict = dict(zip(info_keys, spot_info_list))
         if "exercise_data" in spot_info_dict.keys() and spot_info_dict["exercise_data"]:

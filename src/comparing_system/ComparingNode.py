@@ -153,7 +153,6 @@ class SpotInfoHandler():
 
         num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
         num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
-
         
         self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
         self.spot_info_interface.set_spot_state_dict(spot_state_key, beginning_state_dict)

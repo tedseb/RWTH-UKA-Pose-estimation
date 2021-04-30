@@ -63,7 +63,7 @@ class Receiver():
 
             p_dict = message_converter.convert_ros_message_to_dictionary(p)
 
-            joints_with_timestamp = {'used_joint_ndarray': array, 'joints': p_dict["bodyParts"], 'ros_timestamp': message.header.stamp.to_time()}   # Get away from messages here, towards a simple dict
+            joints_with_timestamp = {'used_joint_ndarray': array, 'ros_timestamp': message.header.stamp.to_time()}   # Get away from messages here, towards a simple dict
 
             queue_size = self.spot_queue_interface.enqueue(p.stationID, joints_with_timestamp)
 
@@ -117,7 +117,7 @@ class SpotInfoHandler():
     Such changes are written into the spot information .json via Redis.
     """
     def __init__(self, 
-    spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, 
+    spot_info_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
     message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface,
     feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
 

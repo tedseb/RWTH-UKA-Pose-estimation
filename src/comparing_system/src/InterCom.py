@@ -34,6 +34,9 @@ class QueueEmpty(QueueingException):
 class QueueTimeout(QueueingException):
     pass
 
+class SpotMetaDataException(Exception):
+    pass
+
 
 class SpotQueueInterface(ABC):
     """
@@ -113,7 +116,7 @@ class QueueLoadBalancerInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class SpotInfoInterface(ABC):
+class SpotMetaDataInterface(ABC):
     @abstractmethod
     def __init__(self):
         raise NotImplementedError("This is an interface and shold not be called directly")
@@ -127,7 +130,7 @@ class SpotInfoInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class RedisSpotInfoInterface(SpotInfoInterface):
+class RedisSpotMetaDataInterface(SpotMetaDataInterface):
     def __init__(self):
         # TODO: Use Messagepack here
         self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, charset="utf-8", decode_responses=True)
@@ -135,7 +138,7 @@ class RedisSpotInfoInterface(SpotInfoInterface):
     def get_spot_info_dict(self, key: str, info_keys: list):
         spot_info_list = self.redis_connection.hmget(key, info_keys)
         if not spot_info_list:
-            raise QueueingException("Trying to process queue with key " + key + " which has incomplete information set (maybe no exercise was set?)")
+            raise SpotMetaDataException("Trying to get spot_info_dict at key " + key + ", but no spot_info_dict is set.")
         spot_info_dict = dict(zip(info_keys, spot_info_list))
         if "exercise_data" in spot_info_dict.keys() and spot_info_dict["exercise_data"]:
             spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)

@@ -27,7 +27,7 @@ import time
 class NoJointsAvailable(Exception):
     pass
 
-class NoSpotInfoAvailable(Exception):
+class NoSpoMetaDataAvailable(Exception):
     pass
 
 class NoExerciseDataAvailable(Exception):
@@ -38,7 +38,7 @@ class Comparator(Thread):
     The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     """
     def __init__(self, 
-    spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, 
+    spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
     spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, 
     message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, 
     spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
@@ -48,7 +48,8 @@ class Comparator(Thread):
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
         self.message_out_queue_interface = message_out_queue_interface_class()
         self.spot_queue_interface = spot_queue_interface_class()
-        self.spot_info_interface = spot_info_interface_class()
+        self.spot_metadata_interface = spot_metadata_interface_class()
+        self.feature_extractor = feature_extractor_class()
         
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
@@ -59,7 +60,7 @@ class Comparator(Thread):
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
     def get_exercise_data(self, spot_key, exercise_data_hash):
-        return self.spot_info_interface.get_spot_info_dict(spot_key, ["exercise_data"])
+        return self.spot_metadata_interface.get_spot_info_dict(spot_key, ["exercise_data"])
 
     def run(self):
         """
@@ -76,19 +77,19 @@ class Comparator(Thread):
                 _, _, spot_info_key, spot_state_key = generate_redis_key_names(spot_key)
 
                 # Construct spot info dict, possibly from chache
-                spot_info_dict = self.spot_info_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "state", "repetitions"])
+                spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "state", "repetitions"])
                 
                 # Use LRU Caching to update the spot info dict
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
 
-                spot_state_dict = self.spot_info_interface.get_spot_state_dict(spot_state_key, spot_info_dict['exercise_data']['feature_of_interest_specification'])
+                spot_state_dict = self.spot_metadata_interface.get_spot_state_dict(spot_state_key, spot_info_dict.get('exercise_data', {}).get('feature_of_interest_specification'))
 
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
                 # Compare joints with expert system data
-                increase_reps, new_state, center_of_body = compare(spot_info_dict, spot_state_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                increase_reps, new_state, center_of_body = self.compare(spot_info_dict, spot_state_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
 
-                spot_info_dict['state'] = new_state
+                self.spot_metadata_interface.set_spot_state_dict(spot_state_key, new_state)
 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
@@ -108,7 +109,7 @@ class Comparator(Thread):
                 del spot_info_dict["exercise_data_hash"]
                 del spot_info_dict['start_time']
 
-                self.spot_info_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
+                self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
                 # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -127,62 +128,46 @@ class Comparator(Thread):
             except Exception as e:
                 if HIGH_VERBOSITY:
                     print_exc() 
-                    rp.logerr("Error sending data in the comparator: " + str(e))    
+                    rp.logerr("Encountered an Error while Comparing: " + str(e))    
 
 
-def compare(spot_info_dict: dict, spot_state_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
-    exercise_data = spot_info_dict['exercise_data']
-    
-    joints = joints_with_timestamp['joints']
-    timestamp = joints_with_timestamp['ros_timestamp']
+    def compare(self, spot_info_dict: dict, spot_state_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
+        exercise_data = spot_info_dict['exercise_data']
+        
+        used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
+        timestamp = joints_with_timestamp['ros_timestamp']
 
-    
-    print(joints_with_timestamp)
-    print(spot_state_dict)
+        new_spot_state_dict = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
+        
+        repetition_counted = new_spot_state_dict == spot_state_dict
 
-    pose = {}
+        # TODO: We define the center of the body as the pelvis
+        center_of_body = None
 
-    for index in joints_used:
-        point = Point()
-        # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-        point.x = joints[index]['point']['x']
-        point.y = joints[index]['point']['z']
-        point.z = joints[index]['point']['y']
-        pose[joint_labels[index]] = point
+        return repetition_counted, new_spot_state_dict, center_of_body
 
-    repetition_counted, new_state = count(exercise_data, spot_state_dict, pose)
+    def count(self, exercise_data, state_dict, pose):
+        """
+        Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
+        """
+        boundaries = exercise_data['boundaries']
 
-    # We define the center of the body as the pelvis
-    center_of_body = pose[center_of_body_label]
+        new_state_dict = {}
 
-    return repetition_counted, new_state, center_of_body
 
-def count(exercise_data, state_dict, pose):
-    """
-    Check if the state has changed. If so, possibly increment repetitions and return them. Otherwise return None
-    """
-    boundaries = exercise_data['boundaries']
+        for joint_names, angle_info_dict in boundaries["angles"]["angles_high"].items():
+            if calculateAngle(angle_info_dict["inner_joint"], angle_info_dict["outer_joints"], pose) > angle_info_dict["angle"]:
+                
+                return "high" == exercise_data['beginning_state_dict'], "high"
+        else:
+            return False, "low"
 
-    new_state_dict = {}
+        for joint_names, angle_info_dict in boundaries["angles"]["angles_low"].items():
+            if calculateAngle(angle_info_dict["inner_joint"], angle_info_dict["outer_joints"], pose) < angle_info_dict["angle"]:
+                return "low" == exercise_data['beginning_state_dict'], "low"
+        else:
+            return False, "high"
+        
 
-    # print(boundaries)
-    # print(state_dict)
-
-    # CALCULATE NEW STATES HERE AND COMPARE THEM TO OLD STATES
-
-    for joint_names, angle_info_dict in boundaries["angles"]["angles_high"].items():
-        if calculateAngle(angle_info_dict["inner_joint"], angle_info_dict["outer_joints"], pose) > angle_info_dict["angle"]:
-            
-            return "high" == exercise_data['beginning_state_dict'], "high"
-    else:
-        return False, "low"
-
-    for joint_names, angle_info_dict in boundaries["angles"]["angles_low"].items():
-        if calculateAngle(angle_info_dict["inner_joint"], angle_info_dict["outer_joints"], pose) < angle_info_dict["angle"]:
-            return "low" == exercise_data['beginning_state_dict'], "low"
-    else:
-        return False, "high"
-    
-
-def checkforstate(this_angle, angle, state):
-    return (this_angle >= angle - alpha and this_angle <= angle + alpha)
+    def checkforstate(this_angle, angle, state):
+        return (this_angle >= angle - alpha and this_angle <= angle + alpha)

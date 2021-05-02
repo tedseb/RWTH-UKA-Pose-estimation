@@ -4,7 +4,6 @@ At the time of writing, such features are explicitly angles. Other features migh
 
 TODO: Use msgpack at Shawans end do extract features there already? https://pypi.org/project/msgpack-numpy/
 
-
 We support the following features that can be extracted either from single skeletons or series of skeletons:
     * Distance      (between 2 joints)      :scalar
     * Angle         (between 3 joints)      :scalar
@@ -22,17 +21,20 @@ We define our numpy arrays representing skelletons as follows:
     ],
     (...)
 ]
-
 """
-from abc import ABC, abstractmethod
-import math
-import numpy as np
-from backend.msg import Bodypart
-import rospy as rp
-from itertools import combinations
-import msgpack
 
+import math
+from abc import ABC, abstractmethod
+from itertools import combinations
+from typing import Any, Dict, List, Tuple
+
+import msgpack
+import numpy as np
+import rospy as rp
 from src.config import *
+
+from backend.msg import Bodypart
+
 
 class FeatureExtractorException(Exception):
     pass
@@ -42,18 +44,19 @@ class UnknownAngleException(FeatureExtractorException):
 
 
 class FeatureExtractor(ABC):
+    """This class takes ndarrays reporesenting human poses and turns them into features."""
     @abstractmethod
     def __init__():
         pass
 
     @abstractmethod
-    def get_joint_index(self, joint_name: str):
+    def get_joint_index(self, joint_name: str) -> int:
         """Get the index of a joint from its name"""
         raise NotImplementedError("This is an interface and shold not be called directly")
         
     @abstractmethod
-    def extract_distance(self, pose_array: np.ndarray, joint_a: int, joint_b: int):
-        """Computes the distance between two joints.
+    def extract_distance(self, pose_array: np.ndarray, joint_a: int, joint_b: int) -> float:
+        """Compute the distance between two joints.
 
         Args:
             pose: A pose, according to the ROS Message 'Person'
@@ -66,8 +69,8 @@ class FeatureExtractor(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def extract_angle(self, pose_array: np.ndarray, inner_joint: int, outer_joints: set):
-        """Computes the angle between three connected joints.
+    def extract_angle(self, pose_array: np.ndarray, inner_joint: int, outer_joints: set) -> float:
+        """Compute the angle between three connected joints.
         
         Args:
             pose: A pose, according to the ROS Message 'Person'
@@ -80,8 +83,8 @@ class FeatureExtractor(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def extract_rotation(self, pose_array: np.ndarray, joint: int):
-        """Computes the rotation of a joint.
+    def extract_rotation(self, pose_array: np.ndarray, joint: int) -> float:
+        """Compute the rotation of a joint.
 
        Args:
             pose: A pose, according to the ROS Message 'Person'
@@ -94,7 +97,7 @@ class FeatureExtractor(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def extract_speed(self, poses_array: np.ndarray, joint: int):
+    def extract_speed(self, poses_array: np.ndarray, joint: int) -> float:
         """Compute the speed of a joint, averaged over a list of poses.
 
         Args:
@@ -107,7 +110,7 @@ class FeatureExtractor(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def extract_acceleration(self, poses_array: np.ndarray, joint: int):
+    def extract_acceleration(self, poses_array: np.ndarray, joint: int) -> float:
         """Compute the acceleration of a joint, averaged over a list of poses.
 
         Args:
@@ -119,7 +122,7 @@ class FeatureExtractor(ABC):
         """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
-    def extract_feature_of_interest_specification_dictionary(self, exercise_data: dict):
+    def extract_feature_of_interest_specification_dictionary(self, exercise_data: dict) -> dict:
         """This method turns an exercise data dictionary into a dictionary of features.
 
         Features are specified according to the following structure:
@@ -134,7 +137,7 @@ class FeatureExtractor(ABC):
 
         return features_of_interest
 
-    def extract_angles_of_interest(self, exercise_data: dict):
+    def extract_angles_of_interest(self, exercise_data: dict) -> dict:
         """A triplet of three joints has three angles. This method finds the inner and outer joints for an angle.
 
         The inner and outer joints dictionary returned by this method has the following form:
@@ -148,12 +151,17 @@ class FeatureExtractor(ABC):
         }
 
         Args:
-            joints_of_interest: Sets of three angles that are of interest to the comparing algorithm.
+            exercise_data: The exercise data that hold information on what angles the expert chose.
 
         Returns:
             A dictionary of inner joints and sets of outer joints.
         """
-        def find_inner_and_outer_joints(joint_names):
+        def find_inner_and_outer_joints(joint_names: Tuple[str, str, str]) -> Tuple[str, Tuple[str, str]]:
+            """Take 3 joints and look their connections up in self.joint_connection_labels to see if there is an inner joint.
+            
+            Args:
+                joint_names: 
+            """
             if not len(joint_names) == 3:
                 raise FeatureExtractorException("Can not calculate angle between other than 3 points.")
             
@@ -195,14 +203,14 @@ class FeatureExtractor(ABC):
             # Hash frozenset of joints so that we can use them for indexing, also in Redis
             inner_and_outer_joints[str(joint_names)] = {"inner_joint": inner_joint, "outer_joints": outer_joints}
         
-        if exceptions:
+        if exceptions and HIGH_VERBOSITY:
             rp.logerr("Errors occured while parsing the provided exercise:" + str(exceptions))
 
         return inner_and_outer_joints
 
 
-    def extract_boundaries_with_tolerances(self, recording: np.ndarray, feature_of_interest_specification: dict):
-        """Extracts the boundaries of angles (and in the future possibly distances).
+    def extract_boundaries_with_tolerances(self, recording: np.ndarray, feature_of_interest_specification: dict) -> dict:
+        """Extract the boundaries of angles (and in the future possibly distances).
         
         Under consideration of the specification of featuers of interest, this method extracts the boundaries
         of the specified features from a recording. The feature_of_interest_specification is then returned
@@ -249,8 +257,8 @@ class FeatureExtractor(ABC):
 
 
     def extract_states(self, pose_array: np.ndarray, boundaries: dict, feature_of_interest_specification: dict):
-        """
-        Extracts the beginning state.
+        """Extract the beginning state.
+        
         In order to so, we take a naive approach and test how many of the angles of interest in the first step of the recording tend towards to higher boundary.
         """
         state_dict = dict()
@@ -283,6 +291,7 @@ class FeatureExtractor(ABC):
 
     
 class SpinFeatureExtractor(FeatureExtractor):
+    """ This FeatureExtractor is able to extract features from ndarrays that are formatted according to the SPIN paper."""
     def __init__(self):
         # The indices of the joints that we use (of all the joints from the spin paper)
         self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43];
@@ -303,8 +312,8 @@ class SpinFeatureExtractor(FeatureExtractor):
         """Get the index of a joint from its name"""
         return self.joints_used_labels.index(joint_name)
 
-    def extract_distance(self, pose_array: np.ndarray, joint_a: int, joint_b: int):
-        """Computes the distance between two joints.
+    def extract_distance(self, pose_array: np.ndarray, joint_a: int, joint_b: int) -> int:
+        """Compute the distance between two joints.
 
         Args:
             pose: A pose, according to the ROS Message 'Person'
@@ -316,8 +325,8 @@ class SpinFeatureExtractor(FeatureExtractor):
         """
         raise NotImplementedError
 
-    def extract_angle(self, pose_array: np.ndarray, inner_joint: int, outer_joints: tuple):
-        """Computes the angle between three connected joints.
+    def extract_angle(self, pose_array: np.ndarray, inner_joint: int, outer_joints: tuple) -> int:
+        """Compute the angle between three connected joints.
         
         Args:
             pose: A pose, according to the ROS Message 'Person'
@@ -332,14 +341,17 @@ class SpinFeatureExtractor(FeatureExtractor):
 
         def dot_product(a, b):
             return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+        
+        def length_of_vector(x):
+            return math.sqrt(math.pow(x[0], 2) + math.pow(x[1], 2) + math.pow(x[2], 2))
 
         ba = create_vector_from_two_points(pose_array[inner_joint], pose_array[outer_joints[0]])
         bc = create_vector_from_two_points(pose_array[inner_joint], pose_array[outer_joints[1]])
         x = dot_product(ba, bc) / (length_of_vector(ba) * length_of_vector(bc))
         return math.acos(x) * 180 / math.pi
 
-    def extract_rotation(self, pose_array: np.ndarray, joint: int):
-        """Computes the rotation of a joint.
+    def extract_rotation(self, pose_array: np.ndarray, joint: int) -> int:
+        """Compute the rotation of a joint.
 
        Args:
             pose: A pose, according to the ROS Message 'Person'
@@ -350,7 +362,7 @@ class SpinFeatureExtractor(FeatureExtractor):
         """
         raise NotImplementedError
 
-    def extract_speed(self, poses_array: np.ndarray, joint: int):
+    def extract_speed(self, poses_array: np.ndarray, joint: int) -> int:
         """Compute the speed of a joint, averaged over a list of poses.
 
         Args:
@@ -362,7 +374,7 @@ class SpinFeatureExtractor(FeatureExtractor):
         """
         raise NotImplementedError
 
-    def extract_acceleration(self, poses_array: np.ndarray, joint: int):
+    def extract_acceleration(self, poses_array: np.ndarray, joint: int) -> int:
         """Compute the acceleration of a joint, averaged over a list of poses.
 
         Args:
@@ -374,7 +386,7 @@ class SpinFeatureExtractor(FeatureExtractor):
         """
         raise NotImplementedError
 
-    def recording_to_ndarray(self, recording: list):
+    def recording_to_ndarray(self, recording: list) -> np.ndarray:
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float32)
 
         for idx_recording, step in enumerate(recording):
@@ -388,8 +400,8 @@ class SpinFeatureExtractor(FeatureExtractor):
         return array
 
 
-    def body_parts_to_ndarray(self, body_parts: Bodypart):
-        """This methods takes a Bodyparts object, defined by the backend messages turns it into an ndarray
+    def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
+        """Take a Bodyparts object, defined by the backend messages turn it into an ndarray.
         
         Every bodyParts object, for now, is an iterable of bodyPart objects.
         The exact specification of such bodyPart object can be found in the ROS backend messages.
@@ -414,8 +426,8 @@ class SpinFeatureExtractor(FeatureExtractor):
 
         return array
 
-    def ndarray_to_body_parts(self, ndarray: np.ndarray):
-        """This methods takes a ndarray, and turns it into a Bodyparts object defined by the backend messages
+    def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
+        """Take an ndarray, and turn it into a Bodyparts object defined by the backend messages
         
         Every bodyParts object, for now, is an iterable of bodyPart objects.
         The exact specification of such bodyPart object can be found in the ROS backend messages.
@@ -440,6 +452,3 @@ class SpinFeatureExtractor(FeatureExtractor):
         
         return body_parts
 
-
-def length_of_vector(x):
-    return math.sqrt(math.pow(x[0], 2) + math.pow(x[1], 2) + math.pow(x[2], 2))

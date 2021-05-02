@@ -1,27 +1,24 @@
 """
-This file contains the Comparator. 
+This file contains the Comparator.
+A Comparator thread dequeues data from spots, extracts features and compares them to exercises performed
+by experts, i.e. data from the expert system.
+Whatever information is gained is sent via an outgoing message queue.
 """
 
-
-import threading
 import math
-import rospy as rp
-import redis
-import yaml
+import threading
 import time
-
-
+from functools import lru_cache
 from importlib import import_module
 from threading import Thread
-from functools import lru_cache
-
-from src.config import *
-from src.InterCom import *
-from src.FeatureExtraction import *
-
 from traceback import print_exc
 
-import time
+import redis
+import rospy as rp
+import yaml
+from src.config import *
+from src.FeatureExtraction import *
+from src.InterCom import *
 
 
 class NoJointsAvailable(Exception):
@@ -134,7 +131,7 @@ class Comparator(Thread):
                     rp.logerr("Encountered an Error while Comparing: " + str(e))    
 
 
-    def compare(self, spot_info_dict: dict, spot_state_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict):
+    def compare(self, spot_info_dict: dict, spot_state_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
         exercise_data = spot_info_dict['exercise_data']
         
         used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']

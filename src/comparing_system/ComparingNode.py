@@ -1,33 +1,33 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import rospy as rp
-import yaml
 import json
 import operator
-import traceback
 import os
 import time
-
+import traceback
+from importlib import import_module
+from queue import Empty, Full, Queue
 from random import randint
 from sys import maxsize
-from rospy_message_converter import message_converter
 from threading import Thread
-from importlib import import_module
-from queue import Queue, Empty, Full
+from typing import Any, Dict, List, Tuple
 
-from comparing_system.msg import user_state, user_correction
-from backend.msg import Persons
-from geometry_msgs.msg import Vector3, Point
-from std_msgs.msg import String
-from visualization_msgs.msg import Marker, MarkerArray
-
+import rospy as rp
+import yaml
+from geometry_msgs.msg import Point, Vector3
+from rospy_message_converter import message_converter
 # ComparingNode imports
 from src.Comparator import Comparator
 from src.config import *
-from src.InterCom import *
 from src.FeatureExtraction import *
+from src.InterCom import *
 from src.Util import *
+from std_msgs.msg import String
+from visualization_msgs.msg import Marker, MarkerArray
+
+from backend.msg import Persons
+from comparing_system.msg import user_correction, user_state
 
 # db 0 is our (comparing node) database
 # TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
@@ -50,7 +50,7 @@ class Receiver():
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
         self.feature_extractor = feature_extractor_class()
 
-    def callback(self, message):
+    def callback(self, message: Any) -> None:
         """
         This function will be called everytime whenever a message is received by the subscriber.
         It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
@@ -88,9 +88,6 @@ class Sender(Thread):
         self.start()
 
     def run(self):
-        """
-        We publish messages indefinately. If there are none, we wait for the queue to fill and report back every 5 seconds.
-        """
         while(self.running):
             try:
                 data = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
@@ -112,10 +109,7 @@ class Sender(Thread):
                 
 
 class SpotMetaDataHandler():
-    """
-    This class waits for updates on the spots, such as a change of exercises that the spot.
-    Such changes are written into the spot information .json via Redis.
-    """
+    """This class waits for updates on the spots and communicates them through the its MetaDataInterface."""
     def __init__(self, 
     spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
     message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface,
@@ -163,7 +157,6 @@ if __name__ == '__main__':
     # initialize ros node
     rp.init_node('comparing_system_node', anonymous=False)
 
-    # TODO: Do not hardcode maxsize
     # Both queues contain dictionaries that can easily converted to YAML to be pusblished via ROS
     user_state_out_queue = Queue(maxsize=QUEUEING_USER_STATE_QUEUE_SIZE_MAX)
     user_correction_out_queue = Queue(maxsize=QUEUEING_USER_INFO_QUEUE_SIZE_MAX)

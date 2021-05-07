@@ -8,6 +8,7 @@ Whatever information is gained is sent via an outgoing message queue.
 import math
 import threading
 import time
+import hashlib
 from functools import lru_cache
 from importlib import import_module
 from threading import Thread
@@ -30,6 +31,7 @@ class NoSpoMetaDataAvailable(Exception):
 class NoExerciseDataAvailable(Exception):
     pass
 
+# TODO: Divide into stage one and stage two for counting and comparing
 class Comparator(Thread):
     """
     The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
@@ -39,7 +41,8 @@ class Comparator(Thread):
     spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, 
     message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, 
     spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
-    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor,
+    past_features_queue_interface_class: type(PastFeaturesQueueInterface) = RedisPastFeaturesQueueInterface):
         super(Comparator, self).__init__()
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
@@ -47,6 +50,7 @@ class Comparator(Thread):
         self.spot_queue_interface = spot_queue_interface_class()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.feature_extractor = feature_extractor_class()
+        self.past_features_queue_interface = past_features_queue_interface_class()
         
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
@@ -68,10 +72,11 @@ class Comparator(Thread):
         """
         while(self.running):
             try:
+                start = time.time()
                 # Fetch all data that is needed for the comparison:
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
 
-                _, _, spot_info_key, spot_state_key = generate_redis_key_names(spot_key)
+                _, _, spot_info_key, spot_state_key, spot_past_features_key = generate_redis_key_names(spot_key)
 
                 # Construct spot info dict, possibly from chache
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
@@ -79,14 +84,14 @@ class Comparator(Thread):
                 # Use LRU Caching to update the spot info dict
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
 
-                spot_state_dict = self.spot_metadata_interface.get_spot_state_dict(spot_state_key, spot_info_dict['exercise_data']['feature_of_interest_specification'])
-
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
-                # Compare joints with expert system data
-                increase_reps, new_state, center_of_body = self.compare(spot_info_dict, spot_state_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                spot_last_features_dict = self.past_features_queue_interface.get_features(spot_past_features_key, latest_only=True)
 
-                self.spot_metadata_interface.set_spot_state_dict(spot_state_key, new_state)
+                # Compare joints with expert system data
+                increase_reps, features, center_of_body = self.compare(spot_info_dict, spot_last_features_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+
+                self.past_features_queue_interface.enqueue(spot_past_features_key, features)
 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
@@ -119,7 +124,6 @@ class Comparator(Thread):
                         'display_text': correction
                     }
                     self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
-
             except QueueEmpty:
                 continue
             except SpotMetaDataException as e:
@@ -129,33 +133,38 @@ class Comparator(Thread):
                 if HIGH_VERBOSITY:
                     print_exc() 
                     rp.logerr("Encountered an Error while Comparing: " + str(e))    
+            
 
-
-    def compare(self, spot_info_dict: dict, spot_state_dict: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
+    def compare(self, spot_info_dict: dict, old_features: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
         exercise_data = spot_info_dict['exercise_data']
         
         used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
         timestamp = joints_with_timestamp['ros_timestamp']
 
-        new_spot_state_dict = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
+        new_features = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
 
         increase_reps = True
 
-        for feature_type, features in new_spot_state_dict.items():
-            for k, v in features.items():
-                if spot_state_dict[feature_type][k] == "done":
-                    new_spot_state_dict[feature_type][k] = "done"
-                    continue
-                if v == spot_info_dict['exercise_data']['beginning_state_dict'][feature_type][k] and v != spot_state_dict[feature_type][k]:
-                    new_spot_state_dict[feature_type][k] = "done"
-                else:
-                    increase_reps = False
+        # for feature_type, features in new_features.items():
+        #     for k, v in features.items():
+        #         print(old_features[feature_type])
+        #         if old_features[feature_type][k]['feature_state'] == "done":
+        #             new_features[feature_type][k]['feature_state'] = "done"
+        #             continue
+        #         if v != old_features[feature_type][k] != spot_info_dict['exercise_data']['beginning_state_dict'][feature_type][k]:
+        #             new_features[feature_type][k]['feature_state'] = "middle"
+        #             continue
+        #         if v == spot_info_dict['exercise_data']['beginning_state_dict'][feature_type][k]['feature_state'] and v != old_features[feature_type][k]['feature_state']:
+        #             new_features[feature_type][k]['feature_state'] = "done"
+        #         else:
+        #             increase_reps = False
+        increase_reps = False
         
         # TODO: We define the center of the body as the pelvis
         center_of_body = None
 
         if increase_reps:
-            new_spot_state_dict = spot_info_dict['exercise_data']['beginning_state_dict']
+            new_features = spot_info_dict['exercise_data']['beginning_state_dict']
 
-        return increase_reps, new_spot_state_dict, center_of_body
+        return increase_reps, new_features, center_of_body
 

@@ -18,6 +18,7 @@ NUMBER_OF_COMPARATOR_THREADS = 1
 REDIS_MAXIMUM_QUEUE_SIZE = 100
 REDIS_MAXIMUM_PAST_QUEUE_SIZE = 100
 STATION_QUEUE_SIZE_MINIMUM = 0
+REDIS_KEY_SEPARATOR = ":"
 
 REDIS_USER_STATE_SENDING_QUEUE_NAME = "user_state_sending_queue"
 REDIS_USER_INFO_SENDING_QUEUE_NAME = "user_correction_sending_queue"
@@ -31,12 +32,13 @@ EXERCISE_DATA_LRU_CACHE_SIZE = 1000
 assert STATION_QUEUE_SIZE_MINIMUM <= REDIS_MAXIMUM_QUEUE_SIZE
 
 # Incase other people want to use the same redis database, better use a prefix for keys so our data does not collide
-REDIS_GENERAL_PREFIX = "ComparingSystem:"
-REDIS_SPOT_QUEUE_POSTFIX = ":queue"
-REDIS_SPOT_PAST_QUEUE_POSTFIX = ":queue_past"
-REDIS_SPOT_INFO_POSTFIX = ":info"
-REDIS_SPOT_STATE_POSTFIX = ":state"
-REDIS_SPOT_EXERCISE_POSTFIX = ":exercise"
+REDIS_GENERAL_PREFIX = "comparing_system"
+REDIS_SPOT_QUEUE_POSTFIX = "pose_queue"
+REDIS_SPOT_PAST_QUEUE_POSTFIX = "pose_queue_past"
+REDIS_SPOT_INFO_POSTFIX = "spot_info"
+REDIS_SPOT_STATE_POSTFIX = "spot_state"
+REDIS_SPOT_EXERCISE_POSTFIX = "exercise"
+REDIS_SPOT_PAST_FEATURES_POSTFIX = "past_features"
 
 SEND_CORRETIONS = False
 

@@ -124,21 +124,28 @@ class SpotMetaDataHandler():
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
 
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key = generate_redis_key_names(spot_update_data["stationID"])
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key, _ = generate_redis_key_names(spot_update_data["stationID"])
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
-        exercise_data['recording'] = self.feature_extractor.recording_to_ndarray(exercise_data['recording'])
+        # TODO: In the future: Average recordings? What to do here?
+        recording = self.feature_extractor.recording_to_ndarray(exercise_data['recording'])
 
-        exercise_data['feature_of_interest_specification'] = self.feature_extractor.extract_feature_of_interest_specification_dictionary(exercise_data)
+        feature_of_interest_specification = self.feature_extractor.extract_feature_of_interest_specification_dictionary(exercise_data)
 
-        exercise_data['boundaries'] = self.feature_extractor.extract_boundaries_with_tolerances(exercise_data['recording'], exercise_data['feature_of_interest_specification'])
-        
-        beginning_pose = exercise_data['recording'][0]
-        beginning_state_dict = self.feature_extractor.extract_states(beginning_pose, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
-        exercise_data['beginning_state_dict'] = beginning_state_dict
+        reference_feature_trajectories = self.feature_extractor.extract_feature_trajectories_from_recordings([recording], feature_of_interest_specification)
+
+        boundaries = self.feature_extractor.extract_boundaries_from_feature_trajectories(reference_feature_trajectories)
+
+        beginning_pose = recording[0]
+        exercise_data['beginning_state_dict'] = self.feature_extractor.extract_states(beginning_pose, boundaries, feature_of_interest_specification)
 
         del exercise_data['stages']
+        
+        exercise_data['recording'] = recording
+        exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
+        exercise_data['reference_feature_trajectories'] = reference_feature_trajectories
+        exercise_data['boundaries'] = boundaries
         
         spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
 
@@ -150,7 +157,6 @@ class SpotMetaDataHandler():
 
         self.spot_metadata_interface.delete(spot_state_key)
         self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
-        self.spot_metadata_interface.set_spot_state_dict(spot_state_key, beginning_state_dict)
 
 
 if __name__ == '__main__':

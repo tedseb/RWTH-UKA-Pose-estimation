@@ -62,7 +62,7 @@ class ObjectDetectionPipeline:
 
         tmpTime = time.time()
         imgs = [img_original_bgr_0, img_original_bgr_1]
-        img = self.obj_detectYolo(imgs)[:,:,::-1] 
+        img = self.obj_detectYolo(imgs)
 
         fps = int(1/(time.time()-tmpTime))
         print("FPS : ",fps)
@@ -106,16 +106,23 @@ class ObjectDetectionPipeline:
         idx_big2small = np.argsort(bbox_size)[::-1]                                
         resul_np = [ resul_np[i] for i in idx_big2small ]  
         resul_np = np.array(resul_np)
-        labels = resul_np[:,5]
-        self._get_Person_boxes(labels,resul_np,self.frame_id_0)
+        print("Array1",np.shape(resul_np))
+        print("Array1_len",len(resul_np))
+        if len(resul_np) > 0:
+            labels = resul_np[:,5]
+            self._get_Person_boxes(labels,resul_np,self.frame_id_0)
+
 
         resul_np=results.xyxy[1].cpu().detach().numpy()
         bbox_size =  [ ((x[2]-x[0]) * (x[3]-x[1])) for x in resul_np]
         idx_big2small = np.argsort(bbox_size)[::-1]                                
         resul_np = [ resul_np[i] for i in idx_big2small ]  
         resul_np = np.array(resul_np)
-        labels = resul_np[:,5]
-        self._get_Person_boxes(labels,resul_np,self.frame_id_1)
+        print("Array2",np.shape(resul_np))
+        print("Array2_len",len(resul_np))
+        if len(resul_np) > 0:
+            labels = resul_np[:,5]
+            self._get_Person_boxes(labels,resul_np,self.frame_id_1)
 
         return results.imgs[0]
     
@@ -151,4 +158,4 @@ class ObjectDetectionPipeline:
 if __name__ == '__main__':  
     rospy.init_node('objectNodeYOLO', anonymous=True)
     # instantiate the Comparator class
-    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.85, renderer=True, stationChk =True)                  #Later on, we can choose a specific detector. We have to write a new class for each detector
+    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.85, renderer=True, stationChk =False)                  #Later on, we can choose a specific detector. We have to write a new class for each detector

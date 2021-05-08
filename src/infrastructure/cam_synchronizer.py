@@ -11,7 +11,7 @@ class cam_syn:
     def __init__(self):
         img_sub = message_filters.Subscriber('image', Image)
         img1_sub  =message_filters.Subscriber('image1', Image)
-        ts = message_filters.ApproximateTimeSynchronizer([img_sub, img1_sub], 10, 0.1, allow_headerless=True)
+        ts = message_filters.ApproximateTimeSynchronizer([img_sub, img1_sub], 100, 0.03, allow_headerless=True)
         ts.registerCallback(self.addImages)
         self.publish_syn_imgs = rospy.Publisher('syn_image', Images, queue_size=2)
         self.spin() 

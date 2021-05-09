@@ -1,0 +1,5 @@
+{
+    "PORT": 3061,
+    "POSTGRES_PW": "digi-gym-trainerai-tc",
+    "POSTGRES_PORT": 5432
+}

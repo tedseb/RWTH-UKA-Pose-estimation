@@ -38,12 +38,17 @@ class ObjectDetectionPipeline:
         self.spin() #Dont write any line of code after self.spin!
 
     def spin(self):
-            '''
-            We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
-            '''
-            rospy.spin()
+        '''
+        We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
+        '''
+        rospy.spin()
 
     def run_objectdetector(self, img_msg):  
+        '''
+        This is a callback function which receives the message from the subscriber. 
+        The message contains an image from the camera, this is reshaped, 
+        sent to the function obj_detectYolo() and then the result (BBOX) is published.
+        '''
         shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
         img = np.frombuffer(img_msg.data, dtype=np.uint8)
         img_original_bgr = img.reshape(shape)
@@ -76,12 +81,13 @@ class ObjectDetectionPipeline:
 
     def obj_detectYolo(self, img):
         """
-        Now the call method This takes a raw frame from opencv finds the boxes and draws on it.
+        This function uses the Yolo object detector. It predicts BBOX with label and confidence values. 
+        The labels are analyzed to see if they are human, then they are examined to see if their BBOX are within a station. 
+        If yes, then FrameID, StationID and BBOX are published. The getBoxesInStation class in scheduler is used for the examination.
         """  
         img_tens =img   
         results = self.model(img_tens,size=640)
         if self.renderer==True:
-            #results.save()
             results.render()  # updates results.imgs with boxes and labels
         
         results.imgs # array of original images (as np array) passed to model for inference

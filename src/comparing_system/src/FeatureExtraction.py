@@ -34,6 +34,7 @@ import msgpack
 import numpy as np
 import rospy as rp
 from src.config import *
+from src.Util import *
 
 from backend.msg import Bodypart
 
@@ -343,11 +344,12 @@ class FeatureExtractor():
                     feature_dict = {"feature_value": angle}
 
                     if angle > higher_angle:
-                        feature_dict["feature_state"] = "high"
+                        feature_dict["feature_state"] = FEATURE_HIGH
                     elif angle < lower_angle:
-                        feature_dict["feature_state"] = "low"
+                        feature_dict["feature_state"] = FEATURE_LOW
                     else:
-                        feature_dict["feature_state"] = "middle"
+                        # TODO: possibly leave out middle state and just return incopmlete dict without middle states
+                        feature_dict["feature_state"] = FEATURE_UNDECIDED
 
                     state_dict[feature_type][joint_hash] = feature_dict
             else:

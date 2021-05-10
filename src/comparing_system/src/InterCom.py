@@ -146,12 +146,12 @@ class PastFeaturesQueueInterface(ABC):
     Said features have separate queues with keys that are generated on the way, using featires_of_interest_specification dictionaries.    
     """
     @abstractmethod
-    def get_features(self, spot_key: str) -> List[dict]:
+    def get_features(self, spot_key: str, latest_only: bool = False) -> List[dict]:
         """Get the feature queues of a spot, according to the features_of_interest_specification."""
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def enqueue(self, spot_key: str, featuers_dict: dict, pose_hash: str) -> None:
+    def enqueue(self, spot_key: str, featuers_dict: dict,  reset: bool = False) -> None:
         """Enqueue the features of a spot, according to the features_of_interest_specification."""
         raise NotImplementedError("This is an interface and shold not be called directly")
 
@@ -175,31 +175,31 @@ class RedisPastFeaturesQueueInterface(RedisInterface, PastFeaturesQueueInterface
     # TODO: Use hmap or scan()+get, test different implementations
     # TODO: care for pose_hash and timestamp
     def __init__(self):
-        # TODO: Use Messagepack here
         # We need a separate constructor in order to force decode_responses=True for this Redis connection
         self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=True)
 
     def get_features(self, spot_key: str, latest_only: bool = False) -> dict:
         feature_redis_keys = self.redis_connection.scan_iter(match=spot_key + "*")
 
-        root_dict = {}
-
-        def construct_child_features_dict(parent_dict, remaining_path, full_path):
+        def construct_child_features_dict(d, remaining_path, full_path):
+            d.setdefault(remaining_path[0], {})
+            d = d[remaining_path[0]]
             remaining_path = remaining_path[1:]
+            
             if not remaining_path or remaining_path[0] == '':
                 if latest_only:
-                        return self.redis_connection.lrange(full_path, 0, 0)[0]
+                    return self.redis_connection.lrange(full_path, 0, 0)[0]
                 else:
-                        return self.redis_connection.lrange(full_path, 0, -1) 
-                return
-            parent_dict.setdefault(remaining_path[0], {})
-            parent_dict[remaining_path[0]] = construct_child_features_dict(parent_dict[remaining_path[0]], remaining_path, full_path)
-            return parent_dict
+                    return self.redis_connection.lrange(full_path, 0, -1) 
+
+            d[remaining_path[0]] = construct_child_features_dict(d, remaining_path, full_path)
         
+        root_dict = {}
+
         for redis_key in feature_redis_keys:
             complete_path = redis_key.split(":")[3:]
-            root_dict = construct_child_features_dict(root_dict, complete_path, redis_key)
-        
+            construct_child_features_dict(root_dict, complete_path, redis_key)
+
         return root_dict
 
 
@@ -219,7 +219,7 @@ class RedisPastFeaturesQueueInterface(RedisInterface, PastFeaturesQueueInterface
         enqueue_child_featuers_dictionary(featuers_dict, spot_key)
 
 
-    def delete(self, spot_key: str, features_of_interest_specification: dict) -> None:
+    def delete(self, spot_key: str) -> None:
         feature_keys = self.redis_connection.scan_iter(match=spot_key + "*")
         for feature_key in feature_redis_keys:
             self.redis_connection.delete(feature_key)

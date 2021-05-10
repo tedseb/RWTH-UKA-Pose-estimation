@@ -13,6 +13,7 @@ from functools import lru_cache
 from importlib import import_module
 from threading import Thread
 from traceback import print_exc
+from typing import NoReturn
 
 import redis
 import rospy as rp
@@ -20,6 +21,7 @@ import yaml
 from src.config import *
 from src.FeatureExtraction import *
 from src.InterCom import *
+from src.Util import *
 
 
 class NoJointsAvailable(Exception):
@@ -29,6 +31,9 @@ class NoSpoMetaDataAvailable(Exception):
     pass
 
 class NoExerciseDataAvailable(Exception):
+    pass
+
+class MalformedFeatures(Exception):
     pass
 
 # TODO: Divide into stage one and stage two for counting and comparing
@@ -63,7 +68,7 @@ class Comparator(Thread):
     def get_exercise_data(self, spot_key, exercise_data_hash):
         return self.spot_metadata_interface.get_spot_info_dict(spot_key, ["exercise_data"])
 
-    def run(self):
+    def run(self) -> NoReturn:
         """
         This is our main threading loop. We devide it into three parts for a  better overview:
             * Getting data from the queues with self.get_data()
@@ -86,12 +91,12 @@ class Comparator(Thread):
 
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
-                spot_last_features_dict = self.past_features_queue_interface.get_features(spot_past_features_key, latest_only=True)
+                old_features_progression = self.past_features_queue_interface.get_features(spot_past_features_key, latest_only=True)
 
                 # Compare joints with expert system data
-                increase_reps, features, center_of_body = self.compare(spot_info_dict, spot_last_features_dict, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                increase_reps, new_features_progression = self.compare_high_level_features(spot_info_dict, old_features_progression, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
 
-                self.past_features_queue_interface.enqueue(spot_past_features_key, features)
+                self.past_features_queue_interface.enqueue(spot_past_features_key, new_features_progression)
 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
@@ -135,36 +140,85 @@ class Comparator(Thread):
                     rp.logerr("Encountered an Error while Comparing: " + str(e))    
             
 
-    def compare(self, spot_info_dict: dict, old_features: dict, past_joints_with_timestamp_list: list, joints_with_timestamp: list, future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
+    def compare_high_level_features(self, 
+    spot_info_dict: dict, 
+    old_feature_progressions: dict, 
+    ast_joints_with_timestamp_list: list, 
+    joints_with_timestamp: list, 
+    future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
+        """Compare high level features, such as angles, by extracting them from the joints array and turn them into a progression.
+        """
         exercise_data = spot_info_dict['exercise_data']
-        
         used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
         timestamp = joints_with_timestamp['ros_timestamp']
+        beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
 
-        new_features = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
+        features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
 
         increase_reps = True
+        new_feature_progressions = {}
 
-        # for feature_type, features in new_features.items():
-        #     for k, v in features.items():
-        #         print(old_features[feature_type])
-        #         if old_features[feature_type][k]['feature_state'] == "done":
-        #             new_features[feature_type][k]['feature_state'] = "done"
-        #             continue
-        #         if v != old_features[feature_type][k] != spot_info_dict['exercise_data']['beginning_state_dict'][feature_type][k]:
-        #             new_features[feature_type][k]['feature_state'] = "middle"
-        #             continue
-        #         if v == spot_info_dict['exercise_data']['beginning_state_dict'][feature_type][k]['feature_state'] and v != old_features[feature_type][k]['feature_state']:
-        #             new_features[feature_type][k]['feature_state'] = "done"
-        #         else:
-        #             increase_reps = False
-        increase_reps = False
+        for feature_type, features in features_states.items():
+            new_feature_progressions[feature_type] = {}
+            for k, v in features.items():
+                beginning_state = beginning_states[feature_type][k]['feature_state']
+                features_state = features_states[feature_type][k]['feature_state']
+                try:
+                    old_feature_progression = old_feature_progressions[feature_type][k]
+                except KeyError:
+                    old_feature_progression = PROGRESSION_START
+                
+                new_feature_progression = old_feature_progression
+                
+                if beginning_state == FEATURE_HIGH:
+                    if features_state == FEATURE_HIGH:
+                        feature_is_in_beginning_state = True
+                    elif features_state == FEATURE_LOW:
+                        new_feature_progression  = PROGRESSION_PARTIAL
+                        feature_is_in_beginning_state = False
+                    else:
+                        feature_is_in_beginning_state = False
+                elif beginning_state == FEATURE_LOW:
+                    if features_state == FEATURE_LOW:
+                        feature_is_in_beginning_state = True
+                    elif features_state == FEATURE_HIGH:
+                        new_feature_progression  = PROGRESSION_PARTIAL
+                        feature_is_in_beginning_state = False
+                    else:
+                        feature_is_in_beginning_state = False
+                else:
+                    raise MalformedFeatures("Beginning state is " + str(beginning_state))
+                
+                if feature_is_in_beginning_state:
+                    if old_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
+                        new_feature_progression  = PROGRESSION_DONE
+                    else:
+                        new_feature_progression = PROGRESSION_START
+                
+                if new_feature_progression != PROGRESSION_DONE:
+                    increase_reps = False
+
+                new_feature_progressions[feature_type][k] = new_feature_progression
         
-        # TODO: We define the center of the body as the pelvis
-        center_of_body = None
-
         if increase_reps:
-            new_features = spot_info_dict['exercise_data']['beginning_state_dict']
+            def reset_child_featuers(d):
+                for k, v in d.items():
+                    if isinstance(v, collections.MutableMapping):
+                        d[k] = reset_child_featuers(v)
+                    else:
+                        d[k] = PROGRESSION_START
+                    return d
+            new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
-        return increase_reps, new_features, center_of_body
+        return increase_reps, new_feature_progressions
+
+    def compare_high_level_feature_trajectories(self, 
+    spot_info_dict: dict, 
+    old_feature_progressions: dict, 
+    ast_joints_with_timestamp_list: list, 
+    joints_with_timestamp: list, 
+    future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
+        """Compare high level feature trajectories, such as those of angles, by extracting them from the joints array and turn them into a progression.
+        """
+        raise NotImplementedError
 

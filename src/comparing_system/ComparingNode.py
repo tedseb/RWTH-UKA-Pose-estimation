@@ -113,18 +113,20 @@ class SpotMetaDataHandler():
     def __init__(self, 
     spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
     message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface,
-    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor,
+    past_features_queue_interface_class: type(PastFeatureDataQueuesInterface) = RedisFeatureDataQueuesInterface):
 
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.message_queue_interface = message_queue_interface_class()
         self.feature_extractor = feature_extractor_class()
+        self.past_features_queue_interface = past_features_queue_interface_class()
 
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
 
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key, _ = generate_redis_key_names(spot_update_data["stationID"])
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key, redis_spot_feature_progression_key, redis_spot_resampled_features_key = generate_redis_key_names(spot_update_data["stationID"])
 
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
@@ -135,28 +137,31 @@ class SpotMetaDataHandler():
 
         reference_feature_trajectories = self.feature_extractor.extract_feature_trajectories_from_recordings([recording], feature_of_interest_specification)
 
-        boundaries = self.feature_extractor.extract_boundaries_from_feature_trajectories(reference_feature_trajectories)
+        reference_feature_data = self.feature_extractor.extract_reference_feature_data_from_feature_trajectories(reference_feature_trajectories)
 
         beginning_pose = recording[0]
-        exercise_data['beginning_state_dict'] = self.feature_extractor.extract_states(beginning_pose, boundaries, feature_of_interest_specification)
+        exercise_data['beginning_state_dict'] = self.feature_extractor.extract_states(beginning_pose, reference_feature_data, feature_of_interest_specification)
 
         del exercise_data['stages']
         
         exercise_data['recording'] = recording
         exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
         exercise_data['reference_feature_trajectories'] = reference_feature_trajectories
-        exercise_data['boundaries'] = boundaries
+        exercise_data['reference_feature_data'] = reference_feature_data
         
         spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
 
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
 
-        num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
-        num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
-
         self.spot_metadata_interface.delete(spot_state_key)
+        self.past_features_queue_interface.delete(redis_spot_feature_progression_key)
+        self.past_features_queue_interface.delete(redis_spot_resampled_features_key)
+        self.message_queue_interface.delete(spot_queue_key)
+        self.message_queue_interface.delete(spot_past_queue_key)
+
         self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
+        
 
 
 if __name__ == '__main__':

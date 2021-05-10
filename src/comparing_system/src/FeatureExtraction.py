@@ -120,6 +120,7 @@ class FeatureExtractor():
         Returns:
             A float value corresponding to the inner angle between the three defined joints.
         """
+        # TODO: Extract angles for trajectories of poses
         def create_vector_from_two_points(a, b):
             return np.array([b[0] - a[0], b[1] - a[1], b[2] - a[2]])
 
@@ -261,62 +262,6 @@ class FeatureExtractor():
 
         return inner_and_outer_joints
 
-
-    def extract_boundaries_from_recordings(self, recordings: List[np.ndarray], feature_of_interest_specification: dict) -> dict:
-        """Extract the boundaries of angles (and in the future possibly distances).
-        
-        Under consideration of the specification of featuers of interest, this method extracts the boundaries
-        of the specified features from a recording. The feature_of_interest_specification is then returned
-        with the boundaries added.
-
-        Args:
-            recording: An ndarray containing a sequence of ndarrays that each represent a pose.
-            feature_if_interest_specification: A nested dictionary which looks as follows:
-            { # One entry for each feature type
-                <feature type>: <feature specification>,
-                (...)
-            }
-        
-        Returns:
-            The boundary specification, which follows the same structure as the features_of_interest_specification.
-        """
-        boundaries_dict = dict()
-        
-        for feature_type, feature_specification in feature_of_interest_specification.items():
-            boundaries_dict[feature_type] = dict()
-            if feature_type == 'angles':
-                # Subroutine that calculates the boundaries for angles
-                for joint_hash, features in feature_specification.items():
-                    boundaries_dict[feature_type][joint_hash] = dict()
-                    inner_joint_name, outer_joints_names = features["inner_joint"], features["outer_joints"]
-                    inner_joint_idx = self.get_joint_index(inner_joint_name)
-                    outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
-                    lowest_values = []
-                    highest_values = []
-                    for recording in recordings:
-                        angles = []
-                        for pose_array in recording:
-                            angles.append(self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs))
-                        lowest_values.append(np.amin(angles))
-                        highest_values.append(np.amax(angles))
-
-                    # TODO: Introduce sophisticated way for extraction of angles
-
-                    highest_angle = np.average(highest_values)
-                    lowest_angle = np.average(lowest_values)
-
-                    range_of_motion = abs(highest_angle - lowest_angle)
-
-                    lower_boundary = lowest_angle + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
-                    upper_boundary = highest_angle - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
-
-                    boundaries_dict[feature_type][joint_hash] = {"lower_boundary": lower_boundary, "upper_boundary": upper_boundary}
-            else:
-                raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
-
-        return boundaries_dict
-
-
     def extract_states(self, pose_array: np.ndarray, boundaries: dict, feature_of_interest_specification: dict):
         """Extract the state.
         
@@ -399,7 +344,7 @@ class FeatureExtractor():
 
         return feature_trajectory_dict
 
-    def extract_boundaries_from_feature_trajectories(self, feature_trajectories: dict) -> dict:
+    def extract_reference_feature_data_from_feature_trajectories(self, feature_trajectories: dict) -> dict:
         """Extract the boundaries of angles (and in the future possibly distances).
             
         This method takes a dict consisting of feature trajectories and turns these trajectories into boudnaries
@@ -430,16 +375,16 @@ class FeatureExtractor():
                         highest_values.append(np.amax(values))
 
                     # We take the average of highest and lowest values to compute the boundaries
-                    highest_angle = np.average(highest_values)
-                    lowest_angle = np.average(lowest_values)
+                    highest_value = np.average(highest_values)
+                    lowest_value = np.average(lowest_values)
 
                     # We then compute the boundaries as the range of motion of reference tractories, with tolerances
-                    range_of_motion = abs(highest_angle - lowest_angle)
+                    range_of_motion = abs(highest_value - lowest_value)
 
-                    lower_boundary = lowest_angle + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
-                    upper_boundary = highest_angle - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
+                    lower_boundary = lowest_value + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
+                    upper_boundary = highest_value - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
 
-                    new_d[k] = {"lower_boundary": lower_boundary, "upper_boundary": upper_boundary}    
+                    new_d[k] = {"lower_boundary": lower_boundary, "upper_boundary": upper_boundary, "lowest_value": lowest_value, "highest_value": highest_value, "range_of_motion": range_of_motion}
 
             return new_d
         

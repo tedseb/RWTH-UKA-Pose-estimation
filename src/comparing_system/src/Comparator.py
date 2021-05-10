@@ -47,7 +47,7 @@ class Comparator(Thread):
     message_out_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface, 
     spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
     feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor,
-    past_features_queue_interface_class: type(PastFeaturesQueueInterface) = RedisPastFeaturesQueueInterface):
+    feature_data_queues_interface_class: type(PastFeatureDataQueuesInterface) = RedisFeatureDataQueuesInterface):
         super(Comparator, self).__init__()
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
@@ -55,7 +55,9 @@ class Comparator(Thread):
         self.spot_queue_interface = spot_queue_interface_class()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.feature_extractor = feature_extractor_class()
-        self.past_features_queue_interface = past_features_queue_interface_class()
+        # Use the same interface class for these two, because they have the same needs to the interface 
+        self.past_features_queue_interface = feature_data_queues_interface_class()
+        self.past_resampled_features_queue_interface = feature_data_queues_interface_class()
         
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
@@ -81,7 +83,7 @@ class Comparator(Thread):
                 # Fetch all data that is needed for the comparison:
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
 
-                _, _, spot_info_key, spot_state_key, spot_past_features_key = generate_redis_key_names(spot_key)
+                _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(spot_key)
 
                 # Construct spot info dict, possibly from chache
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
@@ -91,12 +93,14 @@ class Comparator(Thread):
 
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
-                old_features_progression = self.past_features_queue_interface.get_features(spot_past_features_key, latest_only=True)
+                last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
+                last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
 
                 # Compare joints with expert system data
-                increase_reps, new_features_progression = self.compare_high_level_features(spot_info_dict, old_features_progression, past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list)
+                increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
 
-                self.past_features_queue_interface.enqueue(spot_past_features_key, new_features_progression)
+                self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
+                self.past_resampled_features_queue_interface.enqueue(spot_feature_progression_key, new_resampled_features)
 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
@@ -138,79 +142,115 @@ class Comparator(Thread):
                 if HIGH_VERBOSITY:
                     print_exc() 
                     rp.logerr("Encountered an Error while Comparing: " + str(e))    
-            
 
     def compare_high_level_features(self, 
     spot_info_dict: dict, 
-    old_feature_progressions: dict, 
-    ast_joints_with_timestamp_list: list, 
-    joints_with_timestamp: list, 
-    future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
-        """Compare high level features, such as angles, by extracting them from the joints array and turn them into a progression.
-        """
+    last_feature_progressions: dict,
+    last_resampled_features: dict,
+    joints_with_timestamp: list) -> Tuple[bool, dict, Any]:
+        """Compare high level features, such as angles, by extracting them from the joints array and turn them into a progression."""
         exercise_data = spot_info_dict['exercise_data']
         used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
         timestamp = joints_with_timestamp['ros_timestamp']
         beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
 
-        features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['boundaries'], exercise_data['feature_of_interest_specification'])
+        features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
+
+        def copmute_new_feature_progression(beginning_state, features_state, last_feature_progression):
+            new_feature_progression = last_feature_progression
+            
+            if beginning_state == FEATURE_HIGH:
+                if features_state == FEATURE_HIGH:
+                    feature_is_in_beginning_state = True
+                elif features_state == FEATURE_LOW:
+                    new_feature_progression  = PROGRESSION_PARTIAL
+                    feature_is_in_beginning_state = False
+                else:
+                    feature_is_in_beginning_state = False
+            elif beginning_state == FEATURE_LOW:
+                if features_state == FEATURE_LOW:
+                    feature_is_in_beginning_state = True
+                elif features_state == FEATURE_HIGH:
+                    new_feature_progression  = PROGRESSION_PARTIAL
+                    feature_is_in_beginning_state = False
+                else:
+                    feature_is_in_beginning_state = False
+            else:
+                raise MalformedFeatures("Beginning state is " + str(beginning_state))
+            
+            if feature_is_in_beginning_state:
+                if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
+                    new_feature_progression  = PROGRESSION_DONE
+                else:
+                    new_feature_progression = PROGRESSION_START
+
+
+        def compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution):
+            new_resampled_feature_values = []
+            delta = feature_value - last_resampled_feature_value
+            remaining_delta = delta
+            
+            while remaining_delta >= resolution:
+                delta_step = math.copysign(resolution, delta)
+                remaining_delta -= delta_step
+                # Timestamp the resampled values, so that we do not add them multiple times to the queue later
+                new_resampled_feature_values.append({"value": last_resampled_feature_value + delta_step, "timestamp": timestamp})
+
+            return new_resampled_feature_values
+
 
         increase_reps = True
         new_feature_progressions = {}
+        new_resampled_features = {}
 
         for feature_type, features in features_states.items():
             new_feature_progressions[feature_type] = {}
+            new_resampled_features[feature_type] = {}
             for k, v in features.items():
+                # With the current feature value and the last resampled feature value, we can compute new resampled feature values
+                feature_value = features_states[feature_type][k]['feature_value']
+                resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
+                try:
+                    last_resampled_feature_value = last_resampled_features[feature_type][k]['value']
+                    new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
+                except KeyError:
+                    # If we have no resampled feature values yet, set them to the nearest resampled one
+                    new_resampled_feature_values = [resolution * round(feature_value/resolution)]
+                
+                # With the beginning state of a feature and the current feature state, we can computer the new feature progression value
+                try:
+                    last_feature_progression = last_feature_progressions[feature_type][k]
+                except KeyError:
+                    # If we have no last feature progression value, set this feature progression to the starting value
+                    last_feature_progression = PROGRESSION_START
                 beginning_state = beginning_states[feature_type][k]['feature_state']
                 features_state = features_states[feature_type][k]['feature_state']
-                try:
-                    old_feature_progression = old_feature_progressions[feature_type][k]
-                except KeyError:
-                    old_feature_progression = PROGRESSION_START
+                new_feature_progression = copmute_new_feature_progression(beginning_state, features_state, last_feature_progression)
                 
-                new_feature_progression = old_feature_progression
-                
-                if beginning_state == FEATURE_HIGH:
-                    if features_state == FEATURE_HIGH:
-                        feature_is_in_beginning_state = True
-                    elif features_state == FEATURE_LOW:
-                        new_feature_progression  = PROGRESSION_PARTIAL
-                        feature_is_in_beginning_state = False
-                    else:
-                        feature_is_in_beginning_state = False
-                elif beginning_state == FEATURE_LOW:
-                    if features_state == FEATURE_LOW:
-                        feature_is_in_beginning_state = True
-                    elif features_state == FEATURE_HIGH:
-                        new_feature_progression  = PROGRESSION_PARTIAL
-                        feature_is_in_beginning_state = False
-                    else:
-                        feature_is_in_beginning_state = False
-                else:
-                    raise MalformedFeatures("Beginning state is " + str(beginning_state))
-                
-                if feature_is_in_beginning_state:
-                    if old_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
-                        new_feature_progression  = PROGRESSION_DONE
-                    else:
-                        new_feature_progression = PROGRESSION_START
-                
+                # If one of the features is not done, the repetition is not done
                 if new_feature_progression != PROGRESSION_DONE:
                     increase_reps = False
-
-                new_feature_progressions[feature_type][k] = new_feature_progression
+                # We only need to update the feature progression state if the progress has changed
+                new_feature_progressions[feature_type][k] = (new_feature_progression != last_feature_progression) and new_feature_progression
+                new_resampled_features[feature_type][k] = new_resampled_feature_values
+            # If a data type has no updates, remove it again
+            if new_feature_progressions[feature_type] == {}:
+                del new_feature_progressions[feature_type]
+            if new_resampled_features[feature_type] == {}:
+                del new_resampled_features[feature_type]
         
-        if increase_reps:
-            def reset_child_featuers(d):
-                for k, v in d.items():
-                    if isinstance(v, collections.MutableMapping):
-                        d[k] = reset_child_featuers(v)
-                    else:
-                        d[k] = PROGRESSION_START
-                    return d
-            new_feature_progressions = reset_child_featuers(new_feature_progressions)
+        # TODO: Do something safe here, this might not reset all features
+        # if increase_reps:
+        #     def reset_child_featuers(d):
+        #         for k, v in d.items():
+        #             if isinstance(v, collections.MutableMapping):
+        #                 d[k] = reset_child_featuers(v)
+        #             else:
+        #                 d[k] = PROGRESSION_START
+        #             return d
+        #     new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
-        return increase_reps, new_feature_progressions
+        return increase_reps, new_feature_progressions, new_resampled_features
 
     def compare_high_level_feature_trajectories(self, 
     spot_info_dict: dict, 

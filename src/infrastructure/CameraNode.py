@@ -14,7 +14,7 @@ def camera():
     pub = rospy.Publisher('image', Image, queue_size=2)
     rospy.init_node('camera', anonymous=True)
     rate = rospy.Rate(30)
-    cap = cv2.VideoCapture(123)   
+    cap = cv2.VideoCapture(14123)   
     if cap is None or not cap.isOpened():
         rospy.loginfo('INFO: No webCam source. Youtube video will be used as source!')
         cap = cv2.VideoCapture()

@@ -22,9 +22,6 @@ class cam_syn:
             rospy.spin()
 
     def addImages(self, img1_msg,img2_msg):  
-        syn_imgs=[]
- 
-        
         image_msgs = Images()
         image_msgs.number = 2
         image_msgs.img1 = img1_msg

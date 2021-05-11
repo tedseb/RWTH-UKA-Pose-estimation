@@ -21,7 +21,7 @@ url = "https://www.youtube.com/watch?v=wqctLW0Hb_0"
 
 
 class ObjectDetectionPipeline:
-    def __init__(self, threshold=0.5, device="cpu", cmap_name="tab10_r", renderer=False, stationChk=False):
+    def __init__(self, threshold=0.5, device="cpu", renderer=False, stationChk=False):
         self.stationBoxesChk = getBoxesInStation()
         self.stationChk=stationChk
         self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s').eval().to(device)
@@ -108,7 +108,7 @@ class ObjectDetectionPipeline:
         return results.imgs[0]
     
     def _get_Person_boxes(self, labels, resul_np,frame_id):
-        """Plot boxes on an image""" 
+        """Function for checking labels and assigning stations and BBOX""" 
         tmp_conf=0
         for count, label in enumerate(labels):
             box=resul_np[count,:4]

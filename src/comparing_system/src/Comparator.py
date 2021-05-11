@@ -94,13 +94,13 @@ class Comparator(Thread):
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
                 last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
-                last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
+                last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
 
                 # Compare joints with expert system data
                 increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
 
                 self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
-                self.past_resampled_features_queue_interface.enqueue(spot_feature_progression_key, new_resampled_features)
+                self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, new_resampled_features)
 
                 # Send info back back to outgoing message queue and back into the ROS system
                 if increase_reps:
@@ -184,17 +184,19 @@ class Comparator(Thread):
                 else:
                     new_feature_progression = PROGRESSION_START
 
+            return new_feature_progression
+
 
         def compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution):
             new_resampled_feature_values = []
             delta = feature_value - last_resampled_feature_value
-            remaining_delta = delta
+            abs_delta = abs(delta)
+            remaining_delta = abs_delta
             
             while remaining_delta >= resolution:
-                delta_step = math.copysign(resolution, delta)
-                remaining_delta -= delta_step
+                remaining_delta -= resolution
                 # Timestamp the resampled values, so that we do not add them multiple times to the queue later
-                new_resampled_feature_values.append({"value": last_resampled_feature_value + delta_step, "timestamp": timestamp})
+                new_resampled_feature_values.append(last_resampled_feature_value + math.copysign(resolution, delta))
 
             return new_resampled_feature_values
 
@@ -211,11 +213,13 @@ class Comparator(Thread):
                 feature_value = features_states[feature_type][k]['feature_value']
                 resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
                 try:
-                    last_resampled_feature_value = last_resampled_features[feature_type][k]['value']
+                    last_resampled_feature_value = float(last_resampled_features[feature_type][k])
                     new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
+                    if new_resampled_feature_values:
+                        new_resampled_features[feature_type][k] = new_resampled_feature_values
                 except KeyError:
                     # If we have no resampled feature values yet, set them to the nearest resampled one
-                    new_resampled_feature_values = [resolution * round(feature_value/resolution)]
+                    new_resampled_features[feature_type][k] = [resolution * round(feature_value/resolution)]
                 
                 # With the beginning state of a feature and the current feature state, we can computer the new feature progression value
                 try:
@@ -231,8 +235,8 @@ class Comparator(Thread):
                 if new_feature_progression != PROGRESSION_DONE:
                     increase_reps = False
                 # We only need to update the feature progression state if the progress has changed
-                new_feature_progressions[feature_type][k] = (new_feature_progression != last_feature_progression) and new_feature_progression
-                new_resampled_features[feature_type][k] = new_resampled_feature_values
+                if (new_feature_progression != last_feature_progression):
+                    new_feature_progressions[feature_type][k] = new_feature_progression
             # If a data type has no updates, remove it again
             if new_feature_progressions[feature_type] == {}:
                 del new_feature_progressions[feature_type]
@@ -240,15 +244,15 @@ class Comparator(Thread):
                 del new_resampled_features[feature_type]
         
         # TODO: Do something safe here, this might not reset all features
-        # if increase_reps:
-        #     def reset_child_featuers(d):
-        #         for k, v in d.items():
-        #             if isinstance(v, collections.MutableMapping):
-        #                 d[k] = reset_child_featuers(v)
-        #             else:
-        #                 d[k] = PROGRESSION_START
-        #             return d
-        #     new_feature_progressions = reset_child_featuers(new_feature_progressions)
+        if increase_reps:
+            def reset_child_featuers(d):
+                for k, v in d.items():
+                    if isinstance(v, collections.MutableMapping):
+                        d[k] = reset_child_featuers(v)
+                    else:
+                        d[k] = PROGRESSION_START
+                    return d
+            new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
         return increase_reps, new_feature_progressions, new_resampled_features
 

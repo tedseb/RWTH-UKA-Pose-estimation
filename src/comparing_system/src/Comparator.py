@@ -17,6 +17,7 @@ from typing import NoReturn
 
 import redis
 import rospy as rp
+import numpy as np
 import yaml
 from src.config import *
 from src.FeatureExtraction import *
@@ -79,7 +80,6 @@ class Comparator(Thread):
         """
         while(self.running):
             try:
-                start = time.time()
                 # Fetch all data that is needed for the comparison:
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
 
@@ -116,11 +116,13 @@ class Comparator(Thread):
                     }
                     self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
 
-                del spot_info_dict["exercise_data"]
-                del spot_info_dict["exercise_data_hash"]
-                del spot_info_dict['start_time']
+                    self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
 
-                self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
+
+                # Calculate a new reference pose mapping
+                if new_resampled_features:
+                    all_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=False)
+                    reference_pose = self.calculate_reference_pose_mapping(all_resampled_features, spot_info_dict['exercise_data'])
 
                 # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -158,7 +160,7 @@ class Comparator(Thread):
 
         def copmute_new_feature_progression(beginning_state, features_state, last_feature_progression):
             new_feature_progression = last_feature_progression
-            
+
             if beginning_state == FEATURE_HIGH:
                 if features_state == FEATURE_HIGH:
                     feature_is_in_beginning_state = True
@@ -186,21 +188,6 @@ class Comparator(Thread):
 
             return new_feature_progression
 
-
-        def compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution):
-            new_resampled_feature_values = []
-            delta = feature_value - last_resampled_feature_value
-            abs_delta = abs(delta)
-            remaining_delta = abs_delta
-            
-            while remaining_delta >= resolution:
-                remaining_delta -= resolution
-                # Timestamp the resampled values, so that we do not add them multiple times to the queue later
-                new_resampled_feature_values.append(last_resampled_feature_value + math.copysign(resolution, delta))
-
-            return new_resampled_feature_values
-
-
         increase_reps = True
         new_feature_progressions = {}
         new_resampled_features = {}
@@ -212,6 +199,7 @@ class Comparator(Thread):
                 # With the current feature value and the last resampled feature value, we can compute new resampled feature values
                 feature_value = features_states[feature_type][k]['feature_value']
                 resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
+                scale = exercise_data['reference_feature_data'][feature_type][k]['resampled_reference_trajectory_scale_array']
                 try:
                     last_resampled_feature_value = float(last_resampled_features[feature_type][k])
                     new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
@@ -219,7 +207,7 @@ class Comparator(Thread):
                         new_resampled_features[feature_type][k] = new_resampled_feature_values
                 except KeyError:
                     # If we have no resampled feature values yet, set them to the nearest resampled one
-                    new_resampled_features[feature_type][k] = [resolution * round(feature_value/resolution)]
+                    new_resampled_features[feature_type][k] = scale[np.argmin(abs(scale - feature_value))]
                 
                 # With the beginning state of a feature and the current feature state, we can computer the new feature progression value
                 try:
@@ -256,13 +244,42 @@ class Comparator(Thread):
 
         return increase_reps, new_feature_progressions, new_resampled_features
 
-    def compare_high_level_feature_trajectories(self, 
-    spot_info_dict: dict, 
-    old_feature_progressions: dict, 
-    ast_joints_with_timestamp_list: list, 
-    joints_with_timestamp: list, 
-    future_joints_with_timestamp_list: dict) -> Tuple[bool, dict, Any]:
-        """Compare high level feature trajectories, such as those of angles, by extracting them from the joints array and turn them into a progression.
-        """
-        raise NotImplementedError
+    def calculate_reference_pose_mapping(self, feature_trajectories, exercise_data) -> np.ndarray:
+        reference_poses = exercise_data['recording']
+
+        # Collect all feature trajectories from the exercise data dict and turn them into a numpy array
+        all_reference_feature_data_dicts = dict()
+        for feature_type, features in exercise_data['reference_feature_data'].items():
+            for k, v in features.items():
+                resampled_values_reference_trajectory_indices = v['resampled_values_reference_trajectory_indices']
+                reference_trajectory_hankel_matrices = v['reference_trajectory_hankel_matrices']
+                feature_trajectory = np.asarray(feature_trajectories[feature_type][k], np.float16)
+
+                # TODO: Do this for all hankel matrices
+                for reference_trajectory_hankel_matrix in reference_trajectory_hankel_matrices:
+                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 0.5)
+                    prediction = np.argmin(errors)
+
+                    # if last_prediction == None:
+                    #     last_prediction = prediction
+
+                    # if prediction > self.last_prediction:
+                    #     prediction = ((1 - elasticity) * self.last_prediction + elasticity * prediction)
+
+                    # last_prediction = prediction
+
+
+
+def custom_metric(hankel_matrix, feature_trajectory, beta):
+    """
+    Return the l2 norm of signals - signal, but influence fades out linearly form the 
+    newest to the oldest measurement according to beta.
+    """
+    comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
+    hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
+    feature_trajectory_shortened = feature_trajectory[:comparing_length]
+    distances = hankel_matrix_shortened - feature_trajectory_shortened
+    fading_factor = np.linspace(beta, 1, comparing_length) # Let older signals have less influence on the error
+    errors = np.linalg.norm((distances) * fading_factor, axis=1)
+    return errors
 

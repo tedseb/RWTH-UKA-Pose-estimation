@@ -15,9 +15,9 @@ We support the following features that can be extracted either from single skele
 We define our numpy arrays representing skelletons as follows:
 [ # joints 0... n
     [ # x, y, z
-        x, # float32
-        y, # float32 # z - axis in the SPIN coordinates
-        z, # float32 # y - axis in the SPIN coordinates
+        x, # float16
+        y, # float16 # z - axis in the SPIN coordinates
+        z, # float16 # y - axis in the SPIN coordinates
     ],
     (...)
 ]
@@ -33,9 +33,12 @@ import collections
 import msgpack
 import numpy as np
 import rospy as rp
+import scipy
 from src.config import *
 from src.Util import *
 
+from scipy.linalg import hankel
+from scipy.spatial.distance import euclidean
 from backend.msg import Bodypart
 
 
@@ -361,18 +364,18 @@ class FeatureExtractor():
             The boundary specification, which follows the same structure as the features of interest specification.
         """
 
-        def extract_boundaries_of_child_dictionary(d):
+        def extract_reference_feature_data_of_child_dictionary(d): #TODO: Rename me
             new_d = {}
-            for k, v in d.items():
-                if isinstance(v, collections.MutableMapping):
-                    new_d[k] = extract_boundaries_of_child_dictionary(v)
+            for k, feature_trajectories in d.items():
+                if isinstance(feature_trajectories, collections.MutableMapping):
+                    new_d[k] = extract_reference_feature_data_of_child_dictionary(feature_trajectories)
                 else:
                     lowest_values = []
                     highest_values = []
                     # The values here are each lists of feature values of pose trajectories
-                    for values in v:
-                        lowest_values.append(np.amin(values))
-                        highest_values.append(np.amax(values))
+                    for trajectory in feature_trajectories:
+                        lowest_values.append(np.amin(trajectory))
+                        highest_values.append(np.amax(trajectory))
 
                     # We take the average of highest and lowest values to compute the boundaries
                     highest_value = np.average(highest_values)
@@ -380,15 +383,42 @@ class FeatureExtractor():
 
                     # We then compute the boundaries as the range of motion of reference tractories, with tolerances
                     range_of_motion = abs(highest_value - lowest_value)
-
                     lower_boundary = lowest_value + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
                     upper_boundary = highest_value - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
 
-                    new_d[k] = {"lower_boundary": lower_boundary, "upper_boundary": upper_boundary, "lowest_value": lowest_value, "highest_value": highest_value, "range_of_motion": range_of_motion}
+                    # We compute the resampled values separately for each trajectory and turn them into hankel matrices
+                    resolution = range_of_motion * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
+                    resampled_trajectories = []
+                    resampled_values_reference_trajectory_indices = []
+                    reference_trajectory_hankel_matrices = []
+                    for trajectory in feature_trajectories:
+                        last_values = [trajectory[0]]
+                        resampled_values = []
+                        feature_trajectory_indices = []
+                        for index, value in enumerate(trajectory):
+                            value_turned_into_resampled_values = compute_resampled_feature_values(value, last_values[-1], resolution)
+                            resampled_values.extend(value_turned_into_resampled_values)
+                            if value_turned_into_resampled_values:
+                                last_values = value_turned_into_resampled_values
+                                feature_trajectory_indices.extend([index] * len(last_values))
+                        resampled_trajectories.append(resampled_values)
+                        reference_trajectory_hankel_matrices.append(hankel(resampled_trajectories, np.roll(resampled_trajectories, -1)))
+                    resampled_values_reference_trajectory_indices.extend(feature_trajectory_indices)
+
+                    reference_trajectory_hankel_matrices = np.asarray(reference_trajectory_hankel_matrices, dtype=np.float16)
+                    # resampled_values_arrays = np.asarray(resampled_v, dtype=np.float16)
+
+                    resampled_reference_trajectory_scale = set()
+                    for resampled_trajectory in resampled_trajectories:
+                        resampled_reference_trajectory_scale.update(set(resampled_trajectory))
+
+                    resampled_reference_trajectory_scale_array = np.sort(list(resampled_reference_trajectory_scale))
+                        
+                    new_d[k] = {"lower_boundary": lower_boundary, "upper_boundary": upper_boundary, "lowest_value": lowest_value, "highest_value": highest_value, "range_of_motion": range_of_motion, "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array}
 
             return new_d
         
-        return extract_boundaries_of_child_dictionary(feature_trajectories)
+        return extract_reference_feature_data_of_child_dictionary(feature_trajectories)
 
     
 class SpinFeatureExtractor(FeatureExtractor):
@@ -416,7 +446,7 @@ class SpinFeatureExtractor(FeatureExtractor):
 
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
-        array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float32)
+        array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
 
         for idx_recording, step in enumerate(recording):
             skelleton = step[1]
@@ -424,13 +454,13 @@ class SpinFeatureExtractor(FeatureExtractor):
                 idx_step = self.get_joint_index(joint)
                 array[idx_recording][idx_step][0] = coordinates['x']
                 array[idx_recording][idx_step][1] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
-                array[idx_recording][idx_step][2] = coordinates['z']
+                array[idx_recording][idx_step][2] = coordinates['z'] 
         
         return array
 
 
     def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
-        array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float32)
+        array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
 
         body_parts_used = [body_parts[i] for i in self.joints_used]
 
@@ -453,3 +483,16 @@ class SpinFeatureExtractor(FeatureExtractor):
         
         return body_parts
 
+
+def compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution):
+    new_resampled_feature_values = []
+    delta = feature_value - last_resampled_feature_value
+    remaining_delta = abs(delta)
+    
+    while remaining_delta >= resolution:
+        remaining_delta -= resolution
+        # Timestamp the resampled values, so that we do not add them multiple times to the queue later
+        last_resampled_feature_value += math.copysign(resolution, delta)
+        new_resampled_feature_values.append(last_resampled_feature_value)
+
+    return new_resampled_feature_values

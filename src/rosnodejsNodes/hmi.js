@@ -124,6 +124,8 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
     }
   });
 
+  app.get('/api/exercise/all/names', (req, res) => {});
+
 });
 
 //datastructures for expertsystem
@@ -214,6 +216,8 @@ app.post('/api/exercise/recording/stop', (req, res) => {
   res.json(recordedPoses);
   recordedPoses = [];
 });
+
+
 
 // Add new client connections
 wss.on('connection', (ws, req) => {

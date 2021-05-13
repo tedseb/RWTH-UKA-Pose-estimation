@@ -30,23 +30,17 @@ const Spot = sequelize.define('Spot', {
     }
 });
 
-function addSpot(id, exercise, active) {
-    Spot.create({
-        id: id,
-        exercise: exercise,
-        active: active
-    })
-    .then( spot => {
-       return spot;
-    })
-    .catch( err => {
-       return err;
-    });
-}
+
+const Camera = sequelize.define('Camera', {
+    id: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        primaeryKey: true 
+    }
+})
 
 module.exports = {
     sequelize: sequelize,
-    Spot: Spot,
-    addSpot: addSpot
+    Spot: Spot
 };
 

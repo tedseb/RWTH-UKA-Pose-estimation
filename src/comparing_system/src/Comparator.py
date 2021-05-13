@@ -24,6 +24,8 @@ from src.FeatureExtraction import *
 from src.InterCom import *
 from src.Util import *
 
+from backend.msg import Person
+
 
 class NoJointsAvailable(Exception):
     pass
@@ -64,6 +66,8 @@ class Comparator(Thread):
 
         # This can be set to false by an external entity to stop the loop from running
         self.running = True
+
+        self.predicted_skelleton_publisher = rp.Publisher("predictions", Person, queue_size=1000)  
 
         self.start()
 
@@ -123,6 +127,12 @@ class Comparator(Thread):
                 if new_resampled_features:
                     all_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=False)
                     reference_pose = self.calculate_reference_pose_mapping(all_resampled_features, spot_info_dict['exercise_data'])
+                    reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
+                    person_msg = Person()
+                    person_msg.stationID = int(spot_key)
+                    person_msg.sensorID = 0
+                    person_msg.bodyParts = reference_body_parts
+                    self.predicted_skelleton_publisher.publish(person_msg)
 
                 # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -246,9 +256,8 @@ class Comparator(Thread):
 
     def calculate_reference_pose_mapping(self, feature_trajectories, exercise_data) -> np.ndarray:
         reference_poses = exercise_data['recording']
+        predicted_indices = []
 
-        # Collect all feature trajectories from the exercise data dict and turn them into a numpy array
-        all_reference_feature_data_dicts = dict()
         for feature_type, features in exercise_data['reference_feature_data'].items():
             for k, v in features.items():
                 resampled_values_reference_trajectory_indices = v['resampled_values_reference_trajectory_indices']
@@ -256,18 +265,22 @@ class Comparator(Thread):
                 feature_trajectory = np.asarray(feature_trajectories[feature_type][k], np.float16)
 
                 # TODO: Do this for all hankel matrices
-                for reference_trajectory_hankel_matrix in reference_trajectory_hankel_matrices:
-                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 0.5)
+                for idx, reference_trajectory_hankel_matrix in enumerate(reference_trajectory_hankel_matrices):
+                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 1)
                     prediction = np.argmin(errors)
+                    index = resampled_values_reference_trajectory_indices[idx][prediction]
 
-                    # if last_prediction == None:
-                    #     last_prediction = prediction
+                    predicted_indices.append(index)
 
-                    # if prediction > self.last_prediction:
-                    #     prediction = ((1 - elasticity) * self.last_prediction + elasticity * prediction)
 
-                    # last_prediction = prediction
-
+                    # print("\\\\\\\\\\\\\\\\")
+                    # print("prediction", prediction)
+                    # print("reference idx", resampled_values_reference_trajectory_indices[idx])
+                    # print("errors", errors)
+                    # print("index", index)
+                    # print("len", len(reference_poses))
+        
+        return reference_poses[predicted_indices[0]]
 
 
 def custom_metric(hankel_matrix, feature_trajectory, beta):
@@ -279,7 +292,7 @@ def custom_metric(hankel_matrix, feature_trajectory, beta):
     hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
     feature_trajectory_shortened = feature_trajectory[:comparing_length]
     distances = hankel_matrix_shortened - feature_trajectory_shortened
-    fading_factor = np.linspace(beta, 1, comparing_length) # Let older signals have less influence on the error
+    fading_factor = np.linspace(beta, 4, comparing_length) # Let older signals have less influence on the error
     errors = np.linalg.norm((distances) * fading_factor, axis=1)
     return errors
 

@@ -389,12 +389,12 @@ class FeatureExtractor():
                     # We compute the resampled values separately for each trajectory and turn them into hankel matrices
                     resolution = range_of_motion * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
                     resampled_trajectories = []
-                    resampled_values_reference_trajectory_indices = []
-                    reference_trajectory_hankel_matrices = []
+                    resampled_values_reference_trajectory_indices = [] # For every resampled value, we need an index to point us to the original pose
+                    reference_trajectory_hankel_matrices = [] # In the comparing algorithm, we need a hankel matrix of every resampled reference trajectory
                     for trajectory in feature_trajectories:
                         last_values = [trajectory[0]]
-                        resampled_values = []
-                        feature_trajectory_indices = []
+                        resampled_values = last_values
+                        feature_trajectory_indices = [0]
                         for index, value in enumerate(trajectory):
                             value_turned_into_resampled_values = compute_resampled_feature_values(value, last_values[-1], resolution)
                             resampled_values.extend(value_turned_into_resampled_values)
@@ -403,7 +403,7 @@ class FeatureExtractor():
                                 feature_trajectory_indices.extend([index] * len(last_values))
                         resampled_trajectories.append(resampled_values)
                         reference_trajectory_hankel_matrices.append(hankel(resampled_trajectories, np.roll(resampled_trajectories, -1)))
-                    resampled_values_reference_trajectory_indices.extend(feature_trajectory_indices)
+                        resampled_values_reference_trajectory_indices.append(feature_trajectory_indices)
 
                     reference_trajectory_hankel_matrices = np.asarray(reference_trajectory_hankel_matrices, dtype=np.float16)
                     # resampled_values_arrays = np.asarray(resampled_v, dtype=np.float16)
@@ -472,7 +472,8 @@ class SpinFeatureExtractor(FeatureExtractor):
         return array
 
     def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
-        body_parts = [None] * len(self.joint_labels)
+        # We need some dummy body parts that we do not actually use but are still part of the Person defined by SPIN
+        body_parts = [Bodypart()] * len(self.joint_labels)
 
         for used_index, body_part_ndarray in zip(self.joints_used, ndarray):
             b = Bodypart()

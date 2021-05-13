@@ -1,30 +1,33 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import rospy as rp
-import yaml
 import json
 import operator
-import traceback
 import os
-
-from rospy_message_converter import message_converter
-from threading import Thread
+import time
+import traceback
 from importlib import import_module
-from queue import Queue, Empty, Full
+from queue import Empty, Full, Queue
+from random import randint
+from sys import maxsize
+from threading import Thread
+from typing import Any, Dict, List, Tuple
 
-from comparing_system.msg import user_state, user_correction
-from backend.msg import Persons
-from geometry_msgs.msg import Vector3, Point
+import rospy as rp
+import yaml
+from geometry_msgs.msg import Point, Vector3
+from rospy_message_converter import message_converter
+# ComparingNode imports
+from src.Comparator import Comparator
+from src.config import *
+from src.FeatureExtraction import *
+from src.InterCom import *
+from src.Util import *
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
-# ComparingNode imports
-from src.joint_adapters.spin import *
-from src.Comparator import Comparator
-from src.config import *
-from src.InterCom import *
-from src.FeatureExtraction import *
+from backend.msg import Persons
+from comparing_system.msg import user_correction, user_state
 
 # db 0 is our (comparing node) database
 # TODO: Replace ordinary Redis Queues by ones that store hashes that are keys of dictionaries
@@ -36,26 +39,31 @@ class Receiver():
     The Receiver subscribes to the ROS topic that contains joints (or 'skelletons') and puts them into separate queues.
     Each queue corresponds to one spot. Therefore, multiple views of the same spot go into the same queue.
     """
-    def __init__(self, spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface):
+    def __init__(self, 
+    spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, 
+    spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
         self.spot_queue_interface = spot_queue_interface_class()
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
-        self.skelleton_adapter = None
+        self.feature_extractor = feature_extractor_class()
 
-    def callback(self, message):
-        '''
+    def callback(self, message: Any) -> None:
+        """
         This function will be called everytime whenever a message is received by the subscriber.
         It puts the arriving skelletons in the queues for their respective spots, such that we can scale the Comparator.
-        '''
+        """
         # For every person in the image, sort their data into the correction spot queue in redis
 
         for p in message.persons:
-            p_dict = message_converter.convert_ros_message_to_dictionary(p)
-            timestamp = message_converter.convert_ros_message_to_dictionary(message.header.stamp)
 
-            joints_with_timestamp = {'joints': p_dict["bodyParts"], 'timestamp': timestamp}   # Get away from messages here, towards a simple dict
+            array = self.feature_extractor.body_parts_to_ndarray(p.bodyParts)
+
+            p_dict = message_converter.convert_ros_message_to_dictionary(p)
+
+            joints_with_timestamp = {'used_joint_ndarray': array, 'ros_timestamp': message.header.stamp.to_time()}   # Get away from messages here, towards a simple dict
 
             queue_size = self.spot_queue_interface.enqueue(p.stationID, joints_with_timestamp)
 
@@ -80,9 +88,6 @@ class Sender(Thread):
         self.start()
 
     def run(self):
-        '''
-        We publish messages indefinately. If there are none, we wait for the queue to fill and report back every 5 seconds.
-        '''
         while(self.running):
             try:
                 data = self.message_queue_interface.blocking_dequeue(self.redis_sending_queue_name, timeout=2) # TODO: To not hardcode these two seconds
@@ -103,71 +108,66 @@ class Sender(Thread):
                     rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
                 
 
-class SpotInfoHandler():
-    """
-    This class waits for updates on the spots, such as a change of exercises that the spot.
-    Such changes are written into the spot information .json via Redis.
-    """
-    def __init__(self, spot_info_interface_class: type(SpotInfoInterface) = RedisSpotInfoInterface, message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface):
+class SpotMetaDataHandler():
+    """This class waits for updates on the spots and communicates them through the its MetaDataInterface."""
+    def __init__(self, 
+    spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
+    message_queue_interface_class: type(MessageQueueInterface) = RedisMessageQueueInterface,
+    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor,
+    past_features_queue_interface_class: type(PastFeatureDataQueuesInterface) = RedisFeatureDataQueuesInterface):
+
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
-        self.spot_info_interface = spot_info_interface_class()
+        self.spot_metadata_interface = spot_metadata_interface_class()
         self.message_queue_interface = message_queue_interface_class()
+        self.feature_extractor = feature_extractor_class()
+        self.past_features_queue_interface = past_features_queue_interface_class()
 
     def callback(self, name_parameter_containing_exercises: str):
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
 
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key, redis_spot_feature_progression_key, redis_spot_resampled_features_key = generate_redis_key_names(spot_update_data["stationID"])
+
         exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
         
+        # TODO: In the future: Average recordings? What to do here?
+        recording = self.feature_extractor.recording_to_ndarray(exercise_data['recording'])
 
-        # We need to transform the exercise in this case, so that it matches to old format
-        new_stages = list()
-        for stage in exercise_data['stages']:
-            # Calculate the pose per stage and extract the angles
+        feature_of_interest_specification = self.feature_extractor.extract_feature_of_interest_specification_dictionary(exercise_data)
 
-            joints = stage['skeleton']
-            
-            pose = {}
-            angles = {}
-            for index in ownpose_used:
-                label = joint_labels[index]
-                point = Point()
-                # This code currently swaps Y and Z axis, which is how Tamer did this. # TODO: Find defenitive solution to this
-                point.x = joints[label]['x']
-                point.y = joints[label]['z']
-                point.z = joints[label]['y']
-                pose[label] = point
+        reference_feature_trajectories = self.feature_extractor.extract_feature_trajectories_from_recordings([recording], feature_of_interest_specification)
 
-            new_angles = list()
-            for rule_joints in stage['angles']:
-                new_angles.append({'points': rule_joints, 'angle': calculateAngle(rule_joints, pose), 'rules': {}})
-            new_stages.append(new_angles)
-        exercise_data['stages'] = new_stages
-        if EXTRACT_BOUNDARIES:
-            exercise_data['boundaries'] = extract_angle_boundaries(exercise_data)
-        else:
-            exercise_data['boundaries'] = {}
-        exercise_data['recording'] = []
-                
-        now_in_seconds = rp.get_rostime().secs
-        new_nanoseconds = rp.get_rostime().nsecs
+        reference_feature_data = self.feature_extractor.extract_reference_feature_data_from_feature_trajectories(reference_feature_trajectories)
 
-        spot_queue_key, spot_past_queue_key, spot_info_key = generate_redis_key_names(spot_update_data["stationID"])
+        beginning_pose = recording[0]
+        exercise_data['beginning_state_dict'] = self.feature_extractor.extract_states(beginning_pose, reference_feature_data, feature_of_interest_specification)
+
+        del exercise_data['stages']
+        
+        exercise_data['recording'] = recording
+        exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
+        exercise_data['reference_feature_trajectories'] = reference_feature_trajectories
+        exercise_data['reference_feature_data'] = reference_feature_data
+        
+        spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
+
         if HIGH_VERBOSITY:
             rp.logerr("Updating info for: " + spot_info_key)
+
+        self.spot_metadata_interface.delete(spot_state_key)
+        self.past_features_queue_interface.delete(redis_spot_feature_progression_key)
+        self.past_features_queue_interface.delete(redis_spot_resampled_features_key)
+        self.message_queue_interface.delete(spot_queue_key)
+        self.message_queue_interface.delete(spot_past_queue_key)
+
+        self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
         
-        num_deleted_items = self.message_queue_interface.delete(spot_queue_key)
-        num_deleted_items += self.message_queue_interface.delete(spot_past_queue_key)
-        
-        spot_info_dict = {'exercise': exercise_data, 'start_time': now_in_seconds, 'repetitions': 0, 'state': 0}
-        self.spot_info_interface.set_spot_info_dict(spot_update_data["stationID"], spot_info_dict)
 
 
 if __name__ == '__main__':
     # initialize ros node
     rp.init_node('comparing_system_node', anonymous=False)
 
-    # TODO: Do not hardcode maxsize
     # Both queues contain dictionaries that can easily converted to YAML to be pusblished via ROS
     user_state_out_queue = Queue(maxsize=QUEUEING_USER_STATE_QUEUE_SIZE_MAX)
     user_correction_out_queue = Queue(maxsize=QUEUEING_USER_INFO_QUEUE_SIZE_MAX)
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
     receiver = Receiver()
 
-    spot_info_handler = SpotInfoHandler()
+    spot_info_handler = SpotMetaDataHandler()
 
     def kill_threads():
         all_threads = comparators + [user_state_sender, user_correction_sender]

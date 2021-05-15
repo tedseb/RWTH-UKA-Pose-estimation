@@ -56,7 +56,7 @@
     </mat-list-item>
 </mat-list> -->
 
-<mat-card *ngFor="let spot of spots" style="margin-bottom: 10px;">
+<!-- <mat-card *ngFor="let spot of spots" style="margin-bottom: 10px;">
     <mat-card-header>
         <mat-card-title>
             <span *ngIf="spot.active">
@@ -74,4 +74,13 @@
             Übung: {{spot.exercise}}
         </p>
     </mat-card-content>
-</mat-card>
+</mat-card> -->
+<mat-list>
+    <div mat-subheader>Spots</div>
+    <mat-list-item *ngFor="let spot of spots">
+        <mat-icon mat-list-icon *ngIf="spot.active">play_arrow</mat-icon>
+        <mat-icon mat-list-icon *ngIf="!spot.active">pause</mat-icon>
+        <div mat-line>Spot {{spot.id}}</div>
+        <div mat-line>{{spot.updatedAt}}</div>
+    </mat-list-item>
+</mat-list>

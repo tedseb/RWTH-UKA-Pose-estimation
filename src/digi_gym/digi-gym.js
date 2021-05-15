@@ -108,5 +108,4 @@ function refreshSpots() {
     }).catch(err => {
         console.log(err);
     });
-
 }

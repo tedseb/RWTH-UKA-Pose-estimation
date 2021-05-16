@@ -67,7 +67,8 @@ class Comparator(Thread):
         # This can be set to false by an external entity to stop the loop from running
         self.running = True
 
-        self.predicted_skelleton_publisher = rp.Publisher("predictions", Person, queue_size=1000)  
+        self.predicted_skelleton_publisher = rp.Publisher("comparing_reference_prediction", Person, queue_size=1000)
+        self.user_skelleton_publisher = rp.Publisher("comparing_input", Person, queue_size=1000)  
 
         self.start()
 
@@ -128,11 +129,18 @@ class Comparator(Thread):
                     all_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=False)
                     reference_pose = self.calculate_reference_pose_mapping(all_resampled_features, spot_info_dict['exercise_data'])
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
-                    person_msg = Person()
-                    person_msg.stationID = int(spot_key)
-                    person_msg.sensorID = 0
-                    person_msg.bodyParts = reference_body_parts
-                    self.predicted_skelleton_publisher.publish(person_msg)
+                    reference_person_msg = Person()
+                    reference_person_msg.stationID = 99
+                    reference_person_msg.sensorID = 0
+                    reference_person_msg.bodyParts = reference_body_parts
+                    self.predicted_skelleton_publisher.publish(reference_person_msg)
+
+                    user_body_parts = self.feature_extractor.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
+                    user_person_msg = Person()
+                    user_person_msg.stationID = 99
+                    user_person_msg.sensorID = 0
+                    user_person_msg.bodyParts = user_body_parts
+                    self.user_skelleton_publisher.publish(user_person_msg)
 
                 # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
                 correction = None

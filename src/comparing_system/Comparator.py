@@ -1,14 +1,16 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 """
-This file contains the Comparator.
-A Comparator thread dequeues data from spots, extracts features and compares them to exercises performed
+This file contains the Spot Comparator Node.
+It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
+The Node spawns mutiple Comparator threads.
+A Comparator thread dequeues data from spot queues, extracts features and compares them to exercises performed
 by experts, i.e. data from the expert system.
-Whatever information is gained is sent via an outgoing message queue.
+Whatever information is gained is sent via outgoing message queues.
 """
 
-import math
-import threading
 import time
-import hashlib
 from functools import lru_cache
 from importlib import import_module
 from threading import Thread
@@ -18,7 +20,6 @@ from typing import NoReturn
 import redis
 import rospy as rp
 import numpy as np
-import yaml
 from src.config import *
 from src.FeatureExtraction import *
 from src.InterCom import *
@@ -41,8 +42,12 @@ class MalformedFeatures(Exception):
 
 # TODO: Divide into stage one and stage two for counting and comparing
 class Comparator(Thread):
-    """
-    The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
+    """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
+    
+    A Comparator thread asks a spot queue load balancer what spot queue to dequeue from.
+    User data, i.e. a skelleton, is dequeued and used to compute information like the progress in an exercise or the
+    reaching of a repetition. The Comparator can be scaled horizontally, meaning that more threads can be spawned to
+    scale the throughput of the Comparator Node.
     """
     def __init__(self, 
     spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
@@ -74,40 +79,35 @@ class Comparator(Thread):
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
     def get_exercise_data(self, spot_key, exercise_data_hash):
+        """Gets data on the exercise that is to be performed on the spot.
+        
+        This method uses lru caching because exercise information is usually obtained on every step, which makes
+        it a very costly operation if it includes fetching data from a stata store (like Redis) and deserializing it.
+        """
         return self.spot_metadata_interface.get_spot_info_dict(spot_key, ["exercise_data"])
 
     def run(self) -> NoReturn:
-        """
-        This is our main threading loop. We devide it into three parts for a  better overview:
-            * Getting data from the queues with self.get_data()
-            * Comparing the "is" and "should be" data for the joints with self.compare()
-            * Putting data back into sending queues with self.send_info()
-        """
         while(self.running):
             try:
-                # Fetch all data that is needed for the comparison:
+                # The following lines fetch data that we need to compare
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
-
                 _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(spot_key)
-
-                # Construct spot info dict, possibly from chache
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
-                
-                # Use LRU Caching to update the spot info dict
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
-
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
+                # Fetch last feature progressions and resampled feature lists
                 last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
                 last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
 
                 # Compare joints with expert system data
                 increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
 
+                # Enqueue data for feature progressions and resampled feature lists
                 self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
                 self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, new_resampled_features)
 
-                # Send info back back to outgoing message queue and back into the ROS system
+                # Send info back to outgoing message queue to the Sender node and into the ROS system
                 if increase_reps:
                     spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
                     user_state_message = {
@@ -122,7 +122,6 @@ class Comparator(Thread):
                     self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
 
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
-
 
                 # Calculate a new reference pose mapping
                 if new_resampled_features:
@@ -142,7 +141,7 @@ class Comparator(Thread):
                     user_person_msg.bodyParts = user_body_parts
                     self.user_skelleton_publisher.publish(user_person_msg)
 
-                # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
+                # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
 
                 if correction != None and SEND_CORRETIONS:
@@ -168,14 +167,32 @@ class Comparator(Thread):
     last_feature_progressions: dict,
     last_resampled_features: dict,
     joints_with_timestamp: list) -> Tuple[bool, dict, Any]:
-        """Compare high level features, such as angles, by extracting them from the joints array and turn them into a progression."""
+        """Compare high level features, such as angles, by extracting them from the joints array.
+        
+        This method turn high level features into a progression dictionary and resamples them.
+        By calculating the progression dictionary it also detects repetitions.
+
+        Args:
+            spot_info_dict: Contains the exercise data that we want to compare our user's features to.
+            last_feature_progressions: The feature progressions dictionary from the previous comparing step
+            last_resampled_features: The resampled values from possibly many previous comparings steps
+            joints_with_timestamp: The joints and theirs timestamp for the current comparing step
+            
+        Returns:
+            increase_reps (bool): Is true if a repetition was detected
+            new_feature_progressions (dict): Resembles the features of interest specification dictionary but has strings inplace for every feature
+                                             that indicate the progress the user made concerning said feature.
+            new_resampled_features (dict): Resembles the features of interest specification dictionary but has lists inplace for every feature
+                                           that contain the resampled values.
+        """
         exercise_data = spot_info_dict['exercise_data']
         used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
         timestamp = joints_with_timestamp['ros_timestamp']
         beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
 
         features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
-
+        
+        # TODO: This methods needs a cleanup
         def copmute_new_feature_progression(beginning_state, features_state, last_feature_progression):
             new_feature_progression = last_feature_progression
 
@@ -304,3 +321,23 @@ def custom_metric(hankel_matrix, feature_trajectory, beta):
     errors = np.linalg.norm((distances) * fading_factor, axis=1)
     return errors
 
+
+if __name__ == '__main__':
+    # initialize ros node
+    rp.init_node('ComparingSystem_Comparator', anonymous=False)
+
+    # Spawn a couple of Comparator threads
+    comparators = []
+    for i in range(NUMBER_OF_COMPARATOR_THREADS):  # TODO: Let this number be controlled by Ted
+        comparators.append(Comparator())
+
+    def kill_threads():
+        for t in comparators:
+            # TODO: We can not use thread.join() for some reason, envestigate why
+            t.running = False
+    
+    rp.on_shutdown(kill_threads)
+
+    rp.spin()
+
+ 

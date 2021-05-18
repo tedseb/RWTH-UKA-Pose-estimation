@@ -1,5 +1,6 @@
 """
 This file contains code that deals with the  manual extraction of low-level features from skelletons.
+It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 At the time of writing, such features are explicitly angles. Other features might follow in the future.
 
 TODO: Use msgpack at Shawans end do extract features there already? https://pypi.org/project/msgpack-numpy/

@@ -58,3 +58,6 @@ assert REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER + REDUCED_RANGE_OF_MOTION_TOLERAN
 
 # The final feature trajectory resolution is: FEATURE_TRAJECTORY_RESOLUTION_FACTOR  * range of motion of a single feature
 FEATURE_TRAJECTORY_RESOLUTION_FACTOR = 0.1
+
+# Message sender dequeueing timeout in seconds. A lower timeout lets us kill the threader quicker but results in higher resource consumption
+SENDER_NODE_MESSAGE_DEQUEUEING_TIMEOUT = 1

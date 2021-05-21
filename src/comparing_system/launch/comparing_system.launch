@@ -3,4 +3,5 @@
   <node name="ComparingSystem_Sender" pkg="comparing_system" type="Sender.py" />
   <node name="ComparingSystem_SpotMetaDataHandler" pkg="comparing_system" type="SpotMetaDataHandler.py" />
   <node name="ComparingSystem_Visualizer" pkg="comparing_system" type="Visualizer.py" />
+  <node name="ComparingSystem_Comparator" pkg="comparing_system" type="Comparator.py" />
 </launch> 

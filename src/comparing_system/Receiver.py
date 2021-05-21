@@ -9,6 +9,7 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 from typing import Any
 
 import rospy as rp
+from src.FeatureExtraction import *
 from src.config import *
 from src.InterCom import *
 from src.Util import *

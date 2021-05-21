@@ -40,7 +40,81 @@ class NoExerciseDataAvailable(Exception):
 class MalformedFeatures(Exception):
     pass
 
-# TODO: Divide into stage one and stage two for counting and comparing
+def compute_new_feature_progression(beginning_state, features_state, last_feature_progression):
+    """Compute a dictionary representing the progression of the features specified by feature_state
+
+    This method turns features states, such as FEATURE_HIGH or FEATURE_LOW into a feature progression,
+    such as PROGRESSION_PARTIAL, PROGRESSION_DONE or PROGRESSION_START, depending on the previous progression
+    of the feature. This way we can track the progression of different features between timesteps.
+
+    Args: 
+        beginning_state: A dictionary that holds the state in which a feature begins for every feature of every category
+        features_state: The state that the featuers are in
+        last_feature_progression: The last dictionary produced by this method in the last timestep
+
+    Return:
+        new_feature_progression: The feature progression dictionary at this timestep
+
+    Raises:
+        MalformedFeatures: If features are not the expected form.
+    """
+    new_feature_progression = last_feature_progression
+
+    # If features beginn with the FEATURE_HIGH state, we need to check if they have passed through the FEATURE_LOW state
+    if beginning_state == FEATURE_HIGH:
+        if features_state == FEATURE_HIGH:
+            feature_is_in_beginning_state = True
+        elif features_state == FEATURE_LOW:
+            new_feature_progression  = PROGRESSION_PARTIAL
+            feature_is_in_beginning_state = False
+        else:
+            feature_is_in_beginning_state = False
+    # If features beginn with the FEATURE_LOW state, we need to check if they have passed through the FEATURE_HIGH state
+    elif beginning_state == FEATURE_LOW:
+        if features_state == FEATURE_LOW:
+            feature_is_in_beginning_state = True
+        elif features_state == FEATURE_HIGH:
+            new_feature_progression  = PROGRESSION_PARTIAL
+            feature_is_in_beginning_state = False
+        else:
+            feature_is_in_beginning_state = False
+    else:
+        raise MalformedFeatures("Beginning state is " + str(beginning_state))
+    
+    # If features are in the beginning state and they have progressed already, their progression can be set to PROGRESSION_DONE
+    if feature_is_in_beginning_state:
+        if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
+            new_feature_progression  = PROGRESSION_DONE
+        else:
+            new_feature_progression = PROGRESSION_START
+
+    return new_feature_progression
+
+
+def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
+    """Compute a custom metric that represents how probable it is for the user to be at a certain point of the reference trajectory.
+
+    This function computes the l2 norm of signals - signal, but influence to the error fades out linearly form the 
+    newest to the oldest measurement according to beta.
+
+    Args:
+        hankel_matrix: The hankel matrix of the reference trajectory.
+        feature_trajectory: The trajectory of a feature of the user that we want to compare against
+        max_weight_: Dictates how strong the newest values are weighted
+        min_weight: Dictates how weak the oldest values are weighted
+    
+    Returns:
+        An error for every step in the feature_trajectory
+    """
+    comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
+    hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
+    feature_trajectory_shortened = feature_trajectory[:comparing_length]
+    distances = hankel_matrix_shortened - feature_trajectory_shortened
+    fading_factor = np.linspace(min_weight, max_weight_, comparing_length) # Let older signals have less influence on the error
+    errors = np.linalg.norm((distances) * fading_factor, axis=1)
+    return errors
+
+
 class Comparator(Thread):
     """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     
@@ -192,37 +266,6 @@ class Comparator(Thread):
 
         features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
         
-        # TODO: This methods needs a cleanup
-        def copmute_new_feature_progression(beginning_state, features_state, last_feature_progression):
-            new_feature_progression = last_feature_progression
-
-            if beginning_state == FEATURE_HIGH:
-                if features_state == FEATURE_HIGH:
-                    feature_is_in_beginning_state = True
-                elif features_state == FEATURE_LOW:
-                    new_feature_progression  = PROGRESSION_PARTIAL
-                    feature_is_in_beginning_state = False
-                else:
-                    feature_is_in_beginning_state = False
-            elif beginning_state == FEATURE_LOW:
-                if features_state == FEATURE_LOW:
-                    feature_is_in_beginning_state = True
-                elif features_state == FEATURE_HIGH:
-                    new_feature_progression  = PROGRESSION_PARTIAL
-                    feature_is_in_beginning_state = False
-                else:
-                    feature_is_in_beginning_state = False
-            else:
-                raise MalformedFeatures("Beginning state is " + str(beginning_state))
-            
-            if feature_is_in_beginning_state:
-                if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
-                    new_feature_progression  = PROGRESSION_DONE
-                else:
-                    new_feature_progression = PROGRESSION_START
-
-            return new_feature_progression
-
         increase_reps = True
         new_feature_progressions = {}
         new_resampled_features = {}
@@ -252,7 +295,7 @@ class Comparator(Thread):
                     last_feature_progression = PROGRESSION_START
                 beginning_state = beginning_states[feature_type][k]['feature_state']
                 features_state = features_states[feature_type][k]['feature_state']
-                new_feature_progression = copmute_new_feature_progression(beginning_state, features_state, last_feature_progression)
+                new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
                 
                 # If one of the features is not done, the repetition is not done
                 if new_feature_progression != PROGRESSION_DONE:
@@ -279,7 +322,21 @@ class Comparator(Thread):
 
         return increase_reps, new_feature_progressions, new_resampled_features
 
-    def calculate_reference_pose_mapping(self, feature_trajectories, exercise_data) -> np.ndarray:
+    def calculate_reference_pose_mapping(self, feature_trajectories: dict, exercise_data: dict) -> np.ndarray:
+        """Calculate the pose in the reference trajectory that we think our user is most probably in.
+
+        This method measures the similarity between the recent feature_trajectory of a user and the vectors
+        inside a hankel matrix of the reference trajectory. Thereby we can compute how likely it is that the
+        use is at a certain point in the execution of the exercise of the expert.
+
+        Args:
+            feature_trajectories: A dictionary that holds a list of past feature values for every type of feature
+                                  in every feature category
+            exercise data: A dictionary containing metadata around the exercise
+
+        Returns:
+            reference_pose: The reference pose that we think the user is in
+        """
         reference_poses = exercise_data['recording']
         predicted_indices = []
 
@@ -291,7 +348,7 @@ class Comparator(Thread):
 
                 # TODO: Do this for all hankel matrices
                 for idx, reference_trajectory_hankel_matrix in enumerate(reference_trajectory_hankel_matrices):
-                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 1)
+                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                     prediction = np.argmin(errors)
                     index = resampled_values_reference_trajectory_indices[idx][prediction]
 
@@ -304,22 +361,10 @@ class Comparator(Thread):
                     # print("errors", errors)
                     # print("index", index)
                     # print("len", len(reference_poses))
+
+        reference_pose = reference_poses[predicted_indices[0]]
         
-        return reference_poses[predicted_indices[0]]
-
-
-def custom_metric(hankel_matrix, feature_trajectory, beta):
-    """
-    Return the l2 norm of signals - signal, but influence fades out linearly form the 
-    newest to the oldest measurement according to beta.
-    """
-    comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
-    hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
-    feature_trajectory_shortened = feature_trajectory[:comparing_length]
-    distances = hankel_matrix_shortened - feature_trajectory_shortened
-    fading_factor = np.linspace(beta, 4, comparing_length) # Let older signals have less influence on the error
-    errors = np.linalg.norm((distances) * fading_factor, axis=1)
-    return errors
+        return reference_pose
 
 
 if __name__ == '__main__':

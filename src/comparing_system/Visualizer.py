@@ -114,7 +114,6 @@ class RealtimeVisualization():
             m.lifetime = rospy.Duration(0.5) 
             marker_array.markers.append(m)
             
-        rospy.logerr(marker_array)
         # publish the markers
         publisher.publish(marker_array)
 

@@ -125,7 +125,7 @@ if __name__ == '__main__':
     rospy.init_node('visualizer_node', anonymous=False)
 
     # read the parameters from ROS launch file
-    frame_topic = 'kinect_persons'
+    frame_topic = 'personsJS'
     skeleton_frame = 'dev0'
     id_text_size = 12
     id_text_offset = 0

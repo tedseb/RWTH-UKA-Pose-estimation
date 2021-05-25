@@ -11,7 +11,7 @@ import pickle
 import time
 import rospy
 from sensor_msgs.msg import Image
-from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
+from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes, Images
 from std_msgs.msg import Float32MultiArray
 
 import os,sys,inspect
@@ -51,10 +51,7 @@ class run_spin():
 
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
-        #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
-
-        rospy.Subscriber('image', Image, self.callback_setImage)       
-        #srospy.Subscriber('image1', Image, self.callback_setImage)
+        rospy.Subscriber('syn_image', Images,self.callback_setImage )     
         self.spin()
 
 
@@ -66,25 +63,29 @@ class run_spin():
 
     def callback_setImage(self, msg):
         self.msg_image = msg
-        shape = self.msg_image.height, self.msg_image.width, 3     #(480, 640, 3) --> (y,x,3) = (h,w,3)
-        img = np.frombuffer(self.msg_image.data, dtype=np.uint8)
-        self.img_original_bgr = img.reshape(shape)
+        shape = self.msg_image.img1.height, self.msg_image.img1.width, 3     #(480, 640, 3) --> (y,x,3) = (h,w,3)
+        img = np.frombuffer(self.msg_image.img1.data, dtype=np.uint8)
+        self.img_original_bgr0 = img.reshape(shape)
+
+        shape = self.msg_image.img2.height, self.msg_image.img2.width, 3     #(480, 640, 3) --> (y,x,3) = (h,w,3)
+        img = np.frombuffer(self.msg_image.img2.data, dtype=np.uint8)
+        self.img_original_bgr1 = img.reshape(shape)
 
     def callback_regress(self, body_bbox_list_station):
-        '''
-        This function will be called everytime whenever a message is received by the subscriber
-        '''
         body_bbox_list_station_reshaped=np.array(body_bbox_list_station.data).reshape(-1,4)
         tmpTime = time.time()
  
         #ToDo: differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
 
         # Body Pose Regression
-        pred_output_list = self.body_mocap.regress(self.img_original_bgr, body_bbox_list_station_reshaped)
+        pred_output_list = self.body_mocap.regress(self.img_original_bgr0, body_bbox_list_station_reshaped)
+
+        pred_output_list1 = self.body_mocap.regress(self.img_original_bgr1, body_bbox_list_station_reshaped)
+        pred_output_list.extend(pred_output_list1)
         fps = int(1/(time.time()-tmpTime))
 
         print("FPS : ",fps)
-        self.publish_results(pred_output_list, self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
+        self.publish_results(pred_output_list, self.msg_image.img1,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
 
 
     def publish_results(self,results, img_msg, stationID,sensorID):  
@@ -103,8 +104,8 @@ class run_spin():
             lenPoints=len(joints)       #ToDo use fix number of joints to save calculation time
             person_msg = Person()
             if len(stationID) >0:
-                person_msg.stationID = stationID[inc]
-                person_msg.sensorID = sensorID[inc]
+                person_msg.stationID = 1
+                person_msg.sensorID = 1
             person_msg.bodyParts = [None]*lenPoints
             for idx in range(lenPoints):
                 person_msg.bodyParts[idx] = Bodypart()

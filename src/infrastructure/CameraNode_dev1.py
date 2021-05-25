@@ -6,14 +6,14 @@ import numpy as np
 import pafy
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
-url = "https://youtu.be/BHeko6p-JoY"             #"https://www.youtube.com/watch?v=C_VtOYc6j5c"  https://www.youtube.com/watch?v=QifjltKUMCk
+url = "https://youtu.be/bqpCkbAr8dY"             #"https://www.youtube.com/watch?v=C_VtOYc6j5c"  https://www.youtube.com/watch?v=QifjltKUMCk
 video = pafy.new(url)
 best = video.getbest(preftype="mp4")
 def camera():
     pub = rospy.Publisher('image1', Image, queue_size=2)
     rospy.init_node('camera', anonymous=True)
     rate = rospy.Rate(30)
-    cap = cv2.VideoCapture(6)   
+    cap = cv2.VideoCapture(2425)   
     if cap is None or not cap.isOpened():
         rospy.loginfo('INFO: No webCam source. Youtube video will be used as source!')
         cap = cv2.VideoCapture()

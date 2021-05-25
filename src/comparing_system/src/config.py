@@ -3,6 +3,7 @@
 This file contains some parameters to our ComparingNode, such as ROS Topic names and queueing limits.
 """
 
+# GENERAL COMPARING SYSTEM CONFIGURATION (not algorithmic)
 DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
 
 ROS_TOPIC_USER_EXERCISE_STATES = 'user_state'
@@ -17,6 +18,7 @@ NUMBER_OF_COMPARATOR_THREADS = 1
 REDIS_MAXIMUM_QUEUE_SIZE = 100
 REDIS_MAXIMUM_PAST_QUEUE_SIZE = 100
 STATION_QUEUE_SIZE_MINIMUM = 0
+REDIS_KEY_SEPARATOR = ":"
 
 REDIS_USER_STATE_SENDING_QUEUE_NAME = "user_state_sending_queue"
 REDIS_USER_INFO_SENDING_QUEUE_NAME = "user_correction_sending_queue"
@@ -25,19 +27,37 @@ REDIS_LOAD_BALANCER_LIST_KEY = "spot_queue_load_balancer_list"
 QUEUEING_USER_STATE_QUEUE_SIZE_MAX = 100
 QUEUEING_USER_INFO_QUEUE_SIZE_MAX = 100
 
+EXERCISE_DATA_LRU_CACHE_SIZE = 1000
+
 assert STATION_QUEUE_SIZE_MINIMUM <= REDIS_MAXIMUM_QUEUE_SIZE
 
 # Incase other people want to use the same redis database, better use a prefix for keys so our data does not collide
-REDIS_GENERAL_PREFIX = "ComparingSystem:"
-REDIS_SPOT_QUEUE_POSTFIX = ":queue"
-REDIS_SPOT_PAST_QUEUE_POSTFIX = ":queue_past"
-REDIS_SPOT_INFO_POSTFIX = ":info"
+REDIS_GENERAL_PREFIX = "comparing_system"
+REDIS_SPOT_QUEUE_POSTFIX = "pose_queue"
+REDIS_SPOT_PAST_QUEUE_POSTFIX = "pose_queue_past"
+REDIS_SPOT_INFO_POSTFIX = "spot_info"
+REDIS_SPOT_STATE_POSTFIX = "spot_state"
+REDIS_SPOT_EXERCISE_POSTFIX = "exercise"
+REDIS_SPOT_FEATURE_PROGRESSION_POSTFIX = "feature_progression"
+REDIS_SPOT_RESAMPLED_FEATURES_POSTFIX = "resampled_features"
 
-LEGACY_COMPARING = True
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = False
+HIGH_VERBOSITY = True
 
-# Beta exercise format
-EXTRACT_BOUNDARIES = False
+# ALGORITHMIC COMFIGURATION
+
+# 0 means that user has to reach angle at least as high/low as performed by expert
+# 1 means that the boundaries are swapped (and makes no sense)
+REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER = 0.3
+REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER = 0.3
+REDUCED_RANGE_OF_MOTION_TOLERANCE_MINIMAL_DISTANCE_HIGHER_LOWER = 0.3
+
+assert REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER + REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER <= 1 - REDUCED_RANGE_OF_MOTION_TOLERANCE_MINIMAL_DISTANCE_HIGHER_LOWER
+
+# The final feature trajectory resolution is: FEATURE_TRAJECTORY_RESOLUTION_FACTOR  * range of motion of a single feature
+FEATURE_TRAJECTORY_RESOLUTION_FACTOR = 0.1
+
+# Message sender dequeueing timeout in seconds. A lower timeout lets us kill the threader quicker but results in higher resource consumption
+SENDER_NODE_MESSAGE_DEQUEUEING_TIMEOUT = 1

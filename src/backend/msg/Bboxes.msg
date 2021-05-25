@@ -1,4 +1,4 @@
 Header header
 float32[] data
-float32[] stationID
-float32 sensorID
+int16[] stationID
+int16[] sensorID

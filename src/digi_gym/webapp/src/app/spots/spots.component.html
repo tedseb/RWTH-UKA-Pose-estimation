@@ -1,0 +1,86 @@
+<!-- <table mat-table [dataSource]="spots">
+    <ng-container matColumnDef="id">
+        <th mat-header-cell *matHeaderCellDef> No. </th>
+        <td mat-cell *matCellDef="let spot"> {{spot.id}} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef> Exercise </th>
+        <td mat-cell *matCellDef="let spot"> {{spot.exercise}} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="active">
+        <th mat-header-cell *matHeaderCellDef> Active </th>
+        <td mat-cell *matCellDef="let spot"> {{spot.active}} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="updatedAt">
+        <th mat-header-cell *matHeaderCellDef> Last Update </th>
+        <td mat-cell *matCellDef="let spot"> {{spot.updatedAt}} </td>
+    </ng-container>
+
+
+    <tr mat-header-row *matHeaderRowDef="tableCols"></tr>
+    <tr mat-row *matRowDef="let row; columns: tableCols;"></tr>
+</table> -->
+<!-- 
+<ul>
+    <li *ngFor="let spot of spots">
+        <span *ngIf="spot.active">
+            <mat-icon>toggle_on</mat-icon>
+        </span>
+        <span *ngIf="!spot.active">
+            <mat-icon>toggle_off</mat-icon>
+        </span>
+        Spot {{spot.id}}:
+        <br>
+        Exercise: {{spot.exercise}}
+        <br>
+        UpdatedAt: {{spot.updatedAt}}
+    </li>
+</ul>
+
+<mat-list role="list">
+    <mat-list-item *ngFor="let spot of spots">
+        <span *ngIf="spot.active">
+            <mat-icon>toggle_on</mat-icon>
+        </span>
+        <span *ngIf="!spot.active">
+            <mat-icon>toggle_off</mat-icon>
+        </span>
+        Spot {{spot.id}}:
+        <br>
+        - Exercise: {{spot.exercise}}
+        <br>
+        - UpdatedAt: {{spot.updatedAt}}
+    </mat-list-item>
+</mat-list> -->
+
+<!-- <mat-card *ngFor="let spot of spots" style="margin-bottom: 10px;">
+    <mat-card-header>
+        <mat-card-title>
+            <span *ngIf="spot.active">
+                <mat-icon>✅</mat-icon>
+            </span>
+            <span *ngIf="!spot.active">
+                <mat-icon>❎</mat-icon>
+            </span>
+            Spot Nr. {{spot.id}}
+        </mat-card-title>
+        <mat-card-subtitle>Letztes Update: {{spot.updatedAt}}</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+        <p>
+            Übung: {{spot.exercise}}
+        </p>
+    </mat-card-content>
+</mat-card> -->
+<mat-list>
+    <div mat-subheader>Spots</div>
+    <mat-list-item *ngFor="let spot of spots">
+        <mat-icon mat-list-icon *ngIf="spot.active">play_arrow</mat-icon>
+        <mat-icon mat-list-icon *ngIf="!spot.active">pause</mat-icon>
+        <div mat-line>Spot {{spot.id}}</div>
+        <div mat-line>{{spot.updatedAt}}</div>
+    </mat-list-item>
+</mat-list>

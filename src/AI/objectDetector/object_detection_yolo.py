@@ -21,7 +21,7 @@ url = "https://www.youtube.com/watch?v=wqctLW0Hb_0"
 
 
 class ObjectDetectionPipeline:
-    def __init__(self, threshold=0.5, device="cpu", cmap_name="tab10_r", renderer=False, stationChk=False):
+    def __init__(self, threshold=0.5, device="cpu", renderer=False, stationChk=False):
         self.stationBoxesChk = getBoxesInStation()
         self.stationChk=stationChk
         self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s').eval().to(device)
@@ -33,16 +33,22 @@ class ObjectDetectionPipeline:
         self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
         self.body_bbox=[]
         self.info_station=[]
+        self.info_frameID=[]
         self.frame_id=0
         self.spin() #Dont write any line of code after self.spin!
 
     def spin(self):
-            '''
-            We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
-            '''
-            rospy.spin()
+        '''
+        We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
+        '''
+        rospy.spin()
 
     def run_objectdetector(self, img_msg):  
+        '''
+        This is a callback function which receives the message from the subscriber. 
+        The message contains an image from the camera, this is reshaped, 
+        sent to the function obj_detectYolo() and then the result (BBOX) is published.
+        '''
         shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
         img = np.frombuffer(img_msg.data, dtype=np.uint8)
         img_original_bgr = img.reshape(shape)
@@ -69,20 +75,26 @@ class ObjectDetectionPipeline:
         left_top.header.frame_id = img_msg.header.frame_id #From which camera
         left_top.data=array1D_body_bbox[0]
         left_top.stationID=self.info_station  
-        left_top.sensorID=self.frame_id       
+        left_top.sensorID=self.info_frameID       
         self.publisher_boxes.publish(left_top)
 
     def obj_detectYolo(self, img):
         """
-        Now the call method This takes a raw frame from opencv finds the boxes and draws on it.
+        This function uses the Yolo object detector. It predicts BBOX with label and confidence values. 
+        The labels are analyzed to see if they are human, then they are examined to see if their BBOX are within a station. 
+        If yes, then FrameID, StationID and BBOX are published. The getBoxesInStation class in scheduler is used for the examination.
         """  
         img_tens =img   
         results = self.model(img_tens,size=640)
         if self.renderer==True:
-            #results.save()
             results.render()  # updates results.imgs with boxes and labels
         
         results.imgs # array of original images (as np array) passed to model for inference
+
+        self.body_bbox=[]
+        self.info_station=[]
+        self.info_frameID=[]
+
         resul_np=results.xyxy[0].cpu().detach().numpy()
         
         bbox_size =  [ ((x[2]-x[0]) * (x[3]-x[1])) for x in resul_np]
@@ -91,13 +103,11 @@ class ObjectDetectionPipeline:
         resul_np = np.array(resul_np)
         
         labels = resul_np[:,5]
-        self._get_Person_boxes(labels,resul_np)
+        self._get_Person_boxes(labels,resul_np,self.frame_id)
         return results.imgs[0]
     
-    def _get_Person_boxes(self, labels, resul_np):
-        """Plot boxes on an image"""
-        self.body_bbox=[]
-        self.info_station=[]  
+    def _get_Person_boxes(self, labels, resul_np,frame_id):
+        """Function for checking labels and assigning stations and BBOX""" 
         tmp_conf=0
         for count, label in enumerate(labels):
             box=resul_np[count,:4]
@@ -112,7 +122,7 @@ class ObjectDetectionPipeline:
                         h=box[3]-y
                         self.body_bbox.append([x,y,w,h])
                         self.info_station.append(stationID)
-                        print("self.info_station: ",self.info_station)
+                        self.info_frameID.append(frame_id)
                 else:
                     if resul_np[count,4]>tmp_conf:
                         self.body_bbox= [None] * 1

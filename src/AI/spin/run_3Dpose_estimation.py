@@ -81,8 +81,9 @@ class run_spin():
 
         # Body Pose Regression
         pred_output_list = self.body_mocap.regress(self.img_original_bgr, body_bbox_list_station_reshaped)
+        #x= pred_output_list
         fps = int(1/(time.time()-tmpTime))
-
+        #print("result: ", np.shape(pred_output_list.extend(x)))
         print("FPS : ",fps)
         self.publish_results(pred_output_list, self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
 
@@ -104,7 +105,7 @@ class run_spin():
             person_msg = Person()
             if len(stationID) >0:
                 person_msg.stationID = int(stationID[inc])
-                person_msg.sensorID = int(sensorID)
+                person_msg.sensorID = sensorID[inc]
             person_msg.bodyParts = [None]*lenPoints
             for idx in range(lenPoints):
                 person_msg.bodyParts[idx] = Bodypart()

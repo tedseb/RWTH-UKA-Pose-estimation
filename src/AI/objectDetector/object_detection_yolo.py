@@ -75,7 +75,6 @@ class ObjectDetectionPipeline:
         left_top.header.frame_id = img_msg.header.frame_id #From which camera
         left_top.data=array1D_body_bbox[0]
         left_top.stationID=self.info_station  
-        left_top.sensorID=self.frame_id 
         left_top.sensorID=self.info_frameID       
         self.publisher_boxes.publish(left_top)
 

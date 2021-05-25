@@ -44,7 +44,7 @@ REDIS_SPOT_RESAMPLED_FEATURES_POSTFIX = "resampled_features"
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = False
+HIGH_VERBOSITY = True
 
 # ALGORITHMIC COMFIGURATION
 
@@ -58,3 +58,6 @@ assert REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER + REDUCED_RANGE_OF_MOTION_TOLERAN
 
 # The final feature trajectory resolution is: FEATURE_TRAJECTORY_RESOLUTION_FACTOR  * range of motion of a single feature
 FEATURE_TRAJECTORY_RESOLUTION_FACTOR = 0.1
+
+# Message sender dequeueing timeout in seconds. A lower timeout lets us kill the threader quicker but results in higher resource consumption
+SENDER_NODE_MESSAGE_DEQUEUEING_TIMEOUT = 1

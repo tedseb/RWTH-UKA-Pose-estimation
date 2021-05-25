@@ -1,14 +1,16 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 """
-This file contains the Comparator.
-A Comparator thread dequeues data from spots, extracts features and compares them to exercises performed
+This file contains the Spot Comparator Node.
+It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
+The Node spawns mutiple Comparator threads.
+A Comparator thread dequeues data from spot queues, extracts features and compares them to exercises performed
 by experts, i.e. data from the expert system.
-Whatever information is gained is sent via an outgoing message queue.
+Whatever information is gained is sent via outgoing message queues.
 """
 
-import math
-import threading
 import time
-import hashlib
 from functools import lru_cache
 from importlib import import_module
 from threading import Thread
@@ -18,7 +20,6 @@ from typing import NoReturn
 import redis
 import rospy as rp
 import numpy as np
-import yaml
 from src.config import *
 from src.FeatureExtraction import *
 from src.InterCom import *
@@ -39,10 +40,88 @@ class NoExerciseDataAvailable(Exception):
 class MalformedFeatures(Exception):
     pass
 
-# TODO: Divide into stage one and stage two for counting and comparing
-class Comparator(Thread):
+def compute_new_feature_progression(beginning_state, features_state, last_feature_progression):
+    """Compute a dictionary representing the progression of the features specified by feature_state
+
+    This method turns features states, such as FEATURE_HIGH or FEATURE_LOW into a feature progression,
+    such as PROGRESSION_PARTIAL, PROGRESSION_DONE or PROGRESSION_START, depending on the previous progression
+    of the feature. This way we can track the progression of different features between timesteps.
+
+    Args: 
+        beginning_state: A dictionary that holds the state in which a feature begins for every feature of every category
+        features_state: The state that the featuers are in
+        last_feature_progression: The last dictionary produced by this method in the last timestep
+
+    Return:
+        new_feature_progression: The feature progression dictionary at this timestep
+
+    Raises:
+        MalformedFeatures: If features are not the expected form.
     """
-    The Comparator can be scaled horizontally. It pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
+    new_feature_progression = last_feature_progression
+
+    # If features beginn with the FEATURE_HIGH state, we need to check if they have passed through the FEATURE_LOW state
+    if beginning_state == FEATURE_HIGH:
+        if features_state == FEATURE_HIGH:
+            feature_is_in_beginning_state = True
+        elif features_state == FEATURE_LOW:
+            new_feature_progression  = PROGRESSION_PARTIAL
+            feature_is_in_beginning_state = False
+        else:
+            feature_is_in_beginning_state = False
+    # If features beginn with the FEATURE_LOW state, we need to check if they have passed through the FEATURE_HIGH state
+    elif beginning_state == FEATURE_LOW:
+        if features_state == FEATURE_LOW:
+            feature_is_in_beginning_state = True
+        elif features_state == FEATURE_HIGH:
+            new_feature_progression  = PROGRESSION_PARTIAL
+            feature_is_in_beginning_state = False
+        else:
+            feature_is_in_beginning_state = False
+    else:
+        raise MalformedFeatures("Beginning state is " + str(beginning_state))
+    
+    # If features are in the beginning state and they have progressed already, their progression can be set to PROGRESSION_DONE
+    if feature_is_in_beginning_state:
+        if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
+            new_feature_progression  = PROGRESSION_DONE
+        else:
+            new_feature_progression = PROGRESSION_START
+
+    return new_feature_progression
+
+
+def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
+    """Compute a custom metric that represents how probable it is for the user to be at a certain point of the reference trajectory.
+
+    This function computes the l2 norm of signals - signal, but influence to the error fades out linearly form the 
+    newest to the oldest measurement according to beta.
+
+    Args:
+        hankel_matrix: The hankel matrix of the reference trajectory.
+        feature_trajectory: The trajectory of a feature of the user that we want to compare against
+        max_weight_: Dictates how strong the newest values are weighted
+        min_weight: Dictates how weak the oldest values are weighted
+    
+    Returns:
+        An error for every step in the feature_trajectory
+    """
+    comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
+    hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
+    feature_trajectory_shortened = feature_trajectory[:comparing_length]
+    distances = hankel_matrix_shortened - feature_trajectory_shortened
+    fading_factor = np.linspace(min_weight, max_weight_, comparing_length) # Let older signals have less influence on the error
+    errors = np.linalg.norm((distances) * fading_factor, axis=1)
+    return errors
+
+
+class Comparator(Thread):
+    """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
+    
+    A Comparator thread asks a spot queue load balancer what spot queue to dequeue from.
+    User data, i.e. a skelleton, is dequeued and used to compute information like the progress in an exercise or the
+    reaching of a repetition. The Comparator can be scaled horizontally, meaning that more threads can be spawned to
+    scale the throughput of the Comparator Node.
     """
     def __init__(self, 
     spot_metadata_interface_class: type(SpotMetaDataInterface) = RedisSpotMetaDataInterface, 
@@ -74,40 +153,35 @@ class Comparator(Thread):
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
     def get_exercise_data(self, spot_key, exercise_data_hash):
+        """Gets data on the exercise that is to be performed on the spot.
+        
+        This method uses lru caching because exercise information is usually obtained on every step, which makes
+        it a very costly operation if it includes fetching data from a stata store (like Redis) and deserializing it.
+        """
         return self.spot_metadata_interface.get_spot_info_dict(spot_key, ["exercise_data"])
 
     def run(self) -> NoReturn:
-        """
-        This is our main threading loop. We devide it into three parts for a  better overview:
-            * Getting data from the queues with self.get_data()
-            * Comparing the "is" and "should be" data for the joints with self.compare()
-            * Putting data back into sending queues with self.send_info()
-        """
         while(self.running):
             try:
-                # Fetch all data that is needed for the comparison:
+                # The following lines fetch data that we need to compare
                 spot_key = self.spot_queue_load_balancer.get_queue_key()
-
                 _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(spot_key)
-
-                # Construct spot info dict, possibly from chache
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
-                
-                # Use LRU Caching to update the spot info dict
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
-
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
+                # Fetch last feature progressions and resampled feature lists
                 last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
                 last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
 
                 # Compare joints with expert system data
                 increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
 
+                # Enqueue data for feature progressions and resampled feature lists
                 self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
                 self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, new_resampled_features)
 
-                # Send info back back to outgoing message queue and back into the ROS system
+                # Send info back to outgoing message queue to the Sender node and into the ROS system
                 if increase_reps:
                     spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
                     user_state_message = {
@@ -122,7 +196,6 @@ class Comparator(Thread):
                     self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
 
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
-
 
                 # Calculate a new reference pose mapping
                 if new_resampled_features:
@@ -142,7 +215,7 @@ class Comparator(Thread):
                     user_person_msg.bodyParts = user_body_parts
                     self.user_skelleton_publisher.publish(user_person_msg)
 
-                # Corrections are not part of the alpha release, we therefore leave them out and never send user correction messages
+                # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
 
                 if correction != None and SEND_CORRETIONS:
@@ -168,44 +241,31 @@ class Comparator(Thread):
     last_feature_progressions: dict,
     last_resampled_features: dict,
     joints_with_timestamp: list) -> Tuple[bool, dict, Any]:
-        """Compare high level features, such as angles, by extracting them from the joints array and turn them into a progression."""
+        """Compare high level features, such as angles, by extracting them from the joints array.
+        
+        This method turn high level features into a progression dictionary and resamples them.
+        By calculating the progression dictionary it also detects repetitions.
+
+        Args:
+            spot_info_dict: Contains the exercise data that we want to compare our user's features to.
+            last_feature_progressions: The feature progressions dictionary from the previous comparing step
+            last_resampled_features: The resampled values from possibly many previous comparings steps
+            joints_with_timestamp: The joints and theirs timestamp for the current comparing step
+            
+        Returns:
+            increase_reps (bool): Is true if a repetition was detected
+            new_feature_progressions (dict): Resembles the features of interest specification dictionary but has strings inplace for every feature
+                                             that indicate the progress the user made concerning said feature.
+            new_resampled_features (dict): Resembles the features of interest specification dictionary but has lists inplace for every feature
+                                           that contain the resampled values.
+        """
         exercise_data = spot_info_dict['exercise_data']
         used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
         timestamp = joints_with_timestamp['ros_timestamp']
         beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
 
         features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
-
-        def copmute_new_feature_progression(beginning_state, features_state, last_feature_progression):
-            new_feature_progression = last_feature_progression
-
-            if beginning_state == FEATURE_HIGH:
-                if features_state == FEATURE_HIGH:
-                    feature_is_in_beginning_state = True
-                elif features_state == FEATURE_LOW:
-                    new_feature_progression  = PROGRESSION_PARTIAL
-                    feature_is_in_beginning_state = False
-                else:
-                    feature_is_in_beginning_state = False
-            elif beginning_state == FEATURE_LOW:
-                if features_state == FEATURE_LOW:
-                    feature_is_in_beginning_state = True
-                elif features_state == FEATURE_HIGH:
-                    new_feature_progression  = PROGRESSION_PARTIAL
-                    feature_is_in_beginning_state = False
-                else:
-                    feature_is_in_beginning_state = False
-            else:
-                raise MalformedFeatures("Beginning state is " + str(beginning_state))
-            
-            if feature_is_in_beginning_state:
-                if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
-                    new_feature_progression  = PROGRESSION_DONE
-                else:
-                    new_feature_progression = PROGRESSION_START
-
-            return new_feature_progression
-
+        
         increase_reps = True
         new_feature_progressions = {}
         new_resampled_features = {}
@@ -235,7 +295,7 @@ class Comparator(Thread):
                     last_feature_progression = PROGRESSION_START
                 beginning_state = beginning_states[feature_type][k]['feature_state']
                 features_state = features_states[feature_type][k]['feature_state']
-                new_feature_progression = copmute_new_feature_progression(beginning_state, features_state, last_feature_progression)
+                new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
                 
                 # If one of the features is not done, the repetition is not done
                 if new_feature_progression != PROGRESSION_DONE:
@@ -262,7 +322,21 @@ class Comparator(Thread):
 
         return increase_reps, new_feature_progressions, new_resampled_features
 
-    def calculate_reference_pose_mapping(self, feature_trajectories, exercise_data) -> np.ndarray:
+    def calculate_reference_pose_mapping(self, feature_trajectories: dict, exercise_data: dict) -> np.ndarray:
+        """Calculate the pose in the reference trajectory that we think our user is most probably in.
+
+        This method measures the similarity between the recent feature_trajectory of a user and the vectors
+        inside a hankel matrix of the reference trajectory. Thereby we can compute how likely it is that the
+        use is at a certain point in the execution of the exercise of the expert.
+
+        Args:
+            feature_trajectories: A dictionary that holds a list of past feature values for every type of feature
+                                  in every feature category
+            exercise data: A dictionary containing metadata around the exercise
+
+        Returns:
+            reference_pose: The reference pose that we think the user is in
+        """
         reference_poses = exercise_data['recording']
         predicted_indices = []
 
@@ -274,7 +348,7 @@ class Comparator(Thread):
 
                 # TODO: Do this for all hankel matrices
                 for idx, reference_trajectory_hankel_matrix in enumerate(reference_trajectory_hankel_matrices):
-                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 1)
+                    errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                     prediction = np.argmin(errors)
                     index = resampled_values_reference_trajectory_indices[idx][prediction]
 
@@ -287,20 +361,28 @@ class Comparator(Thread):
                     # print("errors", errors)
                     # print("index", index)
                     # print("len", len(reference_poses))
+
+        reference_pose = reference_poses[predicted_indices[0]]
         
-        return reference_poses[predicted_indices[0]]
+        return reference_pose
 
 
-def custom_metric(hankel_matrix, feature_trajectory, beta):
-    """
-    Return the l2 norm of signals - signal, but influence fades out linearly form the 
-    newest to the oldest measurement according to beta.
-    """
-    comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
-    hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
-    feature_trajectory_shortened = feature_trajectory[:comparing_length]
-    distances = hankel_matrix_shortened - feature_trajectory_shortened
-    fading_factor = np.linspace(beta, 4, comparing_length) # Let older signals have less influence on the error
-    errors = np.linalg.norm((distances) * fading_factor, axis=1)
-    return errors
+if __name__ == '__main__':
+    # initialize ros node
+    rp.init_node('ComparingSystem_Comparator', anonymous=False)
 
+    # Spawn a couple of Comparator threads
+    comparators = []
+    for i in range(NUMBER_OF_COMPARATOR_THREADS):  # TODO: Let this number be controlled by Ted
+        comparators.append(Comparator())
+
+    def kill_threads():
+        for t in comparators:
+            # TODO: We can not use thread.join() for some reason, envestigate why
+            t.running = False
+    
+    rp.on_shutdown(kill_threads)
+
+    rp.spin()
+
+ 

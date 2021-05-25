@@ -1,5 +1,6 @@
 """
 This file contains code that deals with the  manual extraction of low-level features from skelletons.
+It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 At the time of writing, such features are explicitly angles. Other features might follow in the future.
 
 TODO: Use msgpack at Shawans end do extract features there already? https://pypi.org/project/msgpack-numpy/
@@ -50,7 +51,6 @@ class UnknownAngleException(FeatureExtractorException):
 
 
 class FeatureExtractor():
-    """This class takes ndarrays reporesenting human poses and turns them into features."""
     @abstractmethod
     def __init__():
         pass
@@ -422,7 +422,6 @@ class FeatureExtractor():
 
     
 class SpinFeatureExtractor(FeatureExtractor):
-    """ This FeatureExtractor is able to extract features from ndarrays that are formatted according to the SPIN paper."""
     def __init__(self):
         # The indices of the joints that we use (of all the joints from the spin paper)
         self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43];

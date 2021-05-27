@@ -168,64 +168,68 @@ class Comparator(Thread):
                 _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(spot_key)
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
-                past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
+            except QueueEmpty:
+                continue
+            try:
+                while self.running:
+                    past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
 
-                # Fetch last feature progressions and resampled feature lists
-                last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
-                last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
+                    # Fetch last feature progressions and resampled feature lists
+                    last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
+                    last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
 
-                # Compare joints with expert system data
-                increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
+                    # Compare joints with expert system data
+                    increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
 
-                # Enqueue data for feature progressions and resampled feature lists
-                self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
-                self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, new_resampled_features)
+                    # Enqueue data for feature progressions and resampled feature lists
+                    self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
+                    self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, new_resampled_features)
 
-                # Send info back to outgoing message queue to the Sender node and into the ROS system
-                if increase_reps:
-                    spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
-                    user_state_message = {
-                        'user_id': 0,
-                        'current_exercise_name': spot_info_dict.get('exercise_data').get('name'),
-                        'repetitions': spot_info_dict['repetitions'],
-                        'seconds_since_last_exercise_start': (time.time_ns() - int(spot_info_dict.get('start_time'))) / 1e+9,
-                        'milliseconds_since_last_repetition': 0,
-                        'repetition_score': 100,
-                        'exercise_score': 100
-                    }
-                    self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
+                    # Send info back to outgoing message queue to the Sender node and into the ROS system
+                    if increase_reps:
+                        spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
+                        user_state_message = {
+                            'user_id': 0,
+                            'current_exercise_name': spot_info_dict.get('exercise_data').get('name'),
+                            'repetitions': spot_info_dict['repetitions'],
+                            'seconds_since_last_exercise_start': (time.time_ns() - int(spot_info_dict.get('start_time'))) / 1e+9,
+                            'milliseconds_since_last_repetition': 0,
+                            'repetition_score': 100,
+                            'exercise_score': 100
+                        }
+                        self.message_out_queue_interface.enqueue(REDIS_USER_STATE_SENDING_QUEUE_NAME, user_state_message)
 
-                    self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
+                        self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
 
-                # Calculate a new reference pose mapping
-                if new_resampled_features:
-                    all_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=False)
-                    reference_pose = self.calculate_reference_pose_mapping(all_resampled_features, spot_info_dict['exercise_data'])
-                    reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
-                    reference_person_msg = Person()
-                    reference_person_msg.stationID = 99
-                    reference_person_msg.sensorID = 0
-                    reference_person_msg.bodyParts = reference_body_parts
-                    self.predicted_skelleton_publisher.publish(reference_person_msg)
+                    # Calculate a new reference pose mapping
+                    if new_resampled_features:
+                        all_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=False)
+                        reference_pose = self.calculate_reference_pose_mapping(all_resampled_features, spot_info_dict['exercise_data'])
+                        reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
+                        reference_person_msg = Person()
+                        reference_person_msg.stationID = 99
+                        reference_person_msg.sensorID = 0
+                        reference_person_msg.bodyParts = reference_body_parts
+                        self.predicted_skelleton_publisher.publish(reference_person_msg)
 
-                    user_body_parts = self.feature_extractor.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
-                    user_person_msg = Person()
-                    user_person_msg.stationID = 99
-                    user_person_msg.sensorID = 0
-                    user_person_msg.bodyParts = user_body_parts
-                    self.user_skelleton_publisher.publish(user_person_msg)
+                        user_body_parts = self.feature_extractor.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
+                        user_person_msg = Person()
+                        user_person_msg.stationID = 99
+                        user_person_msg.sensorID = 0
+                        user_person_msg.bodyParts = user_body_parts
+                        self.user_skelleton_publisher.publish(user_person_msg)
 
-                # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
-                correction = None
+                    # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
+                    correction = None
 
-                if correction != None and SEND_CORRETIONS:
-                    user_correction_message = {
-                        'user_id': 0,
-                        'repetition': spot_info_dict['repetitions'],
-                        'positive_correction': False,
-                        'display_text': correction
-                    }
-                    self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
+                    if correction != None and SEND_CORRETIONS:
+                        user_correction_message = {
+                            'user_id': 0,
+                            'repetition': spot_info_dict['repetitions'],
+                            'positive_correction': False,
+                            'display_text': correction
+                        }
+                        self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
             except QueueEmpty:
                 continue
             except SpotMetaDataException as e:

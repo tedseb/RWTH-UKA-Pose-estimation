@@ -25,43 +25,36 @@ def returnCameraIndices():
 
 class CameraNode():
     def __init__(self, verbose = False, force_youtube = False, check_cameras = False, camera_index = 0):
-        self._url = "https://youtu.be/bqpCkbAr8dY"#"https://youtu.be/Z6SKzx7C84M"  https://youtu.be/bqpCkbAr8dY
-        self._video_stream = None
+        self._url = "https://youtu.be/bqpCkbAr8dY" #"https://youtu.be/Z6SKzx7C84M"  https://youtu.be/bqpCkbAr8dY
         self._cap = None
         self._camera_index = camera_index
         self._verbose = verbose
         self._force_youtube = force_youtube
         self._check_cameras = check_cameras
+        rospy.init_node('camera', anonymous=True)
         self._pub = rospy.Publisher('image', Image, queue_size=2)
-        self._rospy.init_node('camera', anonymous=True)
-
+        
         if force_youtube:
-            video = pafy.new(self.url)
-            self.video_stream = video.getbest(preftype="mp4")
-            self._cap = cv2.VideoCapture()
-            self._cap.open(self._video_stream.url)
+            self.set_youtube_stream()
         else:
-            if check_cameras: 
-                indices = returnCameraIndices()
-                if len(indices) == 0:
-                    raise IOError('No Cameras Found')
-                self._cap = cv2.VideoCapture(indices[0])  
-                if verbose: 
-                    print(f"[CameraNode] start cam on index [indices[0]]")
-            else:
-                self._cap = cv2.VideoCapture(self._camera_index)
+            self.set_camera()
+
+        if not self._cap.isOpened() or self._cap is None: 
+            self.set_youtube_stream()
+            self._force_youtube = True
 
     def start_camera_publisher(self):
-        rate = self._rospy.Rate(30)
+        rate = rospy.Rate(30)
 
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
-            # if not ret:
-            #     try:
-            #         self._cap.open(self._video_stream.url)
-            #     except:
-            #         rospy.loginfo('cant read camera', ret)
-            #     continue
+            
+            if not ret:
+                if self._force_youtube: 
+                    self._cap.open(self._video_stream.url)
+                    continue
+                rospy.logerr('Could not get image')
+                raise IOError('[CameraNode] Could not get image')
 
             msg = Image()
             msg.header.stamp = rospy.Time.now()
@@ -72,6 +65,24 @@ class CameraNode():
             msg.step = frame.shape[-1]*frame.shape[0]
             self._pub.publish(msg)
             rate.sleep()
+    
+    def set_youtube_stream(self):
+        video = pafy.new(self._url)
+        self._video_stream = video.getbest(preftype="mp4")
+        self._cap = cv2.VideoCapture()
+        self._cap.open(self._video_stream.url)
+
+    def set_camera(self):
+        if self._check_cameras: 
+            indices = returnCameraIndices()
+            if len(indices) == 0:
+                rospy.logerr('No Cameras Found')
+                raise IOError('[CameraNode] No Cameras Found')
+            self._cap = cv2.VideoCapture(indices[0])  
+            if self._verbose: 
+                print(f"[CameraNode] start cam on index [indices[0]]")
+        else:
+            self._cap = cv2.VideoCapture(self._camera_index)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -91,14 +102,19 @@ if __name__ == '__main__':
     
     #Todo: In Ros Logger
     if args.verbose:
-        print("[CameraNode] verbosity turned on")
-
+        print("[CameraNode] Verbosity turned on")
+        rospy.loginfo("Verbosity turned on")
         if args.youtube:
-            print("[CameraNode] youtube turned on")
+            print("[CameraNode] Youtube turned on")
+            rospy.loginfo("Youtube turned on")
+        else:
+            print(f"[CameraNode] Try to open {args.camera_index}")
+            rospy.loginfo(f"Try to open {args.camera_index}")
 
         if args.check_cameras:
-            print("[CameraNode] cameras turned on")
-    
+            print("[CameraNode] Try to find camera index")
+            rospy.loginfo("Try to find camera index")
+
     try:
         node = CameraNode(args.verbose, args.youtube, args.check_cameras, args.camera_index)
         node.start_camera_publisher()

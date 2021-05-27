@@ -4,7 +4,11 @@ import cv2
 from sensor_msgs.msg import Image
 import numpy as np
 import pafy
+import argparse
 import pylint
+import sys
+
+
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
 url = "https://youtu.be/bqpCkbAr8dY"             #"https://youtu.be/Z6SKzx7C84M"  https://youtu.be/bqpCkbAr8dY
@@ -41,8 +45,22 @@ def camera():
         rate.sleep()
 
 if __name__ == '__main__':
-        
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
 
+    print("#####################################")
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+    
+    if args.verbose:
+        print("verbosity turned on")
+    print("#####################################")
+    
     try:
         camera()
     except rospy.ROSInterruptException:

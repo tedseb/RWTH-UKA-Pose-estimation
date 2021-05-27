@@ -43,4 +43,10 @@ RUN pip3 install pafy -U
 RUN pip3 install youtube-dl
 RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-python==4.5.1.48 PyYAML==5.4.1
 
+RUN pip3 install msgpack_numpy
+
+COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
+RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
+ENTRYPOINT ["/home/trainerai/start_script.sh"]
+
 USER trainerai

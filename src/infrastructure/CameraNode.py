@@ -38,7 +38,7 @@ def camera():
         msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = 'dev0'
         msg.encoding = "bgr8"
-        msg.data = np.array(frame, dtype=np.uint8).tostring()
+        msg.data = np.array(frame, dtype=np.uint8).tobytes()
         msg.height, msg.width = frame.shape[:-1]
         msg.step = frame.shape[-1]*frame.shape[0]
         pub.publish(msg)
@@ -47,6 +47,8 @@ def camera():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
+    parser.add_argument("-y", "--youtube", help="force youtube video", action="store_true")
+    parser.add_argument("-c", "--check-cameras", help="check all cam id's from 0 to 10", action="store_true")
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
 
@@ -59,6 +61,13 @@ if __name__ == '__main__':
     
     if args.verbose:
         print("verbosity turned on")
+
+    if args.youtube:
+        print("youtube turned on")
+
+    if args.check_cameras:
+        print("cameras turned on")
+
     print("#####################################")
     
     try:

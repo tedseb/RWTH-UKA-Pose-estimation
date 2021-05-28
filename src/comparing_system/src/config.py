@@ -15,21 +15,20 @@ ROS_SKELLETON_DEFINITION = 'skelleton_name'
 
 NUMBER_OF_COMPARATOR_THREADS = 1
 
-REDIS_MAXIMUM_QUEUE_SIZE = 100
+REDIS_MAXIMUM_QUEUE_SIZE = 300
+REDIS_QUEUE_SIZE_PANIC_BOUNDARY = 100
 REDIS_MAXIMUM_PAST_QUEUE_SIZE = 100
-STATION_QUEUE_SIZE_MINIMUM = 0
 REDIS_KEY_SEPARATOR = ":"
 
 REDIS_USER_STATE_SENDING_QUEUE_NAME = "user_state_sending_queue"
 REDIS_USER_INFO_SENDING_QUEUE_NAME = "user_correction_sending_queue"
-REDIS_LOAD_BALANCER_LIST_KEY = "spot_queue_load_balancer_list"
+REDIS_LOAD_BALANCER_SORTED_SET_KEY = "spot_queue_load_balancer_list"
+REDIS_LOAD_BALANCER_ACTIVE_COMPARATORS_SORTED_SET_KEY = "spot_queue_load_balancer_active_comparators"  # Currently not in use
 
 QUEUEING_USER_STATE_QUEUE_SIZE_MAX = 100
 QUEUEING_USER_INFO_QUEUE_SIZE_MAX = 100
 
 EXERCISE_DATA_LRU_CACHE_SIZE = 1000
-
-assert STATION_QUEUE_SIZE_MINIMUM <= REDIS_MAXIMUM_QUEUE_SIZE
 
 # Incase other people want to use the same redis database, better use a prefix for keys so our data does not collide
 REDIS_GENERAL_PREFIX = "comparing_system"

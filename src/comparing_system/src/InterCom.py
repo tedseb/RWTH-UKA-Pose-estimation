@@ -115,7 +115,7 @@ class QueueLoadBalancerInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def set_queue_size(self, key: str, queue_size: int) -> None:
+    def increment_queue_size(self, key: str, queue_size: int) -> None:
         """Set the size of a queue """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
@@ -174,7 +174,6 @@ class RedisFeatureDataQueuesInterface(RedisInterface, PastFeatureDataQueuesInter
     # TODO: These methods will let the Redis memory grow overtime, as different exercises are used. Prevent this.
     # TODO: Use redis pipelines
     # TODO: Use hmap or scan+get, test different implementations
-    # TODO: care for pose_hash and timestamp
     def __init__(self):
         # We need a separate constructor in order to force decode_responses=True for this Redis connection
         self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=True)
@@ -252,7 +251,6 @@ class RedisSpotMetaDataInterface(RedisInterface, SpotMetaDataInterface):
             spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)
         return spot_info_dict
 
-
     def set_spot_info_dict(self, key: str, spot_info_dict: dict) -> None:
         if "exercise_data" in spot_info_dict.keys():
             yaml_string = yaml.dump(spot_info_dict["exercise_data"])
@@ -269,35 +267,34 @@ class RedisSpotMetaDataInterface(RedisInterface, SpotMetaDataInterface):
 
 class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface):
     def get_queue_key(self):
-        # For now, simply take the key corresponding to the spot with the highest load, NO PROPER LOAD BALANCING!
-        spot_key_list = self.redis_connection.zrange(REDIS_LOAD_BALANCER_LIST_KEY, 0, 0)
+        # For now, we want a thread to always focus on the largest queue
+        try:
+            key_tuple = self.redis_connection.bzpopmax(REDIS_LOAD_BALANCER_SORTED_SET_KEY, timeout=1)
+        except TimeoutError:
+            raise QueueEmpty
+        
+        if key_tuple is None:
+            raise QueueEmpty
+        
+        # In the future, we can use expire commands a track working comparators for better balancing
+        # self.redis_connection.incrby(REDIS_LOAD_BALANCER_ACTIVE_COMPARATORS_SORTED_SET_KEY + spot_key, amount=1)
+        # self.redis_connection.pexpire(REDIS_LOAD_BALANCER_ACTIVE_COMPARATORS_SORTED_SET_KEY + spot_key, 100)
 
-        if not spot_key_list:
-           raise QueueEmpty
-        spot_key = spot_key_list[0]
+        # Set score to zero because we now
+        spot_key = key_tuple[1]
         try:
             spot_key = spot_key.decode('utf-8')
         except Exception:
             # Catch cases where we can an byte encoded string back (ROS Melodic's Python 2.7 does that to us)
             pass
-                
-        new_score = self.redis_connection.zadd(REDIS_LOAD_BALANCER_LIST_KEY, {spot_key: -1}, incr=True)
-
-        if new_score < 0:
-            self.redis_connection.zrem(REDIS_LOAD_BALANCER_LIST_KEY, spot_key)
-
+        
         return spot_key
 
-    def set_queue_size(self, key: str, queue_size: int) -> None:
+    def increment_queue_size(self, key: str, increment_by: int = 1) -> None:
         """Set the size of a queue."""
+        self.redis_connection.zadd(REDIS_LOAD_BALANCER_SORTED_SET_KEY, {key: increment_by}, incr=True)
 
-        if (queue_size >= STATION_QUEUE_SIZE_MINIMUM):
-            # The queue_size serves as our score
-            self.redis_connection.zadd(REDIS_LOAD_BALANCER_LIST_KEY, {key: queue_size})
-        else:
-            self.redis_connection.zrem(REDIS_LOAD_BALANCER_LIST_KEY, key)
-        
-
+    
 class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
     def enqueue(self, key, message) -> None:
         message = self.redis_connection.lpush(key, msgpack.packb(message))
@@ -376,12 +373,17 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
 
         queue_size = self.redis_connection.rpush(spot_queue_key, msgpack.packb(data))
 
-        if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-            if HIGH_VERBOSITY:
-                rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
-            self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+        if (queue_size >= REDIS_QUEUE_SIZE_PANIC_BOUNDARY):
+            if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
+                if HIGH_VERBOSITY:
+                    rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
+                self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+            else:
+                if HIGH_VERBOSITY:
+                    rp.logerr("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
+            return queue_size
 
-        return queue_size
+        return 1
 
     def size(self, spot_key: str):
         spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key, redis_spot_feature_progression_key, redis_spot_past_features_key = generate_redis_key_names(key)

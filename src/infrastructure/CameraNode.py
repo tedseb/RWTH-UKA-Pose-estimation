@@ -22,10 +22,24 @@ def returnCameraIndices():
         i -= 1
     return arr
 
+videos_mit_ted = {
+"deadlift_good": "https://www.youtube.com/watch?v=tZvIbg5SiB0",
+"deadlift_bad": "https://www.youtube.com/watch?v=HAvKEgNne_s",
+"jumps": "https://www.youtube.com/watch?v=6Jmuqqzdngg",
+"langhantel_curls_bad": "https://www.youtube.com/watch?v=BzpF-yAIstU",
+"langhantel_curls_good": "https://www.youtube.com/watch?v=gTux94rB92w",
+"military_press_bad": "https://www.youtube.com/watch?v=EsZ_GA8Pk7k",
+"military_press_good": "https://www.youtube.com/watch?v=QVQ5WaEKyFU",
+"pullups_bad": "https://www.youtube.com/watch?v=LujrsivJmbQ",
+"pullups_good": "https://www.youtube.com/watch?v=YiVXPZQhHSA",
+"orhan_ted_buero": "https://youtu.be/bqpCkbAr8dY",
+}
 
 class CameraNode():
-    def __init__(self, verbose = False, force_youtube = False, check_cameras = False, camera_index = 0):
-        self._url = "https://youtu.be/bqpCkbAr8dY" #"https://youtu.be/Z6SKzx7C84M"  https://youtu.be/bqpCkbAr8dY
+    def __init__(self, verbose = False, force_youtube = False, check_cameras = False, video_string="deadlift_good", camera_index = 0):
+        # Try to get the Video from the video list, if the video can not be found, the video string is probably a video link itself
+        self._url = videos_mit_ted.get(video_string, video_string)
+
         self._cap = None
         self._camera_index = camera_index
         self._verbose = verbose
@@ -90,6 +104,7 @@ if __name__ == '__main__':
     parser.add_argument("-y", "--youtube", help="force youtube video", action="store_true")
     parser.add_argument("-c", "--check-cameras", help="check all cam id's from 0 to 10", action="store_true")
     parser.add_argument("-i", "--camera-index", default=0, type=int, help="opencv camera index")
+    parser.add_argument("-s", "--video-string", default=None, type=str, help="string of the video we want to play, see CameraNode.py")
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
 
@@ -116,7 +131,7 @@ if __name__ == '__main__':
             rospy.loginfo("Try to find camera index")
 
     try:
-        node = CameraNode(args.verbose, args.youtube, args.check_cameras, args.camera_index)
+        node = CameraNode(args.verbose, args.youtube, args.check_cameras, args.video_string, args.camera_index)
         node.start_camera_publisher()
     except rospy.ROSInterruptException:
         pass

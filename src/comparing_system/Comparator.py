@@ -168,15 +168,14 @@ class Comparator(Thread):
                 _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(spot_key)
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
-            except QueueEmpty:
-                continue
-            try:
+
+                # Fetch last feature progressions and resampled feature lists
+                last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
+                last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
+ 
+                # As long as there are skelletons available for this spot, continue
                 while self.running:
                     past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(spot_key)
-
-                    # Fetch last feature progressions and resampled feature lists
-                    last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
-                    last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
 
                     # Compare joints with expert system data
                     increase_reps, new_features_progression, new_resampled_features = self.compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, joints_with_timestamp)
@@ -230,6 +229,9 @@ class Comparator(Thread):
                             'display_text': correction
                         }
                         self.message_out_queue_interface.enqueue(REDIS_USER_INFO_SENDING_QUEUE_NAME, user_correction_message)
+
+                    last_feature_progressions = new_features_progression
+                    last_resampled_features = new_resampled_features
             except QueueEmpty:
                 continue
             except SpotMetaDataException as e:

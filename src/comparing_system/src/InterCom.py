@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict, ChainMap
 from traceback import print_exc
 from typing import Any, Dict, List, Tuple
+from copy import deepcopy
 
 import collections
 import msgpack  # TODO: Use Protobufs?
@@ -252,18 +253,16 @@ class RedisSpotMetaDataInterface(RedisInterface, SpotMetaDataInterface):
         return spot_info_dict
 
     def set_spot_info_dict(self, key: str, spot_info_dict: dict) -> None:
+        spot_info_dict_copy = deepcopy(spot_info_dict)
         if "exercise_data" in spot_info_dict.keys():
-            yaml_string = yaml.dump(spot_info_dict["exercise_data"])
-            spot_info_dict["exercise_data"] = yaml_string
-            spot_info_dict["exercise_data_hash"] = hashlib.md5(yaml_string.encode('utf-8')).hexdigest()
-        self.redis_connection.hset(key, mapping=spot_info_dict)
+            yaml_string = yaml.dump(spot_info_dict_copy["exercise_data"])
+            spot_info_dict_copy["exercise_data"] = yaml_string
+            spot_info_dict_copy["exercise_data_hash"] = hashlib.md5(yaml_string.encode('utf-8')).hexdigest()
+        self.redis_connection.hset(key, mapping=spot_info_dict_copy)
 
     def delete(self, key: str) -> None:
-        keys = generate_redis_spot_state_keys(key)
         self.redis_connection.delete(key)
-        for k in keys:
-            self.redis_connection.delete(k)
-        
+
 
 class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface):
     def get_queue_key(self):
@@ -287,14 +286,13 @@ class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface
         except Exception:
             # Catch cases where we can an byte encoded string back (ROS Melodic's Python 2.7 does that to us)
             pass
-        
         return spot_key
 
     def increment_queue_size(self, key: str, increment_by: int = 1) -> None:
-        """Set the size of a queue."""
-        self.redis_connection.zadd(REDIS_LOAD_BALANCER_SORTED_SET_KEY, {key: increment_by}, incr=True)
-
+        """Increment the size of a queue as seen by the load balancer."""
+        new_score = self.redis_connection.zadd(REDIS_LOAD_BALANCER_SORTED_SET_KEY, {key: increment_by}, incr=True)
     
+
 class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
     def enqueue(self, key, message) -> None:
         message = self.redis_connection.lpush(key, msgpack.packb(message))
@@ -380,9 +378,8 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
                 self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
             else:
                 if HIGH_VERBOSITY:
+                    return 1
                     rp.logerr("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
-            return queue_size
-
         return 1
 
     def size(self, spot_key: str):
@@ -423,26 +420,3 @@ def generate_redis_key_names(spot_key: str) -> List[str]:
 
     return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key, redis_spot_feature_progression_key, redis_spot_resampled_features_key
 
-def generate_redis_spot_state_keys(redis_spot_state_key: str) -> List[str]:
-    """This method simplifies handling of redis spot state keys names.
-
-    Returns: 
-        redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key
-
-    Data that is expected by the comparator is listed below.
-    The separator ':' is used here, allthough this can be changed with REDIS_KEY_SEPARATOR.
-
-    The redis keys and values are as follows:
-        * Distances is      <spot_key:state:distances>      :Redis Hashmap
-        * Angles is         <spot_key:state:angles>         :Redis Hashmap
-        * Rotations is      <spot_key:state:rotations>      :Redis Hashmap
-        * Speed is          <spot_key:state:speeds>         :Redis Hashmap
-        * Accaleration is   <spot_key:state:accalerations>  :Redis Hashmap
-    """
-    redis_distances_key = redis_spot_state_key + REDIS_KEY_SEPARATOR + "distances"
-    redis_angles_key = redis_spot_state_key + REDIS_KEY_SEPARATOR + "angles"
-    redis_rotation_key = redis_spot_state_key + REDIS_KEY_SEPARATOR + "rotations"
-    redis_speed_key = redis_spot_state_key + REDIS_KEY_SEPARATOR + "speeds"
-    redis_rotation_key = redis_spot_state_key + REDIS_KEY_SEPARATOR + "accalerations"
-
-    return redis_distances_key, redis_angles_key, redis_rotation_key, redis_speed_key, redis_rotation_key

@@ -8,13 +8,22 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 
 from typing import Any
 
-import rospy as rp
-from src.FeatureExtraction import *
-from src.config import *
-from src.InterCom import *
-from src.Util import *
-
+import rospy as rp    
 from backend.msg import Persons
+
+try:
+    from comparing_system.src.Comparator import Comparator
+    from comparing_system.src.config import *
+    from comparing_system.src.FeatureExtraction import *
+    from comparing_system.src.InterCom import *
+    from comparing_system.src.Util import *
+except ImportError:
+    from src.Comparator import Comparator
+    from src.config import *
+    from src.FeatureExtraction import *
+    from src.InterCom import *
+    from src.Util import *
+
 
 class Receiver():
     """
@@ -23,9 +32,9 @@ class Receiver():
     Each queue corresponds to one spot. Therefore, multiple views of the same spot go into the same queue.
     """
     def __init__(self, 
-    spot_queue_load_balancer_class: type(QueueLoadBalancerInterface) = RedisQueueLoadBalancerInterface, 
-    spot_queue_interface_class: type(SpotQueueInterface) = RedisSpotQueueInterface,
-    feature_extractor_class: type(FeatureExtractor) = SpinFeatureExtractor):
+    spot_queue_load_balancer_class: QueueLoadBalancerInterface = RedisQueueLoadBalancerInterface, 
+    spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
+    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
         self.spot_queue_interface = spot_queue_interface_class()
@@ -42,7 +51,6 @@ class Receiver():
         for p in message.persons:
             array = self.feature_extractor.body_parts_to_ndarray(p.bodyParts)
             joints_with_timestamp = {'used_joint_ndarray': array, 'ros_timestamp': message.header.stamp.to_time()}
-            # This mostly returns 1. Only, if the queue is full, it will return the size of the queue
             queue_size_increment_value = self.spot_queue_interface.enqueue(p.stationID, joints_with_timestamp)
             self.spot_queue_load_balancer.increment_queue_size(p.stationID, queue_size_increment_value)
 

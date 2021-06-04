@@ -35,8 +35,12 @@ import msgpack
 import numpy as np
 import rospy as rp
 import scipy
-from src.config import *
-from src.Util import *
+try:
+    from comparing_system.src.config import *
+    from comparing_system.src.Util import *
+except ImportError:
+    from src.config import *
+    from src.Util import *
 
 from scipy.linalg import hankel
 from scipy.spatial.distance import euclidean

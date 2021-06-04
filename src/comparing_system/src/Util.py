@@ -9,6 +9,12 @@ from typing import Any, Dict
 import msgpack
 import msgpack_numpy as m
 import numpy as np
+import rospy as rp
+
+try:
+    from comparing_system.src.config import *
+except ImportError:
+    from src.config import *
 
 m.patch()
 
@@ -22,6 +28,7 @@ FEATURE_HIGH: str = 'high'
 PROGRESSION_START: str = 'start'
 PROGRESSION_PARTIAL: str = 'partial'
 PROGRESSION_DONE: str = 'done'
+
 
 # TODO: Check more sizes of exercise objects frequently
 def get_size_of_object(obj, seen=None):
@@ -47,3 +54,14 @@ def get_size_of_object(obj, seen=None):
         size += sum([get_size(i, seen) for i in obj])
     return size
 
+
+def publish_message(publisher, topic, message):
+    try:
+        # This is currently how our REST API wants messages to be formed
+        message = json.dumps({'topic': topic, 'data': data})
+        publisher.publish(message)
+        if HIGH_VERBOSITY:
+            rp.logerr("ComparingSystem_Sender.py sent message: " + str(message))
+    except Exception as e:
+        if HIGH_VERBOSITY:
+            rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))

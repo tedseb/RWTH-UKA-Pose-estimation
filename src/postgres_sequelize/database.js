@@ -39,5 +39,4 @@ module.exports = {
     StationUsages: sequelize.models.station_usage,
     DigiGymUsers: sequelize.models.dguser,
     DigiGymRoles: sequelize.models.dgrole
-
 };

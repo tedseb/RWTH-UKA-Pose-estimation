@@ -5,6 +5,7 @@
   </include> 
   <include file="$(find infrastructure)/launch/param_updater.launch" />
   <include file="$(find infrastructure)/launch/mobile_server.launch" />
+   <include file="$(find infrastructure)/launch/crawler.launch" />
   <include file="$(find spin)/launch/spin.launch"/>
   <include file="$(find objectDetector)/launch/objectDetector.launch" />
   <include file="$(find comparing_system)/launch/comparing_system.launch" />

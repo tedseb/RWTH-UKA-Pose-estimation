@@ -1,0 +1,6 @@
+{
+    "POSTGRES_PW": "esel1212",
+    "POSTGRES_USER": "trainerai",
+    "POSTGRES_HOST": "localhost",
+    "POSTGRES_PORT": 5432
+}

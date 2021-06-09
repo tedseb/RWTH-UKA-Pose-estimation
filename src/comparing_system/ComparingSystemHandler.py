@@ -40,14 +40,14 @@ class ComparingSystemHandler():
     """
     def __init__(self, 
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
-    message_queue_interface_class: MessageQueueInterface = RedisMessageQueueInterface,
+    spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     feature_extractor_class: FeatureExtractor = SpinFeatureExtractor,
     past_features_queue_interface_class: PastFeatureDataQueuesInterface = RedisFeatureDataQueuesInterface):
 
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
         self.spot_metadata_interface = spot_metadata_interface_class()
-        self.message_queue_interface = message_queue_interface_class()
+        self.spot_queue_interface = spot_queue_interface_class()
         self.feature_extractor = feature_extractor_class()
         self.past_features_queue_interface = past_features_queue_interface_class()
         self.comparators = {} # A dictionary, with spot IDs as keys
@@ -60,8 +60,7 @@ class ComparingSystemHandler():
         self.spot_metadata_interface.delete(spot_state_key)
         self.past_features_queue_interface.delete(redis_spot_feature_progression_key)
         self.past_features_queue_interface.delete(redis_spot_resampled_features_key)
-        self.message_queue_interface.delete(spot_queue_key)
-        self.message_queue_interface.delete(spot_past_queue_key)
+        self.spot_queue_interface.delete(station_id)
 
         if HIGH_VERBOSITY:
                 rp.logerr("Updating info for spot with key: " + spot_info_key)

@@ -332,7 +332,6 @@ class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
             if HIGH_VERBOSITY:
                 rp.logerr("Issue getting message from Queue: " + str(key))
                 print_exc()
-            pass
         
         return message
 
@@ -391,8 +390,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         return self.redis_connection.llen(spot_queue_key), self.redis_connection.llen(spot_past_queue_key), self.redis_connection.llen(spot_info_key), self.redis_connection.llen(spot_state_key), self.redis_connection.llen(redis_spot_feature_progression_key), self.redis_connection.llen(redis_spot_resampled_features_key)
 
     def delete(self, spot_key: str):
-        # TODO: Try and catch
-        spot_queue_key, spot_past_queue_key, _, _, _, _ = generate_redis_key_names(key)
+        spot_queue_key, spot_past_queue_key, _, _, _, _ = generate_redis_key_names(spot_key)
         self.redis_connection.delete(spot_queue_key)
         self.redis_connection.delete(spot_past_queue_key)
             

@@ -10,6 +10,7 @@ import msgpack
 import msgpack_numpy as m
 import numpy as np
 import rospy as rp
+import json
 
 try:
     from comparing_system.src.config import *
@@ -55,7 +56,7 @@ def get_size_of_object(obj, seen=None):
     return size
 
 
-def publish_message(publisher, topic, message):
+def publish_message(publisher, topic, data):
     try:
         # This is currently how our REST API wants messages to be formed
         message = json.dumps({'topic': topic, 'data': data})

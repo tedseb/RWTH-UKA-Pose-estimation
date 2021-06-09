@@ -16,7 +16,9 @@ from importlib import import_module
 from threading import Thread
 from traceback import print_exc
 from typing import NoReturn
+from queue import Queue
 
+import collections
 import redis
 import rospy as rp
 import numpy as np
@@ -161,18 +163,18 @@ def compare_high_level_features(spot_info_dict: dict,
             resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
             scale = exercise_data['reference_feature_data'][feature_type][k]['resampled_reference_trajectory_scale_array']
             try:
-                last_resampled_feature_value = float(last_resampled_features[feature_type][k])
+                last_resampled_feature_value = float(last_resampled_features[feature_type][k][-1])
                 new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
                 if new_resampled_feature_values:
                     new_resampled_features[feature_type][k] = new_resampled_feature_values
-            except KeyError:
+            except (KeyError, TypeError):
                 # If we have no resampled feature values yet, set them to the nearest resampled one
                 new_resampled_features[feature_type][k] = scale[np.argmin(abs(scale - feature_value))]
             
             # With the beginning state of a feature and the current feature state, we can computer the new feature progression value
             try:
-                last_feature_progression = last_feature_progressions[feature_type][k]
-            except KeyError:
+                last_feature_progression = last_feature_progressions[feature_type][k][-1]
+            except (KeyError, TypeError):
                 # If we have no last feature progression value, set this feature progression to the starting value
                 last_feature_progression = PROGRESSION_START
             beginning_state = beginning_states[feature_type][k]['feature_state']
@@ -203,6 +205,7 @@ def compare_high_level_features(spot_info_dict: dict,
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
     return increase_reps, new_feature_progressions, new_resampled_features
+
 
 def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: dict) -> np.ndarray:
     """Calculate the pose in the reference trajectory that we think our user is most probably in.
@@ -241,6 +244,26 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     return reference_pose
 
 
+def enqueue_dictionary(previous_dict, enqueued_dict):
+    for k, v in enqueued_dict.items():
+        if isinstance(v, collections.MutableMapping):
+            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v)
+        elif isinstance(v, list):
+            previous_dict[k] = previous_dict.get(k, [])
+            previous_dict[k].extend(v)
+            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
+                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
+        else:
+            previous_dict[k] = previous_dict.get(k, [])
+            if previous_dict[k] == None:
+                previous_dict[k] = []
+            previous_dict[k].append(v)
+            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
+                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
+    
+    return previous_dict
+
+
 class Comparator(Thread):
     """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
     
@@ -275,6 +298,12 @@ class Comparator(Thread):
         self.predicted_skelleton_publisher = rp.Publisher("comparing_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("comparing_input", Person, queue_size=1000)
 
+        self.past_features_queue = Queue()
+        self.past_resampled_features_queue = Queue()
+        self.last_feature_progressions = {}
+        self.last_resampled_features = {}
+        self.past_joints_with_timestamps = Queue()
+
         self.spot_key = spot_key
 
         self.start()
@@ -289,17 +318,16 @@ class Comparator(Thread):
         return self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data"])
 
     def run(self) -> NoReturn:
+        _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(self.spot_key)
+        # Fetch last feature progressions and resampled feature lists
+        self.last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
+        self.last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
         while(self.running):
             try:
                 # The following lines fetch data that we need to compare
-                _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(self.spot_key)
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
 
-                # Fetch last feature progressions and resampled feature lists
-                last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
-                last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
- 
                 # As long as there are skelletons available for this spot, continue
                 past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
 
@@ -309,16 +337,15 @@ class Comparator(Thread):
                 features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
 
                 # Compare joints with expert system data
-                increase_reps, new_features_progression, new_resampled_features = compare_high_level_features(spot_info_dict, last_feature_progressions, last_resampled_features, features_states)
+                increase_reps, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states)
 
-                # Enqueue data for feature progressions and resampled feature lists
-                self.past_features_queue_interface.enqueue(spot_feature_progression_key, new_features_progression)
-                self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, new_resampled_features)
+                self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions)
+                self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features)
 
                 # Send info back to REST API
                 if increase_reps:
                     spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
-                    user_state_message = {
+                    user_state_data = {
                         'user_id': 0,
                         'current_exercise_name': spot_info_dict.get('exercise_data').get('name'),
                         'repetitions': spot_info_dict['repetitions'],
@@ -327,14 +354,13 @@ class Comparator(Thread):
                         'repetition_score': 100,
                         'exercise_score': 100
                     }
-                    publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_message)
+                    publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
 
                 # Calculate a new reference pose mapping
                 if new_resampled_features:
-                    all_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=False)
-                    reference_pose = calculate_reference_pose_mapping(all_resampled_features, spot_info_dict['exercise_data'])
+                    reference_pose = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()
                     reference_person_msg.stationID = 99
@@ -368,4 +394,8 @@ class Comparator(Thread):
             except Exception as e:
                 if HIGH_VERBOSITY:
                     print_exc() 
-                    rp.logerr("Encountered an Error while Comparing: " + str(e))    
+                    rp.logerr("Encountered an Error while Comparing: " + str(e))
+            
+        # Enqueue data for feature progressions and resampled feature lists
+        self.past_features_queue_interface.enqueue(spot_feature_progression_key, self.last_feature_progressions)
+        self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, self.last_resampled_features)

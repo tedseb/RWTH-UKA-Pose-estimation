@@ -1,5 +1,6 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import { ReactiveFormsModule } from '@angular/forms';
 
 
 //Angular Material Components
@@ -51,6 +52,7 @@ import { SignupComponent } from './auth/signup/signup.component';
     BrowserModule,
     BrowserAnimationsModule,
     AppRoutingModule,
+    ReactiveFormsModule,
     MatCheckboxModule,
     MatCheckboxModule,
     MatButtonModule,

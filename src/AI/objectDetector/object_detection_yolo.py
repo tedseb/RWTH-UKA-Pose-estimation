@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from PIL import Image as ImagePil
 from sensor_msgs.msg import Image
-from backend.msg import Bboxes, LabelsCameraID
+from backend.msg import Bboxes
+from backend.msg import LabelsCameraID
 from scheduler import getBoxesInStation
 import time
 import rospy

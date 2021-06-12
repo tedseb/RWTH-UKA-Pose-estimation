@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from PIL import Image as ImagePil
 from sensor_msgs.msg import Image
-from backend.msg import Bboxes
+from backend.msg import Bboxes, LabelsCameraID
 from scheduler import getBoxesInStation
 import time
 import rospy
@@ -31,7 +31,9 @@ class ObjectDetectionPipeline:
         if self.renderer==True:
             self.publisher_img = rospy.Publisher('imageYOLO', Image , queue_size=2)
         self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
+        self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
         self.body_bbox=[]
+        self.labels=[]
         self.info_station=[]
         self.info_frameID=[]
         self.frame_id=0
@@ -78,6 +80,13 @@ class ObjectDetectionPipeline:
         left_top.sensorID=self.info_frameID       
         self.publisher_boxes.publish(left_top)
 
+        array1D_labels =np.array(self.labels).reshape(1,-1)
+        lebels  = LabelsCameraID()
+        lebels.header.stamp = img_msg.header.stamp #Will be important for data fusion: Use current time or older stamp from CameraNode
+        lebels.header.frame_id = self.frame_id  #From which camera
+        lebels.data=array1D_labels[0]
+        self.publisher_labels.publish(lebels)
+
     def obj_detectYolo(self, img):
         """
         This function uses the Yolo object detector. It predicts BBOX with label and confidence values. 
@@ -92,6 +101,7 @@ class ObjectDetectionPipeline:
         results.imgs # array of original images (as np array) passed to model for inference
 
         self.body_bbox=[]
+        self.labels=[]
         self.info_station=[]
         self.info_frameID=[]
 
@@ -109,11 +119,12 @@ class ObjectDetectionPipeline:
     def _get_Person_boxes(self, labels, resul_np,frame_id):
         """Function for checking labels and assigning stations and BBOX""" 
         tmp_conf=0
+        self.labels.append(labels)
         for count, label in enumerate(labels):
             box=resul_np[count,:4]
             if label==0:
                 if self.stationChk:
-                    chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box,self.frame_id , self.stationChk)
+                    chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box,frame_id , self.stationChk)
                     if chkIsstation and (stationID not in self.info_station): #ToDo: SensorID to check the correct yaml file
                         #Change it to x,y,w,h for the PoseAI
                         x=box[0]

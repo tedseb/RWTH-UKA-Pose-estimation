@@ -81,12 +81,13 @@ class ObjectDetectionPipeline:
         left_top.sensorID=self.info_frameID       
         self.publisher_boxes.publish(left_top)
 
-        array1D_labels =np.array(self.labels).reshape(1,-1)
-        lebels  = LabelsCameraID()
-        lebels.header.stamp = img_msg.header.stamp #Will be important for data fusion: Use current time or older stamp from CameraNode
-        lebels.header.frame_id = self.frame_id  #From which camera
-        lebels.data=array1D_labels[0]
-        self.publisher_labels.publish(lebels)
+        array1D_labels = np.array(self.labels).reshape(1,-1)
+        labels  = LabelsCameraID()
+        labels.header.stamp = img_msg.header.stamp #Will be important for data fusion: Use current time or older stamp from CameraNode
+        labels.header.frame_id = img_msg.header.frame_id  #From which camera
+        labels.sensorID = self.frame_id
+        labels.data=array1D_labels[0]
+        self.publisher_labels.publish(labels)
 
     def obj_detectYolo(self, img):
         """

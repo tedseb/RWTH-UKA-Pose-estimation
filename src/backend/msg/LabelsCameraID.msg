@@ -1,2 +1,3 @@
 Header header
-int16[] data
+float32[] data
+int16 sensorID

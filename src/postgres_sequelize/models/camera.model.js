@@ -13,6 +13,14 @@ module.exports = (sequelize) => {
             allowNull: false,
             type: DataTypes.STRING(40),
             unique: true,
+        },
+        type: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        typeInfo: {
+            type: DataTypes.STRING(16),
+            allowNull: true
         }
     });
 };

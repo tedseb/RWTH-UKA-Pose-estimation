@@ -15,15 +15,10 @@ const { sequelize } = require('../database');
 // const frame4 = sequelize.models.frame.create({ stationId: 2, frame_box: [[1158, 670], [549, 100]] });
 
 (async () => {
-
-    const webcam0 = await sequelize.models.camera.create({ name: 'webcam0' });
-    const youtube0 = await sequelize.models.camera.create({ name: 'youtube0' });
-
-
-    const station1 = await sequelize.models.station.create({ cameraId: 1, name: 'Power Rack' });
-    const station2 = await sequelize.models.station.create({ cameraId: 2, name: 'office_ted' });
-    const station3 = await sequelize.models.station.create({ cameraId: 2, name: 'office_orhan' });
-    const station4 = await sequelize.models.station.create({ cameraId: 2, name: 'ted_gym_test1' });
+    const station1 = await sequelize.models.station.create({ name: 'Power Rack' });
+    const station2 = await sequelize.models.station.create({ name: 'office_ted' });
+    const station3 = await sequelize.models.station.create({ name: 'office_orhan' });
+    const station4 = await sequelize.models.station.create({ name: 'ted_gym_test1' });
 
     const frame1 = await sequelize.models.frame.create({ stationId: 1, frame_box: [[1158, 640], [493, 100]] });
     const frame2 = await sequelize.models.frame.create({ stationId: 2, frame_box: [[456, 470], [107, 34]] });
@@ -33,6 +28,4 @@ const { sequelize } = require('../database');
     const role1 = await sequelize.models.dgrole.create({id: 1, role: "user"});
     const role2 = await sequelize.models.dgrole.create({id: 2, role: "moderator"});
     const role3 = await sequelize.models.dgrole.create({id: 3, role: "admin"});
-
-
 })();

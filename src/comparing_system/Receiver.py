@@ -52,7 +52,7 @@ class Receiver():
             array = self.feature_extractor.body_parts_to_ndarray(p.bodyParts)
             joints_with_timestamp = {'used_joint_ndarray': array, 'ros_timestamp': message.header.stamp.to_time()}
             queue_size_increment_value = self.spot_queue_interface.enqueue(p.stationID, joints_with_timestamp)
-            self.spot_queue_load_balancer.increment_queue_size(p.stationID, queue_size_increment_value)
+            self.spot_queue_load_balancer.set_queue_size(p.stationID, queue_size_increment_value)
 
 if __name__ == '__main__':
     # initialize ros node

@@ -120,7 +120,7 @@ class QueueLoadBalancerInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def increment_queue_size(self, key: str, queue_size: int) -> None:
+    def set_queue_size(self, key: str, queue_size: int) -> None:
         """Set the size of a queue """
         raise NotImplementedError("This is an interface and shold not be called directly")
 
@@ -292,9 +292,9 @@ class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface
             pass
         return spot_key
 
-    def increment_queue_size(self, key: str, increment_by: int = 1) -> None:
+    def set_queue_size(self, key: str, size: int = 1) -> None:
         """Increment the size of a queue as seen by the load balancer."""
-        new_score = self.redis_connection.zadd(REDIS_LOAD_BALANCER_SORTED_SET_KEY, {key: increment_by}, incr=True)
+        self.redis_connection.zadd(REDIS_LOAD_BALANCER_SORTED_SET_KEY, {key: size})
     
 
 class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):

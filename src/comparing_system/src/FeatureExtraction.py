@@ -269,8 +269,8 @@ class FeatureExtractor():
 
         return inner_and_outer_joints
 
-    def extract_states(self, pose_array: np.ndarray, boundaries: dict, feature_of_interest_specification: dict):
-        """Extract the state.
+    def extract_states(self, pose_array: np.ndarray, reference_feature_data: dict, feature_of_interest_specification: dict):
+        """Extract the states.
         
         In order to so, we take a naive approach and test how many of the angles of interest in the first step of the recording tend towards to higher boundary.
         """
@@ -281,33 +281,35 @@ class FeatureExtractor():
             if feature_type == 'angles':
                 # Subroutine that calculates the boundaries for angles
                 for joint_hash, features in feature_specification.items():
+                    feature_key = joint_hash
                     state_dict[feature_type][joint_hash] = dict()
                     inner_joint_name, outer_joints_names = features["inner_joint"], features["outer_joints"]
                     inner_joint_idx = self.get_joint_index(inner_joint_name)
                     outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
  
-                    angle = self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs)
+                    value = self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs)
 
-                    # TODO: From here on, reuse code in this loop for other feature types
-
-                    lower_angle = boundaries["angles"][joint_hash]["lower_boundary"]
-                    higher_angle = boundaries["angles"][joint_hash]["upper_boundary"]
-
-                    feature_dict = {"feature_value": angle}
-
-                    if angle > higher_angle:
-                        feature_dict["feature_state"] = FEATURE_HIGH
-                    elif angle < lower_angle:
-                        feature_dict["feature_state"] = FEATURE_LOW
-                    else:
-                        # TODO: possibly leave out middle state and just return incopmlete dict without middle states
-                        feature_dict["feature_state"] = FEATURE_UNDECIDED
-
-                    state_dict[feature_type][joint_hash] = feature_dict
             else:
                 raise NotImplementedError("Trying to extract states for an unspecified feature type")
-        
+            
+            feature_dict = {"feature_value": value}
+
+            feature_dict["feature_state"] = decide_feature_state(value, \
+                reference_feature_data["angles"][joint_hash]["lower_boundary"], \
+                    reference_feature_data["angles"][joint_hash]["upper_boundary"])
+
+            state_dict[feature_type][joint_hash] = feature_dict
+
         return state_dict
+
+    def decide_feature_state(value, lower_boundary, upper_boundary):
+        if value > upper_boundary:
+            return FEATURE_HIGH
+        elif value < lower_boundary:
+            return FEATURE_LOW
+        else:
+            return FEATURE_UNDECIDED
+
     
     def extract_feature_trajectories_from_recordings(self, recordings: List[np.ndarray], feature_of_interest_specification: dict) -> dict:
         """Extract the trajectories of angles (and in the future possibly distances and other features).
@@ -345,9 +347,11 @@ class FeatureExtractor():
                             recording_angles.append(self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs))
                         recording_angles_list.append(recording_angles)
 
-                    feature_trajectory_dict[feature_type][joint_hash] = recording_angles_list
+                    feature_trajectories = recording_angles_list
             else:
                 raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
+
+            feature_trajectory_dict[feature_type][joint_hash] = feature_trajectories
 
         return feature_trajectory_dict
 
@@ -365,64 +369,65 @@ class FeatureExtractor():
             }
         
         Returns:
-            The boundary specification, which follows the same structure as the features of interest specification.
+            A dictionary containing extracted information about a feature
         """
 
-        def extract_reference_feature_data_of_child_dictionary(d): #TODO: Rename me
-            new_d = {}
-            for k, feature_trajectories in d.items():
-                if isinstance(feature_trajectories, collections.MutableMapping):
-                    new_d[k] = extract_reference_feature_data_of_child_dictionary(feature_trajectories)
-                else:
-                    lowest_values = []
-                    highest_values = []
-                    # The values here are each lists of feature values of pose trajectories
-                    for trajectory in feature_trajectories:
-                        lowest_values.append(np.amin(trajectory))
-                        highest_values.append(np.amax(trajectory))
+        lowest_values = []
+        highest_values = []
+        # The values here are each lists of feature values of pose trajectories
+        for trajectory in feature_trajectories:
+            lowest_values.append(np.amin(trajectory))
+            highest_values.append(np.amax(trajectory))
 
-                    # We take the average of highest and lowest values to compute the boundaries
-                    highest_value = np.average(highest_values)
-                    lowest_value = np.average(lowest_values)
+        # We take the average of highest and lowest values to compute the boundaries
+        highest_value = np.average(highest_values)
+        lowest_value = np.average(lowest_values)
 
-                    # We then compute the boundaries as the range of motion of reference tractories, with tolerances
-                    range_of_motion = abs(highest_value - lowest_value)
-                    lower_boundary = lowest_value + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
-                    upper_boundary = highest_value - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
+        # We then compute the boundaries as the range of motion of reference tractories, with tolerances
+        range_of_motion = abs(highest_value - lowest_value)
+        lower_boundary = lowest_value + range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
+        upper_boundary = highest_value - range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
 
-                    # We compute the resampled values separately for each trajectory and turn them into hankel matrices
-                    resolution = range_of_motion * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
-                    resampled_trajectories = []
-                    resampled_values_reference_trajectory_indices = [] # For every resampled value, we need an index to point us to the original pose
-                    reference_trajectory_hankel_matrices = [] # In the comparing algorithm, we need a hankel matrix of every resampled reference trajectory
-                    for trajectory in feature_trajectories:
-                        last_values = [trajectory[0]]
-                        resampled_values = last_values
-                        feature_trajectory_indices = [0]
-                        for index, value in enumerate(trajectory):
-                            value_turned_into_resampled_values = compute_resampled_feature_values(value, last_values[-1], resolution)
-                            resampled_values.extend(value_turned_into_resampled_values)
-                            if value_turned_into_resampled_values:
-                                last_values = value_turned_into_resampled_values
-                                feature_trajectory_indices.extend([index] * len(last_values))
-                        resampled_trajectories.append(resampled_values)
-                        reference_trajectory_hankel_matrices.append(hankel(resampled_trajectories, np.roll(resampled_trajectories, -1)))
-                        resampled_values_reference_trajectory_indices.append(feature_trajectory_indices)
+        # We compute the resampled values separately for each trajectory and turn them into hankel matrices
+        resolution = range_of_motion * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
+        resampled_trajectories = []
+        resampled_values_reference_trajectory_indices = [] # For every resampled value, we need an index to point us to the original pose
+        reference_trajectory_hankel_matrices = [] # In the comparing algorithm, we need a hankel matrix of every resampled reference trajectory
+        for trajectory in feature_trajectories:
+            last_values = [trajectory[0]]
+            resampled_values = last_values
+            feature_trajectory_indices = [0]
+            number_of_state_changes = 0
+            for index, value in enumerate(trajectory):
+                value_turned_into_resampled_values = compute_resampled_feature_values(value, last_values[-1], resolution)
+                resampled_values.extend(value_turned_into_resampled_values)
+                if value_turned_into_resampled_values:
+                    last_values = value_turned_into_resampled_values
+                    feature_trajectory_indices.extend([index] * len(last_values))
+            resampled_trajectories.append(resampled_values)
+            reference_trajectory_hankel_matrices.append(hankel(resampled_trajectories, np.roll(resampled_trajectories, -1)))
+            resampled_values_reference_trajectory_indices.append(feature_trajectory_indices)
 
-                    reference_trajectory_hankel_matrices = np.asarray(reference_trajectory_hankel_matrices, dtype=np.float16)
-                    # resampled_values_arrays = np.asarray(resampled_v, dtype=np.float16)
+        reference_trajectory_hankel_matrices = np.asarray(reference_trajectory_hankel_matrices, dtype=np.float16)
+        # resampled_values_arrays = np.asarray(resampled_v, dtype=np.float16)
 
-                    resampled_reference_trajectory_scale = set()
-                    for resampled_trajectory in resampled_trajectories:
-                        resampled_reference_trajectory_scale.update(set(resampled_trajectory))
+        resampled_reference_trajectory_scale = set()
+        for resampled_trajectory in resampled_trajectories:
+            resampled_reference_trajectory_scale.update(set(resampled_trajectory))
 
-                    resampled_reference_trajectory_scale_array = np.sort(list(resampled_reference_trajectory_scale))
-                        
-                    new_d[k] = {"lower_boundary": lower_boundary, "upper_boundary": upper_boundary, "lowest_value": lowest_value, "highest_value": highest_value, "range_of_motion": range_of_motion, "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array}
+        resampled_reference_trajectory_scale_array = np.sort(list(resampled_reference_trajectory_scale))
 
-            return new_d
-        
-        return extract_reference_feature_data_of_child_dictionary(feature_trajectories)
+
+            
+        return {"lower_boundary": lower_boundary, \
+            "upper_boundary": upper_boundary, \
+                "lowest_value": lowest_value, \
+                    "highest_value": highest_value, \
+                        "range_of_motion": range_of_motion, \
+                            "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, \
+                                "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, \
+                                    "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
+                                        "number_of_state_changes": number_of_state_changes}
 
     
 class SpinFeatureExtractor(FeatureExtractor):

@@ -12,7 +12,6 @@ Whatever information is gained is sent via outgoing message queues.
 
 import time
 from functools import lru_cache
-from importlib import import_module
 from threading import Thread
 from traceback import print_exc
 from typing import NoReturn
@@ -49,56 +48,6 @@ class NoExerciseDataAvailable(Exception):
 
 class MalformedFeatures(Exception):
     pass
-
-def compute_new_feature_progression(beginning_state, features_state, last_feature_progression):
-    """Compute a dictionary representing the progression of the features specified by feature_state
-
-    This method turns features states, such as FEATURE_HIGH or FEATURE_LOW into a feature progression,
-    such as PROGRESSION_PARTIAL, PROGRESSION_DONE or PROGRESSION_START, depending on the previous progression
-    of the feature. This way we can track the progression of different features between timesteps.
-
-    Args: 
-        beginning_state: A dictionary that holds the state in which a feature begins for every feature of every category
-        features_state: The state that the featuers are in
-        last_feature_progression: The last dictionary produced by this method in the last timestep
-
-    Return:
-        new_feature_progression: The feature progression dictionary at this timestep
-
-    Raises:
-        MalformedFeatures: If features are not the expected form.
-    """
-    new_feature_progression = last_feature_progression
-
-    # If features beginn with the FEATURE_HIGH state, we need to check if they have passed through the FEATURE_LOW state
-    if beginning_state == FEATURE_HIGH:
-        if features_state == FEATURE_HIGH:
-            feature_is_in_beginning_state = True
-        elif features_state == FEATURE_LOW:
-            new_feature_progression  = PROGRESSION_PARTIAL
-            feature_is_in_beginning_state = False
-        else:
-            feature_is_in_beginning_state = False
-    # If features beginn with the FEATURE_LOW state, we need to check if they have passed through the FEATURE_HIGH state
-    elif beginning_state == FEATURE_LOW:
-        if features_state == FEATURE_LOW:
-            feature_is_in_beginning_state = True
-        elif features_state == FEATURE_HIGH:
-            new_feature_progression  = PROGRESSION_PARTIAL
-            feature_is_in_beginning_state = False
-        else:
-            feature_is_in_beginning_state = False
-    else:
-        raise MalformedFeatures("Beginning state is " + str(beginning_state))
-    
-    # If features are in the beginning state and they have progressed already, their progression can be set to PROGRESSION_DONE
-    if feature_is_in_beginning_state:
-        if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
-            new_feature_progression  = PROGRESSION_DONE
-        else:
-            new_feature_progression = PROGRESSION_START
-
-    return new_feature_progression
 
 
 def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
@@ -162,6 +111,7 @@ def compare_high_level_features(spot_info_dict: dict,
             feature_value = features_states[feature_type][k]['feature_value']
             resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
             scale = exercise_data['reference_feature_data'][feature_type][k]['resampled_reference_trajectory_scale_array']
+            number_of_reference_signal_state_changes = exercise_data['reference_feature_data'][feature_type][k]['number_of_state_changes']
             try:
                 last_resampled_feature_value = float(last_resampled_features[feature_type][k][-1])
                 new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
@@ -176,17 +126,14 @@ def compare_high_level_features(spot_info_dict: dict,
                 last_feature_progression = last_feature_progressions[feature_type][k][-1]
             except (KeyError, TypeError):
                 # If we have no last feature progression value, set this feature progression to the starting value
-                last_feature_progression = PROGRESSION_START
+                last_feature_progression = 0
             beginning_state = beginning_states[feature_type][k]['feature_state']
             features_state = features_states[feature_type][k]['feature_state']
             new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
-            
-            # If one of the features is not done, the repetition is not done
-            if new_feature_progression != PROGRESSION_DONE:
+
+            if new_feature_progression < number_of_reference_signal_state_changes:
                 increase_reps = False
-            # We only need to update the feature progression state if the progress has changed
-            if (new_feature_progression != last_feature_progression):
-                new_feature_progressions[feature_type][k] = new_feature_progression
+
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
             del new_feature_progressions[feature_type]
@@ -200,7 +147,7 @@ def compare_high_level_features(spot_info_dict: dict,
                 if isinstance(v, collections.MutableMapping):
                     d[k] = reset_child_featuers(v)
                 else:
-                    d[k] = PROGRESSION_START
+                    d[k] = 0
                 return d
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
@@ -242,26 +189,6 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     reference_pose = reference_poses[predicted_pose_index]
     
     return reference_pose
-
-
-def enqueue_dictionary(previous_dict, enqueued_dict):
-    for k, v in enqueued_dict.items():
-        if isinstance(v, collections.MutableMapping):
-            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v)
-        elif isinstance(v, list):
-            previous_dict[k] = previous_dict.get(k, [])
-            previous_dict[k].extend(v)
-            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
-        else:
-            previous_dict[k] = previous_dict.get(k, [])
-            if previous_dict[k] == None:
-                previous_dict[k] = []
-            previous_dict[k].append(v)
-            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
-    
-    return previous_dict
 
 
 class Comparator(Thread):

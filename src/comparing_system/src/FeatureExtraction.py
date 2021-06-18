@@ -294,66 +294,21 @@ class FeatureExtractor():
             
             feature_dict = {"feature_value": value}
 
-            feature_dict["feature_state"] = decide_feature_state(value, \
+            feature_dict["feature_state"] = self.decide_feature_state(value, \
                 reference_feature_data["angles"][joint_hash]["lower_boundary"], \
                     reference_feature_data["angles"][joint_hash]["upper_boundary"])
 
-            state_dict[feature_type][joint_hash] = feature_dict
+            state_dict[feature_type][feature_key] = feature_dict
 
         return state_dict
 
-    def decide_feature_state(value, lower_boundary, upper_boundary):
+    def decide_feature_state(self, value, lower_boundary, upper_boundary):
         if value > upper_boundary:
             return FEATURE_HIGH
         elif value < lower_boundary:
             return FEATURE_LOW
         else:
             return FEATURE_UNDECIDED
-
-    
-    def extract_feature_trajectories_from_recordings(self, recordings: List[np.ndarray], feature_of_interest_specification: dict) -> dict:
-        """Extract the trajectories of angles (and in the future possibly distances and other features).
-        
-        Under consideration of the specification of featuers of interest, this method extracts trajectories
-        of the specified features from a recording. The feature_of_interest_specification is then returned
-        with the boundaries added.
-
-        Args:
-            recording: An ndarray containing a sequence of ndarrays that each represent a pose.
-            feature_if_interest_specification: A nested dictionary which looks as follows:
-            { # One entry for each feature type
-                <feature type>: <feature specification>,
-                (...)
-            }
-        
-        Returns:
-            The boundary specification, which follows the same structure as the features_of_interest_specification.
-        """
-        feature_trajectory_dict = dict()
-        
-        for feature_type, feature_specification in feature_of_interest_specification.items():
-            feature_trajectory_dict[feature_type] = dict()
-            if feature_type == 'angles':
-                # Subroutine that calculates the boundaries for angles
-                for joint_hash, features in feature_specification.items():
-                    feature_trajectory_dict[feature_type][joint_hash] = dict()
-                    inner_joint_name, outer_joints_names = features["inner_joint"], features["outer_joints"]
-                    inner_joint_idx = self.get_joint_index(inner_joint_name)
-                    outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
-                    recording_angles_list = []
-                    for recording in recordings:
-                        recording_angles = []
-                        for pose_array in recording:
-                            recording_angles.append(self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs))
-                        recording_angles_list.append(recording_angles)
-
-                    feature_trajectories = recording_angles_list
-            else:
-                raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
-
-            feature_trajectory_dict[feature_type][joint_hash] = feature_trajectories
-
-        return feature_trajectory_dict
 
     def extract_reference_feature_data_from_feature_trajectories(self, feature_trajectories: dict) -> dict:
         """Extract the boundaries of angles (and in the future possibly distances).
@@ -397,7 +352,6 @@ class FeatureExtractor():
             last_values = [trajectory[0]]
             resampled_values = last_values
             feature_trajectory_indices = [0]
-            number_of_state_changes = 0
             for index, value in enumerate(trajectory):
                 value_turned_into_resampled_values = compute_resampled_feature_values(value, last_values[-1], resolution)
                 resampled_values.extend(value_turned_into_resampled_values)
@@ -417,7 +371,18 @@ class FeatureExtractor():
 
         resampled_reference_trajectory_scale_array = np.sort(list(resampled_reference_trajectory_scale))
 
+        resampled_trajectories_array = np.array(resampled_trajectories)
+        averaged_resampled_trajectories_array = np.average(resampled_trajectories_array, axis=0)
 
+        reference_states = np.array([self.decide_feature_state(value, lower_boundary, upper_boundary) for value in averaged_resampled_trajectories_array])
+
+        decided_averaged_reference_states = reference_states[reference_states != 0]
+
+        rp.logerr(decided_averaged_reference_states) # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
+
+        rp.logerr(np.where(decided_averaged_reference_states[:-1] * decided_averaged_reference_states[1:] < 0 )[0] +1)
+
+        raise Exception
             
         return {"lower_boundary": lower_boundary, \
             "upper_boundary": upper_boundary, \
@@ -426,8 +391,53 @@ class FeatureExtractor():
                         "range_of_motion": range_of_motion, \
                             "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, \
                                 "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, \
-                                    "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
-                                        "number_of_state_changes": number_of_state_changes}
+                                    "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array}
+    
+    def extract_reference_feature_data_from_recordings(self, recordings: List[np.ndarray], feature_of_interest_specification: dict) -> dict:
+        """Extract the trajectories of angles (and in the future possibly distances and other features).
+        
+        Under consideration of the specification of featuers of interest, this method extracts trajectories
+        of the specified features from a recording. The feature_of_interest_specification is then returned
+        with the boundaries added.
+
+        Args:
+            recording: An ndarray containing a sequence of ndarrays that each represent a pose.
+            feature_if_interest_specification: A nested dictionary which looks as follows:
+            { # One entry for each feature type
+                <feature type>: <feature specification>,
+                (...)
+            }
+        
+        Returns:
+            The boundary specification, which follows the same structure as the features_of_interest_specification.
+        """
+        reference_feature_data_trajectory_dict = dict()
+        
+        for feature_type, feature_specification in feature_of_interest_specification.items():
+            reference_feature_data_trajectory_dict[feature_type] = dict()
+            if feature_type == 'angles':
+                # Subroutine that calculates the boundaries for angles
+                for joint_hash, features in feature_specification.items():
+                    reference_feature_data_trajectory_dict[feature_type][joint_hash] = dict()
+                    inner_joint_name, outer_joints_names = features["inner_joint"], features["outer_joints"]
+                    inner_joint_idx = self.get_joint_index(inner_joint_name)
+                    outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
+                    recording_angles_list = []
+                    for recording in recordings:
+                        recording_angles = []
+                        for pose_array in recording:
+                            recording_angles.append(self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs))
+                        recording_angles_list.append(recording_angles)
+
+                    feature_trajectories = recording_angles_list
+            else:
+                raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
+
+            reference_feature_data_trajectory_dict[feature_type][joint_hash] = {"trajectories": feature_trajectories}
+            reference_feature_data_trajectory_dict[feature_type][joint_hash].update(self.extract_reference_feature_data_from_feature_trajectories(feature_trajectories))
+
+        return reference_feature_data_trajectory_dict
+
 
     
 class SpinFeatureExtractor(FeatureExtractor):

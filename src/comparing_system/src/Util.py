@@ -21,9 +21,9 @@ except ImportError:
 m.patch()
 
 # Alias for features states
-FEATURE_LOW: str = 'low'
-FEATURE_UNDECIDED: str = 'undecided'
-FEATURE_HIGH: str = 'high'
+FEATURE_LOW: int = -1
+FEATURE_UNDECIDED: int = 0
+FEATURE_HIGH: int = 1
 
 # TODO: Check more sizes of exercise objects frequently
 def get_size_of_object(obj, seen=None):

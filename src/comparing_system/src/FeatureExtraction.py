@@ -19,7 +19,7 @@ We define our numpy arrays representing skelletons as follows:
         x, # float16
         y, # float16 # z - axis in the SPIN coordinates
         z, # float16 # y - axis in the SPIN coordinates
-    ],
+    
     (...)
 ]
 """
@@ -310,7 +310,7 @@ class FeatureExtractor():
         else:
             return FEATURE_UNDECIDED
 
-    def extract_reference_feature_data_from_feature_trajectories(self, feature_trajectories: dict) -> dict:
+    def extract_reference_feature_data_from_feature_trajectories(self, feature_trajectories: dict, recording_lengths: list) -> dict:
         """Extract the boundaries of angles (and in the future possibly distances).
             
         This method takes a dict consisting of feature trajectories and turns these trajectories into boudnaries
@@ -402,12 +402,12 @@ class FeatureExtractor():
 
         # Construction of a median feature trajectory
         resampled_values_reference_trajectory_indices_array = np.array(resampled_values_reference_trajectory_indices)
-        median_resampled_values_reference_trajectory_indices = list()
+        median_resampled_values_reference_trajectory_fractions = list() # Tells us where in the overall reference trajectory this resampled median value lies as a fraction
         all_feature_values_array = np.array(resampled_trajectories)
         median_reference_trajectory = list()
         median_length = np.median([len(values) for values in resampled_trajectories])
         for i in range(median_length):
-            median_resampled_values_reference_trajectory_index = np.median(resampled_values_reference_trajectory_indices_array[:, i])
+            median_resampled_values_reference_trajectory_fraction = np.average([resampled_values_reference_trajectory_indices_array[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
             median_feature_value = np.median(all_feature_values_array[:, i])
             while not np.where(all_feature_values_array[:, i] != value_turned_into_resampled_values):
                 bad_feature_state_indices = np.where(all_feature_values_array[:, i] != median_feature_value)
@@ -423,7 +423,7 @@ class FeatureExtractor():
                         # We add "dummy" parts to shorter trajectories
                         np.insert(all_feature_values_array[:, i], bad_feature_state_index, median_feature_value)
             median_reference_trajectory.append(median_feature_value)
-            median_resampled_values_reference_trajectory_indices.append(median_resampled_values_reference_trajectory_index)
+            median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction)
 
         # Check if reference trajectory matches reference state trajectory and shorten it, if values double
         last_value = np.inf
@@ -449,7 +449,7 @@ class FeatureExtractor():
                                     "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
                                         "median_trajectory": median_reference_trajectory, \
                                             "median_reference_trajectory_feature_states": median_reference_trajectory_feature_states, \
-                                                "median_resampled_values_reference_trajectory_indices": median_resampled_values_reference_trajectory_indices}
+                                                "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions}
     
     
     def extract_reference_feature_data_from_recordings(self, recordings: List[np.ndarray], feature_of_interest_specification: dict) -> dict:
@@ -472,9 +472,9 @@ class FeatureExtractor():
         """
         reference_feature_data_trajectory_dict = dict()
 
-        def extend_feature_dict(feature_trajectories, feature_type, feature_key):
+        def extend_feature_dict(feature_trajectories, feature_type, feature_key, recording_lengths):
             reference_feature_data_trajectory_dict[feature_type][feature_key] = {"trajectories": feature_trajectories}
-            reference_feature_data_trajectory_dict[feature_type][feature_key].update(self.extract_reference_feature_data_from_feature_trajectories(feature_trajectories))
+            reference_feature_data_trajectory_dict[feature_type][feature_key].update(self.extract_reference_feature_data_from_feature_trajectories(feature_trajectories, recording_lengths))
         
         for feature_type, feature_specification in feature_of_interest_specification.items():
             reference_feature_data_trajectory_dict[feature_type] = dict()
@@ -486,25 +486,17 @@ class FeatureExtractor():
                     inner_joint_idx = self.get_joint_index(inner_joint_name)
                     outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
                     recording_angles_list = []
+                    recording_lengths = []
                     for recording in recordings:
                         recording_angles = []
                         for pose_array in recording:
                             recording_angles.append(self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs))
                         recording_angles_list.append(recording_angles)
+                        recording_lengths.append(recording_lengths)
                     
-                    extend_feature_dict(recording_angles_list, feature_type, joint_hash)
+                    extend_feature_dict(recording_angles_list, feature_type, joint_hash, recording_lengths)
             else:
                 raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
-
-        ?!?!?!?!?!?!
-        decided_averaged_reference_states = reference_states[reference_states != 0]
-
-        rp.logerr(decided_averaged_reference_states) # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
-
-        feature_low = np.where(np.diff(decided_averaged_reference_states) == -1)
-        feature_high = np.where(np.diff(decided_averaged_reference_states) == 1)
-
-        rp.logerr(np.where(decided_averaged_reference_states[:-1] * decided_averaged_reference_states[1:] < 0 )[0] +1)
 
         return reference_feature_data_trajectory_dict
 

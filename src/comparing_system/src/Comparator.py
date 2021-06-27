@@ -169,8 +169,30 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     Returns:
         reference_pose: The reference pose that we think the user is in
     """
+
+    def custom_absolute_difference(a, b):
+        """Calculate the absolute difference between two values on a "ring" scale between 0 and 1."""
+        smaller = min([a, b])
+        larger = max([a, b])
+        x = abs(larger - smaller)
+        y = abs(smaller + 1 - larger)
+        return min(x, y)
+
+    # return {"lower_boundary": lower_boundary, \
+    #         "upper_boundary": upper_boundary, \
+    #             "lowest_value": lowest_value, \
+    #                 "highest_value": highest_value, \
+    #                     "range_of_motion": range_of_motion, \
+    #                         "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, \
+    #                             "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, \
+    #                                 "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
+    #                                     "median_trajectory": median_reference_trajectory, \
+    #                                         "median_reference_trajectory_feature_states": median_reference_trajectory_feature_states, \
+    #                                             "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions}
+
     reference_poses = exercise_data['recording']
     predicted_indices = []
+    median_resampled_values_reference_trajectory_fractions = []
 
     for feature_type, features in exercise_data['reference_feature_data'].items():
         for k, v in features.items():
@@ -182,13 +204,26 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                 prediction = np.argmin(errors)
                 index = resampled_values_reference_trajectory_indices[idx][prediction]
+                median_resampled_values_reference_trajectory_fractions.append(v['median_resampled_values_reference_trajectory_fractions'])
 
                 predicted_indices.append(index)
 
+    median_resampled_values_reference_trajectory_fractions_errors = []
+    # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
+    for idx, value in enumerate(median_resampled_values_reference_trajectory_fractions):
+        for idx2 in range(median_resampled_values_reference_trajectory_fractions):
+            if idx2 == idx1:
+                continue
+            a = median_resampled_values_reference_trajectory_fractions_errors[idx]
+            b = median_resampled_values_reference_trajectory_fractions_errors[idx2]
+            median_resampled_values_reference_trajectory_fractions_errors.append(custom_absolute_difference(a, b))
+    
     predicted_pose_index = int(np.average(predicted_indices))
     reference_pose = reference_poses[predicted_pose_index]
+
+    mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)
     
-    return reference_pose
+    return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
 
 
 class Comparator(Thread):
@@ -287,7 +322,11 @@ class Comparator(Thread):
 
                 # Calculate a new reference pose mapping
                 if new_resampled_features:
-                    reference_pose = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
+                    reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
+                    if mean_resampled_values_reference_trajectory_fractions_average_difference >= FEATURE_DIFFERENCE_ELASTICITY:
+                        # TODO: Make sure this rep does not get counted!
+                        
+
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()
                     reference_person_msg.stationID = 99

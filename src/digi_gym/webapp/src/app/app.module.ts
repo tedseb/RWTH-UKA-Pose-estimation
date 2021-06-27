@@ -46,6 +46,7 @@ import { SingleStationComponent } from './station/single-station/single-station.
 import { StatisticsComponent } from './statistics/statistics.component';
 import { SocialComponent } from './social/social.component';
 import { SupportComponent } from './support/support.component';
+import { HttpClientModule } from '@angular/common/http';
 
 @NgModule({
   declarations: [
@@ -94,7 +95,8 @@ import { SupportComponent } from './support/support.component';
     MatTableModule,
     MatSortModule,
     MatPaginatorModule,
-    NgxChartsModule
+    NgxChartsModule,
+    HttpClientModule
   ],
   providers: [],
   bootstrap: [AppComponent]

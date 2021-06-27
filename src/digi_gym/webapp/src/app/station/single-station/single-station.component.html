@@ -2,8 +2,8 @@
   <mat-card class="station-card" *ngIf="station">
     <mat-card-header>
       <div mat-card-avatar class="station-card-image"></div>
-      <mat-card-title>Station {{station!.stationId}}</mat-card-title>
-      <mat-card-subtitle>{{station!.stationDescription}}</mat-card-subtitle>
+      <mat-card-title>Station {{station!.id}}</mat-card-title>
+      <mat-card-subtitle>{{station!.name}}</mat-card-subtitle>
     </mat-card-header>
     <img mat-card-image [src]="station!.imageUrl" alt="station-pic">
     <mat-card-content>

@@ -14,6 +14,6 @@ export class SingleStationComponent implements OnInit {
   ngOnInit(): void {
   }
 
-   @Input()
-  station!: Station;
+  @Input()
+  station!: any;
 }

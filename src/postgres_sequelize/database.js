@@ -32,6 +32,7 @@ for (const modelDefiner of modelDefiners) {
 
 associate(sequelize);
 
+
 module.exports = {
     sequelize: sequelize,
     Stations: sequelize.models.station,

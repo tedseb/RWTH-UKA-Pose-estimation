@@ -2,7 +2,7 @@
 
   <mat-drawer class="station-sidenav" [opened]="true" mode="side">
     <div *ngFor="let station of stations" >
-      <button mat-button (click)="selectStation(station)">Station {{station.stationId}}</button>
+      <button mat-button (click)="selectStation(station)">Station {{station.id}} - {{station.name}}</button>
       <br>
     </div>
 

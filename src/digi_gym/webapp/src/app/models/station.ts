@@ -1,7 +1,7 @@
 export interface Station {
-  stationId: number;
-  stationDescription: string;
-  cameraId: number;
+  id: number;
+  name?: string;
+  cameraId?: number;
   objDetections: string[];
   active: boolean;
   imageUrl: string;

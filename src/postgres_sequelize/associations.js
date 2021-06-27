@@ -1,27 +1,20 @@
 function associate(sequelize) {
     frame_station_onetomany(sequelize);
-    station_camera_mapping_camera(sequelize);
-    station_camera_mapping_station(sequelize);
+    station_camera_mapping(sequelize);
     station_usage_station_onetomany(sequelize);
     digigym_user_digigym_role_manytomany(sequelize);
 }
 
 function frame_station_onetomany(sequelize) {
-    const {frame, camera_station_mapping} = sequelize.models;
-    camera_station_mapping.hasMany(frame);
-    frame.belongsTo(camera_station_mapping);
+    const {frame, station} = sequelize.models;
+    station.hasMany(frame);
+    frame.belongsTo(station);
 }
 
-function station_camera_mapping_camera(sequelize) {
-    const {camera_station_mapping, camera} = sequelize.models;
-    camera.hasMany(camera_station_mapping);
-    camera_station_mapping.belongsTo(camera);
-}
-
-function station_camera_mapping_station(sequelize) {
-    const {camera_station_mapping, station} = sequelize.models;
-    station.hasMany(camera_station_mapping);
-    camera_station_mapping.belongsTo(station);
+function station_camera_mapping(sequelize) {
+    const {camera, station} = sequelize.models;
+    station.belongsToMany(camera, {through: "camera_station_mapping"});
+    camera.belongsToMany(station, {through: "camera_station_mapping"});
 }
 
 function station_usage_station_onetomany(sequelize) {

@@ -1,0 +1,12 @@
+.support-container{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  height: 80vh;
+}
+
+.support-card {
+  min-width: 400px;
+  margin: 20px;
+}

@@ -1,0 +1,13 @@
+.statistics-container{
+  display: flex;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  height: 80vh;
+}
+
+.statistics-button-row {
+  display: table-cell;
+  width: 490px;
+}

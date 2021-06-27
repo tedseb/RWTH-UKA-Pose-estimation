@@ -1,9 +1,15 @@
 <p>
   <mat-toolbar color="primary">
     <mat-toolbar-row>
-      <span>Digi-Gym</span>
+      <span routerLink="">Digi-Gym</span>
+      <button mat-button routerLink="social">Socials</button>
+      <button mat-button routerLink="stations" routerLinkActive="accent">Stations</button>
+      <button mat-button routerLink="statistics">Statistics</button>
       <span class="example-spacer"></span>
-      <button mat-icon-button class="example-icon" routerLink="/login" aria-label="Example icon-button with menu icon">
+      <button mat-icon-button routerLink="/support" routerLinkActive="primary">
+        <mat-icon>support_agent</mat-icon>
+      </button>
+      <button mat-icon-button routerLink="/login" routerLinkActive="primary">
         <mat-icon>login</mat-icon>
       </button>
     </mat-toolbar-row>

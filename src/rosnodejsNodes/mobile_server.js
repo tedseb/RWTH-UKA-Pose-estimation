@@ -90,6 +90,7 @@ wss.on('connection', (ws, req) => {
     ws.on('message', function incoming(message) {
         console.log(message);
         //console.log(JSON.parse(message));
+        
         const qr = JSON.parse(message);
         console.log(qr);
         const msg = new StationUsage({

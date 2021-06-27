@@ -1,0 +1,17 @@
+.station-container{
+  display: flex;
+  //text-align: center;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  height: 80vh;
+}
+
+.station-card {
+  max-width: 400px;
+}
+
+.station-card-image {
+  background-image: url('https://www.my-sports24.de/media/image/a0/33/33/atx-msx-690-_9-von-13__1280x1280.jpg');
+  background-size: cover;
+}

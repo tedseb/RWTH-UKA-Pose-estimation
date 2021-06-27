@@ -1,0 +1,13 @@
+<mat-drawer-container>
+
+  <mat-drawer class="station-sidenav" [opened]="true" mode="side">
+    <div *ngFor="let station of stations" >
+      <button mat-button (click)="selectStation(station)">Station {{station.stationId}}</button>
+      <br>
+    </div>
+
+  </mat-drawer>
+
+  <app-single-station [station]="selectedStation"></app-single-station>
+
+</mat-drawer-container>

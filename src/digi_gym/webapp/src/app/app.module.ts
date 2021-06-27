@@ -34,19 +34,29 @@ import {MatSnackBarModule} from '@angular/material/snack-bar';
 import {MatTableModule} from '@angular/material/table';
 import {MatSortModule} from '@angular/material/sort';
 import {MatPaginatorModule} from '@angular/material/paginator';
-
+import { NgxChartsModule } from '@swimlane/ngx-charts';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { LoginComponent } from './auth/login/login.component';
 import { SignupComponent } from './auth/signup/signup.component';
+import { StationComponent } from './station/station.component';
+import { SingleStationComponent } from './station/single-station/single-station.component';
+import { StatisticsComponent } from './statistics/statistics.component';
+import { SocialComponent } from './social/social.component';
+import { SupportComponent } from './support/support.component';
 
 @NgModule({
   declarations: [
     AppComponent,
     LoginComponent,
-    SignupComponent
+    SignupComponent,
+    StationComponent,
+    SingleStationComponent,
+    StatisticsComponent,
+    SocialComponent,
+    SupportComponent
   ],
   imports: [
     BrowserModule,
@@ -83,7 +93,8 @@ import { SignupComponent } from './auth/signup/signup.component';
     MatSnackBarModule,
     MatTableModule,
     MatSortModule,
-    MatPaginatorModule
+    MatPaginatorModule,
+    NgxChartsModule
   ],
   providers: [],
   bootstrap: [AppComponent]

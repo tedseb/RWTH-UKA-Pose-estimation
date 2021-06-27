@@ -1,0 +1,26 @@
+<div class="station-container">
+  <mat-card class="station-card" *ngIf="station">
+    <mat-card-header>
+      <div mat-card-avatar class="station-card-image"></div>
+      <mat-card-title>Station {{station!.stationId}}</mat-card-title>
+      <mat-card-subtitle>{{station!.stationDescription}}</mat-card-subtitle>
+    </mat-card-header>
+    <img mat-card-image [src]="station!.imageUrl" alt="station-pic">
+    <mat-card-content>
+      <button mat-button>Camera {{station!.cameraId}}</button>
+      <br>
+      <p>
+        Erkannte Objekte:
+        <span *ngFor="let objDetection of station!.objDetections; let i = index">
+          {{objDetection}}<span *ngIf="i != station!.objDetections.length - 1">, </span>
+        </span>
+      </p>
+    </mat-card-content>
+    <mat-card-actions>
+      <button mat-button color="warn" *ngIf="station!.active === true">Deactivate</button>
+      <button mat-button color="accent" *ngIf="station!.active === false">Activate</button>
+      <button mat-button>Statistics</button>
+    </mat-card-actions>
+  </mat-card>
+</div>
+

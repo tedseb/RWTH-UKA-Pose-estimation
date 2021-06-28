@@ -41,7 +41,7 @@ REDIS_SPOT_RESAMPLED_FEATURES_POSTFIX = "resampled_features"
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = True
+HIGH_VERBOSITY = False
 
 # ALGORITHMIC COMFIGURATION
 

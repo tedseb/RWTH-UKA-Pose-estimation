@@ -46,9 +46,6 @@ class NoSpoMetaDataAvailable(Exception):
 class NoExerciseDataAvailable(Exception):
     pass
 
-class MalformedFeatures(Exception):
-    pass
-
 
 def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
     """Compute a custom metric that represents how probable it is for the user to be at a certain point of the reference trajectory.
@@ -67,7 +64,8 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
     """
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
-    feature_trajectory_shortened = feature_trajectory[:comparing_length]
+    feature_trajectory_shortened = feature_trajectory[-comparing_length:]
+    np.flip(feature_trajectory_shortened)
     distances = hankel_matrix_shortened - feature_trajectory_shortened
     fading_factor = np.linspace(min_weight, max_weight_, comparing_length) # Let older signals have less influence on the error
     errors = np.linalg.norm((distances) * fading_factor, axis=1)
@@ -111,7 +109,6 @@ def compare_high_level_features(spot_info_dict: dict,
             feature_value = features_states[feature_type][k]['feature_value']
             resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
             scale = exercise_data['reference_feature_data'][feature_type][k]['resampled_reference_trajectory_scale_array']
-            number_of_reference_signal_state_changes = exercise_data['reference_feature_data'][feature_type][k]['number_of_state_changes']
             try:
                 last_resampled_feature_value = float(last_resampled_features[feature_type][k][-1])
                 new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
@@ -129,10 +126,7 @@ def compare_high_level_features(spot_info_dict: dict,
                 last_feature_progression = 0
             beginning_state = beginning_states[feature_type][k]['feature_state']
             features_state = features_states[feature_type][k]['feature_state']
-            new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
-
-            if new_feature_progression < number_of_reference_signal_state_changes:
-                increase_reps = False
+            new_feature_progressions[feature_type][k] = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
 
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
@@ -204,25 +198,23 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                 prediction = np.argmin(errors)
                 index = resampled_values_reference_trajectory_indices[idx][prediction]
-                median_resampled_values_reference_trajectory_fractions.append(v['median_resampled_values_reference_trajectory_fractions'])
+                median_resampled_values_reference_trajectory_fractions.append(v['median_resampled_values_reference_trajectory_fractions'][prediction])
 
                 predicted_indices.append(index)
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
-    for idx, value in enumerate(median_resampled_values_reference_trajectory_fractions):
-        for idx2 in range(median_resampled_values_reference_trajectory_fractions):
+    for idx1, value in enumerate(median_resampled_values_reference_trajectory_fractions):
+        for idx2 in range(len(median_resampled_values_reference_trajectory_fractions)):
             if idx2 == idx1:
                 continue
-            a = median_resampled_values_reference_trajectory_fractions_errors[idx]
-            b = median_resampled_values_reference_trajectory_fractions_errors[idx2]
-            median_resampled_values_reference_trajectory_fractions_errors.append(custom_absolute_difference(a, b))
+            median_resampled_values_reference_trajectory_fractions_errors.append(custom_absolute_difference(value, median_resampled_values_reference_trajectory_fractions[idx2]))
     
     predicted_pose_index = int(np.average(predicted_indices))
     reference_pose = reference_poses[predicted_pose_index]
 
-    mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)
-    
+    mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
+
     return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
 
 
@@ -325,6 +317,8 @@ class Comparator(Thread):
                     reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
                     if mean_resampled_values_reference_trajectory_fractions_average_difference >= FEATURE_DIFFERENCE_ELASTICITY:
                         # TODO: Make sure this rep does not get counted!
+                        pass
+                        # rp.logerr(mean_resampled_values_reference_trajectory_fractions_average_difference)
                         
 
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)

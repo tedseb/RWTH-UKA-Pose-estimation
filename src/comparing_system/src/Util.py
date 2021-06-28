@@ -113,7 +113,5 @@ def compute_new_feature_progression(beginning_state, features_state, last_featur
         ((features_state == FEATURE_HIGH and last_feature_progression % 2 == 0) or \
             (features_state == FEATURE_LOW and last_feature_progression % 2 == 1)):
             new_feature_progression = last_feature_progression + 1
-    else:
-        raise MalformedFeatures("Beginning state is " + str(beginning_state))
     
     return new_feature_progression

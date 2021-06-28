@@ -276,6 +276,14 @@ class FeatureExtractor():
         """
         state_dict = dict()
 
+        def create_feature_dict(value, lower_boundary, upper_boundary):
+            feature_dict = {"feature_value": value}
+
+            feature_dict["feature_state"] = self.decide_feature_state(value, lower_boundary, upper_boundary)
+
+            return feature_dict
+
+
         for feature_type, feature_specification in feature_of_interest_specification.items():
             state_dict[feature_type] = dict()
             if feature_type == 'angles':
@@ -288,18 +296,13 @@ class FeatureExtractor():
                     outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
  
                     value = self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs)
-
+                                
+                    state_dict[feature_type][feature_key] = create_feature_dict(value, \
+                        reference_feature_data["angles"][joint_hash]["lower_boundary"], \
+                            reference_feature_data["angles"][joint_hash]["upper_boundary"])
             else:
                 raise NotImplementedError("Trying to extract states for an unspecified feature type")
             
-            feature_dict = {"feature_value": value}
-
-            feature_dict["feature_state"] = self.decide_feature_state(value, \
-                reference_feature_data["angles"][joint_hash]["lower_boundary"], \
-                    reference_feature_data["angles"][joint_hash]["upper_boundary"])
-
-            state_dict[feature_type][feature_key] = feature_dict
-
         return state_dict
 
     def decide_feature_state(self, value, lower_boundary, upper_boundary):
@@ -405,7 +408,7 @@ class FeatureExtractor():
         median_resampled_values_reference_trajectory_fractions = list() # Tells us where in the overall reference trajectory this resampled median value lies as a fraction
         all_feature_values_array = np.array(resampled_trajectories)
         median_reference_trajectory = list()
-        median_length = np.median([len(values) for values in resampled_trajectories])
+        median_length = np.int(np.median([len(values) for values in resampled_trajectories]))
         for i in range(median_length):
             median_resampled_values_reference_trajectory_fraction = np.average([resampled_values_reference_trajectory_indices_array[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
             median_feature_value = np.median(all_feature_values_array[:, i])
@@ -475,6 +478,10 @@ class FeatureExtractor():
         def extend_feature_dict(feature_trajectories, feature_type, feature_key, recording_lengths):
             reference_feature_data_trajectory_dict[feature_type][feature_key] = {"trajectories": feature_trajectories}
             reference_feature_data_trajectory_dict[feature_type][feature_key].update(self.extract_reference_feature_data_from_feature_trajectories(feature_trajectories, recording_lengths))
+
+        recording_lengths = []
+        for recording in recordings:
+            recording_lengths.append(len(recording))
         
         for feature_type, feature_specification in feature_of_interest_specification.items():
             reference_feature_data_trajectory_dict[feature_type] = dict()
@@ -486,13 +493,11 @@ class FeatureExtractor():
                     inner_joint_idx = self.get_joint_index(inner_joint_name)
                     outer_joint_idxs = tuple(self.get_joint_index(n) for n in outer_joints_names)
                     recording_angles_list = []
-                    recording_lengths = []
                     for recording in recordings:
                         recording_angles = []
                         for pose_array in recording:
                             recording_angles.append(self.extract_angle(pose_array, inner_joint_idx, outer_joint_idxs))
                         recording_angles_list.append(recording_angles)
-                        recording_lengths.append(recording_lengths)
                     
                     extend_feature_dict(recording_angles_list, feature_type, joint_hash, recording_lengths)
             else:

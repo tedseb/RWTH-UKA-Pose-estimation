@@ -41,7 +41,7 @@ REDIS_SPOT_RESAMPLED_FEATURES_POSTFIX = "resampled_features"
 SEND_CORRETIONS = False
 
 # Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = False
+HIGH_VERBOSITY = True
 
 # ALGORITHMIC COMFIGURATION
 
@@ -60,4 +60,6 @@ FEATURE_TRAJECTORY_RESOLUTION_FACTOR = 0.1
 SENDER_NODE_MESSAGE_DEQUEUEING_TIMEOUT = 1
 
 # Feature difference elasticity - used to see if all features are close to each other in their reference trajectory
-FEATURE_DIFFERENCE_ELASTICITY = 0.3
+FEATURE_DIFFERENCE_ELASTICITY = 0.15
+
+FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH = 3

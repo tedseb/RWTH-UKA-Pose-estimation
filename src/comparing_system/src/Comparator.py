@@ -10,6 +10,7 @@ by experts, i.e. data from the expert system.
 Whatever information is gained is sent via outgoing message queues.
 """
 
+import queue
 import time
 from functools import lru_cache
 from threading import Thread
@@ -126,14 +127,17 @@ def compare_high_level_features(spot_info_dict: dict,
                 last_feature_progression = 0
             beginning_state = beginning_states[feature_type][k]['feature_state']
             features_state = features_states[feature_type][k]['feature_state']
-            new_feature_progressions[feature_type][k] = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
-
+            new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
+            new_feature_progressions[feature_type][k] = new_feature_progression
+            if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
+                increase_reps = False
+                
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
             del new_feature_progressions[feature_type]
         if new_resampled_features[feature_type] == {}:
             del new_resampled_features[feature_type]
-    
+
     # TODO: Do something safe here, this might not reset all features
     if increase_reps:
         def reset_child_featuers(d):
@@ -142,7 +146,8 @@ def compare_high_level_features(spot_info_dict: dict,
                     d[k] = reset_child_featuers(v)
                 else:
                     d[k] = 0
-                return d
+            return d
+
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
     return increase_reps, new_feature_progressions, new_resampled_features
@@ -182,7 +187,8 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     #                                 "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
     #                                     "median_trajectory": median_reference_trajectory, \
     #                                         "median_reference_trajectory_feature_states": median_reference_trajectory_feature_states, \
-    #                                             "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions}
+    #                                             "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions,
+    #                                                 "number_of_changes_in_decided_feature_states": number_of_changes_in_decided_feature_states}
 
     reference_poses = exercise_data['recording']
     predicted_indices = []
@@ -252,13 +258,13 @@ class Comparator(Thread):
         self.predicted_skelleton_publisher = rp.Publisher("comparing_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("comparing_input", Person, queue_size=1000)
 
-        self.past_features_queue = Queue()
-        self.past_resampled_features_queue = Queue()
         self.last_feature_progressions = {}
         self.last_resampled_features = {}
-        self.past_joints_with_timestamps = Queue()
 
         self.spot_key = spot_key
+
+        self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
+        self.bad_repetition = False
 
         self.start()
 
@@ -306,7 +312,7 @@ class Comparator(Thread):
                         'seconds_since_last_exercise_start': (time.time_ns() - int(spot_info_dict.get('start_time'))) / 1e+9,
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
-                        'exercise_score': 100
+                        'exercise_score': 100,
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
@@ -315,23 +321,24 @@ class Comparator(Thread):
                 # Calculate a new reference pose mapping
                 if new_resampled_features:
                     reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
-                    if mean_resampled_values_reference_trajectory_fractions_average_difference >= FEATURE_DIFFERENCE_ELASTICITY:
-                        # TODO: Make sure this rep does not get counted!
-                        pass
-                        # rp.logerr(mean_resampled_values_reference_trajectory_fractions_average_difference)
+                    self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
+                    if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
+                        del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
+                    if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
+                        self.bad_repetition = True
+                        # rp.logerr("REPETITION NOT COUNTED!")
                         
-
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()
-                    reference_person_msg.stationID = 99
-                    reference_person_msg.sensorID = 0
+                    reference_person_msg.stationID = self.spot_key
+                    reference_person_msg.sensorID = -1
                     reference_person_msg.bodyParts = reference_body_parts
                     self.predicted_skelleton_publisher.publish(reference_person_msg)
 
                     user_body_parts = self.feature_extractor.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
                     user_person_msg = Person()
-                    user_person_msg.stationID = 99
-                    user_person_msg.sensorID = 0
+                    user_person_msg.stationID = self.spot_key
+                    user_person_msg.sensorID = -1
                     user_person_msg.bodyParts = user_body_parts
                     self.user_skelleton_publisher.publish(user_person_msg)
 

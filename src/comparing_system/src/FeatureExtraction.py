@@ -382,26 +382,37 @@ class FeatureExtractor():
 
         resampled_reference_trajectory_scale_array = np.sort(list(resampled_reference_trajectory_scale))
 
-        # # Construction of a median feature state trajectory
-        # all_feature_states_array = np.array(all_feature_states)
-        # median_feature_states = list()
-        # median_length = np.median([len(states) for states in all_feature_states_array])
-        # for i in range(median_length):
-        #     median_feature_state = np.median(all_feature_states_array[:, i])
-        #     while not np.where(all_feature_states_array[:, i] != median_feature_state):
-        #         bad_feature_state_indices = np.where(all_feature_states_array[:, i] != median_feature_state)
-        #         # Modify trajectories that differ such that they stay useful
-        #         for bad_feature_state_index in bad_feature_state_indices:
-        #             if len(all_feature_states_array[:, i][bad_feature_state_index]) > median_length:
-        #                 # We cut parts of longer state trajectories
-        #                 np.delete(all_feature_states_array[:, i], bad_feature_state_index)
-        #             elif len(all_feature_states_array[:, i][bad_feature_state_index]) == median_length:
-        #                 # We change states in trajectories of adequate length
-        #                 all_feature_states_array[bad_feature_state_index, i] = median_feature_state
-        #             else:
-        #                 # We add dummy parts to shorter state trajectories
-        #                 np.insert(all_feature_states_array[:, i], bad_feature_state_index, median_feature_state)
-        #     median_feature_states.append(median_feature_state)
+        # Construction of a median feature state trajectory
+        all_feature_states_array = np.array(all_feature_states)
+        median_feature_states = list()
+        median_length = np.int(np.median([len(states) for states in all_feature_states_array]))
+        for i in range(median_length):
+            median_feature_state = np.median(all_feature_states_array[:, i])
+            while not np.where(all_feature_states_array[:, i] != median_feature_state):
+                bad_feature_state_indices = np.where(all_feature_states_array[:, i] != median_feature_state)
+                # Modify trajectories that differ such that they stay useful
+                for bad_feature_state_index in bad_feature_state_indices:
+                    if len(all_feature_states_array[:, i][bad_feature_state_index]) > median_length:
+                        # We cut parts of longer state trajectories
+                        np.delete(all_feature_states_array[:, i], bad_feature_state_index)
+                    elif len(all_feature_states_array[:, i][bad_feature_state_index]) == median_length:
+                        # We change states in trajectories of adequate length
+                        all_feature_states_array[bad_feature_state_index, i] = median_feature_state
+                    else:
+                        # We add dummy parts to shorter state trajectories
+                        np.insert(all_feature_states_array[:, i], bad_feature_state_index, median_feature_state)
+            median_feature_states.append(median_feature_state)
+
+        # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
+        median_feature_states_array = np.array(median_feature_states)
+        decided_median_feature_states = median_feature_states_array[median_feature_states_array != 0]
+        decided_median_feature_state_change_indices = np.where(decided_median_feature_states[:-1] * decided_median_feature_states[1:] < 0 )[0] + 1
+        number_of_changes_in_decided_feature_states = len(decided_median_feature_state_change_indices)
+        if decided_median_feature_states[0] != decided_median_feature_states[-1]:
+            number_of_changes_in_decided_feature_states += 1
+
+        # feature_low = np.where(np.diff(decided_median_feature_states) == -1)
+        # feature_high = np.where(np.diff(decided_median_feature_states) == 1)
 
         # Construction of a median feature trajectory
         resampled_values_reference_trajectory_indices_array = np.array(resampled_values_reference_trajectory_indices)
@@ -452,7 +463,8 @@ class FeatureExtractor():
                                     "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
                                         "median_trajectory": median_reference_trajectory, \
                                             "median_reference_trajectory_feature_states": median_reference_trajectory_feature_states, \
-                                                "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions}
+                                                "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions,
+                                                    "number_of_changes_in_decided_feature_states": number_of_changes_in_decided_feature_states}
     
     
     def extract_reference_feature_data_from_recordings(self, recordings: List[np.ndarray], feature_of_interest_specification: dict) -> dict:

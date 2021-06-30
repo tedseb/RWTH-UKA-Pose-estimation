@@ -70,14 +70,14 @@ def enqueue_dictionary(previous_dict, enqueued_dict):
             previous_dict[k] = previous_dict.get(k, [])
             previous_dict[k].extend(v)
             if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
+                previous_dict[k] = previous_dict[k][-REDIS_MAXIMUM_QUEUE_SIZE:]
         else:
             previous_dict[k] = previous_dict.get(k, [])
             if previous_dict[k] == None:
                 previous_dict[k] = []
             previous_dict[k].append(v)
             if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
+                previous_dict[k] = previous_dict[k][-REDIS_MAXIMUM_QUEUE_SIZE:]
     
     return previous_dict
 
@@ -101,8 +101,6 @@ def compute_new_feature_progression(beginning_state, features_state, last_featur
     Raises:
         MalformedFeatures: If features are not the expected form.
     """
-    new_feature_progression = last_feature_progression
-
     # If features beginn with the FEATURE_HIGH state, feature progressions must be odd if the feature state changes to FEATURE_LOW and even afterwards
     if beginning_state == FEATURE_HIGH and \
         ((features_state == FEATURE_LOW and last_feature_progression % 2 == 0) or \
@@ -113,5 +111,7 @@ def compute_new_feature_progression(beginning_state, features_state, last_featur
         ((features_state == FEATURE_HIGH and last_feature_progression % 2 == 0) or \
             (features_state == FEATURE_LOW and last_feature_progression % 2 == 1)):
             new_feature_progression = last_feature_progression + 1
-    
+    else:
+        new_feature_progression = last_feature_progression
+
     return new_feature_progression

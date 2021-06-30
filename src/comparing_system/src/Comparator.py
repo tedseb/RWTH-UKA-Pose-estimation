@@ -131,6 +131,9 @@ def compare_high_level_features(spot_info_dict: dict,
             new_feature_progressions[feature_type][k] = new_feature_progression
             if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
+            elif new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
+                pass
+                # TODO: Bad repetition detected, since a feature has changed too often! Do something here!
                 
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
@@ -140,6 +143,7 @@ def compare_high_level_features(spot_info_dict: dict,
 
     # TODO: Do something safe here, this might not reset all features
     if increase_reps:
+        
         def reset_child_featuers(d):
             for k, v in d.items():
                 if isinstance(v, collections.MutableMapping):
@@ -149,6 +153,8 @@ def compare_high_level_features(spot_info_dict: dict,
             return d
 
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
+
+        rp.logerr(new_feature_progressions)
 
     return increase_reps, new_feature_progressions, new_resampled_features
 

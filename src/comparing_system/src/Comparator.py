@@ -76,7 +76,8 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
 def compare_high_level_features(spot_info_dict: dict, 
     last_feature_progressions: dict,
     last_resampled_features: dict,
-    features_states: dict) -> Tuple[bool, dict, Any]:
+    features_states: dict,
+    bad_repetition: bool) -> Tuple[bool, bool, dict, Any]:
     """Compare high level features, such as angles, by extracting them from the joints array.
     
     This method turn high level features into a progression dictionary and resamples them.
@@ -95,10 +96,19 @@ def compare_high_level_features(spot_info_dict: dict,
         new_resampled_features (dict): Resembles the features of interest specification dictionary but has lists inplace for every feature
                                         that contain the resampled values.
     """
+    def reset_child_featuers(d):
+        for k, v in d.items():
+            if isinstance(v, collections.MutableMapping):
+                d[k] = reset_child_featuers(v)
+            else:
+                d[k] = 0
+        return d
+
     exercise_data = spot_info_dict['exercise_data']
     beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
 
     increase_reps = True
+    in_beginning_state = True
     new_feature_progressions = {}
     new_resampled_features = {}
 
@@ -127,13 +137,15 @@ def compare_high_level_features(spot_info_dict: dict,
                 last_feature_progression = 0
             beginning_state = beginning_states[feature_type][k]['feature_state']
             features_state = features_states[feature_type][k]['feature_state']
+
+            if features_state != beginning_state:
+                in_beginning_state = False
             new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
             new_feature_progressions[feature_type][k] = new_feature_progression
             if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
-            elif new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
-                pass
-                # TODO: Bad repetition detected, since a feature has changed too often! Do something here!
+            elif new_feature_progression > exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
+                bad_repetition = True
                 
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
@@ -141,22 +153,19 @@ def compare_high_level_features(spot_info_dict: dict,
         if new_resampled_features[feature_type] == {}:
             del new_resampled_features[feature_type]
 
+    if in_beginning_state and bad_repetition:
+        rp.logerr("bad rep fixed!!!")
+        new_feature_progressions = reset_child_featuers(new_feature_progressions)
+        increase_reps, bad_repetition, new_feature_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, new_feature_progressions, last_resampled_features, features_states, False)
+
+    if bad_repetition:
+        increase_reps = False
+
     # TODO: Do something safe here, this might not reset all features
     if increase_reps:
-        
-        def reset_child_featuers(d):
-            for k, v in d.items():
-                if isinstance(v, collections.MutableMapping):
-                    d[k] = reset_child_featuers(v)
-                else:
-                    d[k] = 0
-            return d
-
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
-        rp.logerr(new_feature_progressions)
-
-    return increase_reps, new_feature_progressions, new_resampled_features
+    return increase_reps, bad_repetition, new_feature_progressions, new_resampled_features
 
 
 def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: dict) -> np.ndarray:
@@ -303,10 +312,12 @@ class Comparator(Thread):
                 features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
 
                 # Compare joints with expert system data
-                increase_reps, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states)
+                increase_reps, bad_repetition, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states, self.bad_repetition)
 
                 self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions)
                 self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features)
+
+                self.bad_repetition = bad_repetition
 
                 # Send info back to REST API
                 if increase_reps:

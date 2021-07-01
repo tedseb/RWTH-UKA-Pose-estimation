@@ -74,9 +74,7 @@ class ComparingSystemHandler():
             # TODO: Tamer must let experts specify the features of interest
             feature_of_interest_specification = self.feature_extractor.extract_feature_of_interest_specification_dictionary(exercise_data)
 
-            reference_feature_trajectories = self.feature_extractor.extract_feature_trajectories_from_recordings([recording], feature_of_interest_specification)
-
-            reference_feature_data = self.feature_extractor.extract_reference_feature_data_from_feature_trajectories(reference_feature_trajectories)
+            reference_feature_data = self.feature_extractor.extract_reference_feature_data_from_recordings([recording], feature_of_interest_specification)
 
             beginning_pose = recording[0]
             exercise_data['beginning_state_dict'] = self.feature_extractor.extract_states(beginning_pose, reference_feature_data, feature_of_interest_specification)
@@ -87,7 +85,6 @@ class ComparingSystemHandler():
             # Set all entries that are needed by the comparators threads later on
             exercise_data['recording'] = recording
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
-            exercise_data['reference_feature_trajectories'] = reference_feature_trajectories
             exercise_data['reference_feature_data'] = reference_feature_data
             
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}

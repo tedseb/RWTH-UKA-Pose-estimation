@@ -10,9 +10,9 @@ by experts, i.e. data from the expert system.
 Whatever information is gained is sent via outgoing message queues.
 """
 
+import queue
 import time
 from functools import lru_cache
-from importlib import import_module
 from threading import Thread
 from traceback import print_exc
 from typing import NoReturn
@@ -47,59 +47,6 @@ class NoSpoMetaDataAvailable(Exception):
 class NoExerciseDataAvailable(Exception):
     pass
 
-class MalformedFeatures(Exception):
-    pass
-
-def compute_new_feature_progression(beginning_state, features_state, last_feature_progression):
-    """Compute a dictionary representing the progression of the features specified by feature_state
-
-    This method turns features states, such as FEATURE_HIGH or FEATURE_LOW into a feature progression,
-    such as PROGRESSION_PARTIAL, PROGRESSION_DONE or PROGRESSION_START, depending on the previous progression
-    of the feature. This way we can track the progression of different features between timesteps.
-
-    Args: 
-        beginning_state: A dictionary that holds the state in which a feature begins for every feature of every category
-        features_state: The state that the featuers are in
-        last_feature_progression: The last dictionary produced by this method in the last timestep
-
-    Return:
-        new_feature_progression: The feature progression dictionary at this timestep
-
-    Raises:
-        MalformedFeatures: If features are not the expected form.
-    """
-    new_feature_progression = last_feature_progression
-
-    # If features beginn with the FEATURE_HIGH state, we need to check if they have passed through the FEATURE_LOW state
-    if beginning_state == FEATURE_HIGH:
-        if features_state == FEATURE_HIGH:
-            feature_is_in_beginning_state = True
-        elif features_state == FEATURE_LOW:
-            new_feature_progression  = PROGRESSION_PARTIAL
-            feature_is_in_beginning_state = False
-        else:
-            feature_is_in_beginning_state = False
-    # If features beginn with the FEATURE_LOW state, we need to check if they have passed through the FEATURE_HIGH state
-    elif beginning_state == FEATURE_LOW:
-        if features_state == FEATURE_LOW:
-            feature_is_in_beginning_state = True
-        elif features_state == FEATURE_HIGH:
-            new_feature_progression  = PROGRESSION_PARTIAL
-            feature_is_in_beginning_state = False
-        else:
-            feature_is_in_beginning_state = False
-    else:
-        raise MalformedFeatures("Beginning state is " + str(beginning_state))
-    
-    # If features are in the beginning state and they have progressed already, their progression can be set to PROGRESSION_DONE
-    if feature_is_in_beginning_state:
-        if last_feature_progression in (PROGRESSION_DONE, PROGRESSION_PARTIAL):
-            new_feature_progression  = PROGRESSION_DONE
-        else:
-            new_feature_progression = PROGRESSION_START
-
-    return new_feature_progression
-
 
 def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
     """Compute a custom metric that represents how probable it is for the user to be at a certain point of the reference trajectory.
@@ -118,7 +65,8 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
     """
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
-    feature_trajectory_shortened = feature_trajectory[:comparing_length]
+    feature_trajectory_shortened = feature_trajectory[-comparing_length:]
+    np.flip(feature_trajectory_shortened)
     distances = hankel_matrix_shortened - feature_trajectory_shortened
     fading_factor = np.linspace(min_weight, max_weight_, comparing_length) # Let older signals have less influence on the error
     errors = np.linalg.norm((distances) * fading_factor, axis=1)
@@ -128,7 +76,8 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
 def compare_high_level_features(spot_info_dict: dict, 
     last_feature_progressions: dict,
     last_resampled_features: dict,
-    features_states: dict) -> Tuple[bool, dict, Any]:
+    features_states: dict,
+    bad_repetition: bool) -> Tuple[bool, bool, dict, Any]:
     """Compare high level features, such as angles, by extracting them from the joints array.
     
     This method turn high level features into a progression dictionary and resamples them.
@@ -147,10 +96,19 @@ def compare_high_level_features(spot_info_dict: dict,
         new_resampled_features (dict): Resembles the features of interest specification dictionary but has lists inplace for every feature
                                         that contain the resampled values.
     """
+    def reset_child_featuers(d):
+        for k, v in d.items():
+            if isinstance(v, collections.MutableMapping):
+                d[k] = reset_child_featuers(v)
+            else:
+                d[k] = 0
+        return d
+
     exercise_data = spot_info_dict['exercise_data']
     beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
 
     increase_reps = True
+    in_beginning_state = True
     new_feature_progressions = {}
     new_resampled_features = {}
 
@@ -176,35 +134,37 @@ def compare_high_level_features(spot_info_dict: dict,
                 last_feature_progression = last_feature_progressions[feature_type][k][-1]
             except (KeyError, TypeError):
                 # If we have no last feature progression value, set this feature progression to the starting value
-                last_feature_progression = PROGRESSION_START
+                last_feature_progression = 0
             beginning_state = beginning_states[feature_type][k]['feature_state']
             features_state = features_states[feature_type][k]['feature_state']
+
+            if features_state != beginning_state:
+                in_beginning_state = False
             new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
-            
-            # If one of the features is not done, the repetition is not done
-            if new_feature_progression != PROGRESSION_DONE:
+            new_feature_progressions[feature_type][k] = new_feature_progression
+            if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
-            # We only need to update the feature progression state if the progress has changed
-            if (new_feature_progression != last_feature_progression):
-                new_feature_progressions[feature_type][k] = new_feature_progression
+            elif new_feature_progression > exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
+                bad_repetition = True
+                
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
             del new_feature_progressions[feature_type]
         if new_resampled_features[feature_type] == {}:
             del new_resampled_features[feature_type]
-    
+
+    if in_beginning_state and bad_repetition:
+        new_feature_progressions = reset_child_featuers(new_feature_progressions)
+        increase_reps, bad_repetition, new_feature_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, new_feature_progressions, last_resampled_features, features_states, False)
+
+    if bad_repetition:
+        increase_reps = False
+
     # TODO: Do something safe here, this might not reset all features
     if increase_reps:
-        def reset_child_featuers(d):
-            for k, v in d.items():
-                if isinstance(v, collections.MutableMapping):
-                    d[k] = reset_child_featuers(v)
-                else:
-                    d[k] = PROGRESSION_START
-                return d
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
-    return increase_reps, new_feature_progressions, new_resampled_features
+    return increase_reps, bad_repetition, new_feature_progressions, new_resampled_features
 
 
 def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: dict) -> np.ndarray:
@@ -222,8 +182,35 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     Returns:
         reference_pose: The reference pose that we think the user is in
     """
+
+    def my_weird_metric(a, b):
+        """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
+        a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
+        a_to = a["median_resampled_values_reference_trajectory_fraction_to"]
+        b_from = b["median_resampled_values_reference_trajectory_fraction_from"]
+        b_to = b["median_resampled_values_reference_trajectory_fraction_to"]
+
+        if b_from <= a_from <= b_to or b_from <= a_to <= b_to:
+            return 0
+        else:
+            return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
+
+    # return {"lower_boundary": lower_boundary, \
+    #         "upper_boundary": upper_boundary, \
+    #             "lowest_value": lowest_value, \
+    #                 "highest_value": highest_value, \
+    #                     "range_of_motion": range_of_motion, \
+    #                         "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, \
+    #                             "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, \
+    #                                 "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
+    #                                     "median_trajectory": median_reference_trajectory, \
+    #                                         "median_reference_trajectory_feature_states": median_reference_trajectory_feature_states, \
+    #                                             "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions,
+    #                                                 "number_of_changes_in_decided_feature_states": number_of_changes_in_decided_feature_states}
+
     reference_poses = exercise_data['recording']
     predicted_indices = []
+    median_resampled_values_reference_trajectory_fractions = []
 
     for feature_type, features in exercise_data['reference_feature_data'].items():
         for k, v in features.items():
@@ -235,33 +222,24 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                 prediction = np.argmin(errors)
                 index = resampled_values_reference_trajectory_indices[idx][prediction]
+                median_resampled_values_reference_trajectory_fractions.append(v['median_resampled_values_reference_trajectory_fractions'][prediction])
 
                 predicted_indices.append(index)
 
+    median_resampled_values_reference_trajectory_fractions_errors = []
+    # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
+    for idx1, value in enumerate(median_resampled_values_reference_trajectory_fractions):
+        for idx2 in range(len(median_resampled_values_reference_trajectory_fractions)):
+            if idx2 == idx1:
+                continue
+            median_resampled_values_reference_trajectory_fractions_errors.append(my_weird_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
+    
     predicted_pose_index = int(np.average(predicted_indices))
     reference_pose = reference_poses[predicted_pose_index]
-    
-    return reference_pose
 
-
-def enqueue_dictionary(previous_dict, enqueued_dict):
-    for k, v in enqueued_dict.items():
-        if isinstance(v, collections.MutableMapping):
-            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v)
-        elif isinstance(v, list):
-            previous_dict[k] = previous_dict.get(k, [])
-            previous_dict[k].extend(v)
-            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
-        else:
-            previous_dict[k] = previous_dict.get(k, [])
-            if previous_dict[k] == None:
-                previous_dict[k] = []
-            previous_dict[k].append(v)
-            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][0: REDIS_MAXIMUM_QUEUE_SIZE]
-    
-    return previous_dict
+    mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
+        
+    return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
 
 
 class Comparator(Thread):
@@ -298,13 +276,13 @@ class Comparator(Thread):
         self.predicted_skelleton_publisher = rp.Publisher("comparing_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("comparing_input", Person, queue_size=1000)
 
-        self.past_features_queue = Queue()
-        self.past_resampled_features_queue = Queue()
         self.last_feature_progressions = {}
         self.last_resampled_features = {}
-        self.past_joints_with_timestamps = Queue()
 
         self.spot_key = spot_key
+
+        self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
+        self.bad_repetition = False
 
         self.start()
 
@@ -337,10 +315,12 @@ class Comparator(Thread):
                 features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
 
                 # Compare joints with expert system data
-                increase_reps, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states)
+                increase_reps, bad_repetition, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states, self.bad_repetition)
 
                 self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions)
                 self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features)
+
+                self.bad_repetition = bad_repetition
 
                 # Send info back to REST API
                 if increase_reps:
@@ -352,7 +332,7 @@ class Comparator(Thread):
                         'seconds_since_last_exercise_start': (time.time_ns() - int(spot_info_dict.get('start_time'))) / 1e+9,
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
-                        'exercise_score': 100
+                        'exercise_score': 100,
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
@@ -360,18 +340,24 @@ class Comparator(Thread):
 
                 # Calculate a new reference pose mapping
                 if new_resampled_features:
-                    reference_pose = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
+                    reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
+                    self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
+                    if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
+                        del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
+                    if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
+                        self.bad_repetition = True
+                        
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()
-                    reference_person_msg.stationID = 99
-                    reference_person_msg.sensorID = 0
+                    reference_person_msg.stationID = self.spot_key
+                    reference_person_msg.sensorID = -1
                     reference_person_msg.bodyParts = reference_body_parts
                     self.predicted_skelleton_publisher.publish(reference_person_msg)
 
                     user_body_parts = self.feature_extractor.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
                     user_person_msg = Person()
-                    user_person_msg.stationID = 99
-                    user_person_msg.sensorID = 0
+                    user_person_msg.stationID = self.spot_key
+                    user_person_msg.sensorID = -1
                     user_person_msg.bodyParts = user_body_parts
                     self.user_skelleton_publisher.publish(user_person_msg)
 

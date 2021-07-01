@@ -58,3 +58,8 @@ FEATURE_TRAJECTORY_RESOLUTION_FACTOR = 0.1
 
 # Message sender dequeueing timeout in seconds. A lower timeout lets us kill the threader quicker but results in higher resource consumption
 SENDER_NODE_MESSAGE_DEQUEUEING_TIMEOUT = 1
+
+# Feature difference elasticity - used to see if all features are close to each other in their reference trajectory
+FEATURE_DIFFERENCE_ELASTICITY = 0.15
+
+FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH = 5

@@ -62,4 +62,4 @@ SENDER_NODE_MESSAGE_DEQUEUEING_TIMEOUT = 1
 # Feature difference elasticity - used to see if all features are close to each other in their reference trajectory
 FEATURE_DIFFERENCE_ELASTICITY = 0.15
 
-FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH = 3
+FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH = 5

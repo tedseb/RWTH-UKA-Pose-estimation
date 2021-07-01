@@ -154,7 +154,6 @@ def compare_high_level_features(spot_info_dict: dict,
             del new_resampled_features[feature_type]
 
     if in_beginning_state and bad_repetition:
-        rp.logerr("bad rep fixed!!!")
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
         increase_reps, bad_repetition, new_feature_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, new_feature_progressions, last_resampled_features, features_states, False)
 
@@ -184,13 +183,17 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
         reference_pose: The reference pose that we think the user is in
     """
 
-    def custom_absolute_difference(a, b):
-        """Calculate the absolute difference between two values on a "ring" scale between 0 and 1."""
-        smaller = min([a, b])
-        larger = max([a, b])
-        x = abs(larger - smaller)
-        y = abs(smaller + 1 - larger)
-        return min(x, y)
+    def my_weird_metric(a, b):
+        """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
+        a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
+        a_to = a["median_resampled_values_reference_trajectory_fraction_to"]
+        b_from = b["median_resampled_values_reference_trajectory_fraction_from"]
+        b_to = b["median_resampled_values_reference_trajectory_fraction_to"]
+
+        if b_from <= a_from <= b_to or b_from <= a_to <= b_to:
+            return 0
+        else:
+            return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
 
     # return {"lower_boundary": lower_boundary, \
     #         "upper_boundary": upper_boundary, \
@@ -229,13 +232,13 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
         for idx2 in range(len(median_resampled_values_reference_trajectory_fractions)):
             if idx2 == idx1:
                 continue
-            median_resampled_values_reference_trajectory_fractions_errors.append(custom_absolute_difference(value, median_resampled_values_reference_trajectory_fractions[idx2]))
+            median_resampled_values_reference_trajectory_fractions_errors.append(my_weird_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
     
     predicted_pose_index = int(np.average(predicted_indices))
     reference_pose = reference_poses[predicted_pose_index]
 
     mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
-
+        
     return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
 
 
@@ -343,7 +346,6 @@ class Comparator(Thread):
                         del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
                     if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
                         self.bad_repetition = True
-                        # rp.logerr("REPETITION NOT COUNTED!")
                         
                     reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()

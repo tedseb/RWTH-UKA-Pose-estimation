@@ -421,7 +421,8 @@ class FeatureExtractor():
         median_reference_trajectory = list()
         median_length = np.int(np.median([len(values) for values in resampled_trajectories]))
         for i in range(median_length):
-            median_resampled_values_reference_trajectory_fraction = np.average([resampled_values_reference_trajectory_indices_array[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
+            median_resampled_values_reference_trajectory_fraction_from = np.average([resampled_values_reference_trajectory_indices_array[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
+            median_resampled_values_reference_trajectory_fraction_to = np.average([resampled_values_reference_trajectory_indices_array[j, i + 1 % len(resampled_values_reference_trajectory_indices_array)]/recording_lengths[j] for j in range(len(recording_lengths))])
             median_feature_value = np.median(all_feature_values_array[:, i])
             while not np.where(all_feature_values_array[:, i] != value_turned_into_resampled_values):
                 bad_feature_state_indices = np.where(all_feature_values_array[:, i] != median_feature_value)
@@ -437,7 +438,8 @@ class FeatureExtractor():
                         # We add "dummy" parts to shorter trajectories
                         np.insert(all_feature_values_array[:, i], bad_feature_state_index, median_feature_value)
             median_reference_trajectory.append(median_feature_value)
-            median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction)
+            median_resampled_values_reference_trajectory_fractions.append({"median_resampled_values_reference_trajectory_fraction_from": median_resampled_values_reference_trajectory_fraction_from, \
+                "median_resampled_values_reference_trajectory_fraction_to": median_resampled_values_reference_trajectory_fraction_to})
 
         # Check if reference trajectory matches reference state trajectory and shorten it, if values double
         last_value = np.inf

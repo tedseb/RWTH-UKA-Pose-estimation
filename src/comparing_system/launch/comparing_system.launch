@@ -1,7 +1,6 @@
 <launch>
   <node name="ComparingSystem_Receiver" pkg="comparing_system" type="Receiver.py" />
-  <node name="ComparingSystem_Sender" pkg="comparing_system" type="Sender.py" />
-  <node name="ComparingSystem_SpotMetaDataHandler" pkg="comparing_system" type="SpotMetaDataHandler.py" />
+  <node name="ComparingSystem_ComparingSystemHandler" pkg="comparing_system" type="ComparingSystemHandler.py" />
   <node name="ComparingSystem_Visualizer" pkg="comparing_system" type="Visualizer.py" />
   <node name="ComparingSystem_Comparator" pkg="comparing_system" type="Comparator.py" />
 </launch> 

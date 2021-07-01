@@ -7,7 +7,10 @@ from std_msgs.msg import ColorRGBA, Header
 from geometry_msgs.msg import Vector3
 from visualization_msgs.msg import Marker, MarkerArray
 
-from src.FeatureExtraction import *
+try:
+    from comparing_system.src.FeatureExtraction import *
+except (ImportError, ModuleNotFoundError):
+    from src.FeatureExtraction import *
 
 class Visualizer():
     def __init__(self,

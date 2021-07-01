@@ -19,7 +19,11 @@ import msgpack_numpy as m
 import redis
 import rospy as rp
 import yaml
-from src.config import *
+
+try:
+    from comparing_system.src.config import *
+except ImportError:
+    from src.config import *
 
 # Patch msgpack to understand numpy arrays
 m.patch()
@@ -246,7 +250,7 @@ class RedisSpotMetaDataInterface(RedisInterface, SpotMetaDataInterface):
     def get_spot_info_dict(self, key: str, info_keys: list) -> dict:
         spot_info_list = self.redis_connection.hmget(key, info_keys)
         if None in spot_info_list:
-            raise NoSpotMetaDataSetExcpetion("Trying to get spot_info_dict at key " + key + ", but no spot_info_dict is set.")
+            raise NoSpotMetaDataSetExcpetion("Trying to get spot_info_dict at key " + str(key) + ", but no spot_info_dict is set.")
         spot_info_dict = dict(zip(info_keys, spot_info_list))
         if "exercise_data" in spot_info_dict.keys() and spot_info_dict["exercise_data"]:
             spot_info_dict["exercise_data"] = yaml.load(spot_info_dict["exercise_data"], Loader=yaml.Loader)
@@ -328,7 +332,6 @@ class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
             if HIGH_VERBOSITY:
                 rp.logerr("Issue getting message from Queue: " + str(key))
                 print_exc()
-            pass
         
         return message
 
@@ -387,8 +390,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         return self.redis_connection.llen(spot_queue_key), self.redis_connection.llen(spot_past_queue_key), self.redis_connection.llen(spot_info_key), self.redis_connection.llen(spot_state_key), self.redis_connection.llen(redis_spot_feature_progression_key), self.redis_connection.llen(redis_spot_resampled_features_key)
 
     def delete(self, spot_key: str):
-        # TODO: Try and catch
-        spot_queue_key, spot_past_queue_key, _, _, _, _ = generate_redis_key_names(key)
+        spot_queue_key, spot_past_queue_key, _, _, _, _ = generate_redis_key_names(spot_key)
         self.redis_connection.delete(spot_queue_key)
         self.redis_connection.delete(spot_past_queue_key)
             

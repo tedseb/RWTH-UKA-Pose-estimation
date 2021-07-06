@@ -13,3 +13,4 @@ nh.subscribe('/station_usage', StationUsage, async (msg) => {
         exercise: msg['exerciseName']
     });
 });
+

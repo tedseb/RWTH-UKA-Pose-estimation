@@ -4,10 +4,10 @@
       <div mat-card-avatar class="station-card-image"></div>
       <mat-card-title>Station {{station!.id}}</mat-card-title>
       <mat-card-subtitle>{{station!.name}}</mat-card-subtitle>
-    </mat-card-header>
-    <img mat-card-image [src]="station!.imageUrl" alt="station-pic">
+    </mat-card-header> 
+    <img mat-card-image [src]="canvasDataUrl" alt="station-pic">
     <mat-card-content>
-      <button mat-button>Camera {{station!.cameraId}}</button>
+      <button mat-button>Camera</button>
       <br>
       <p>
         Erkannte Objekte:
@@ -17,10 +17,10 @@
       </p>
     </mat-card-content>
     <mat-card-actions>
-      <button mat-button color="warn" *ngIf="station!.active === true">Deactivate</button>
-      <button mat-button color="accent" *ngIf="station!.active === false">Activate</button>
+      <button mat-button color="warn">Deactivate</button>
+  
       <button mat-button>Statistics</button>
     </mat-card-actions>
   </mat-card>
 </div>
-
+<canvas mat-card-image width="1920" height="1080" #canvas id="canvas" [hidden]=true></canvas>

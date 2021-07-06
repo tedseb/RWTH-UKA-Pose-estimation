@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Station } from '../models/station';
+import { Station } from '../models/Station';
 import { DataService } from './data.service';
 
 @Injectable({
@@ -11,17 +11,10 @@ export class StationService {
 
 
   constructor(private dataService: DataService) {
-    let stationBuilded: Station[] | { id: any; name: any; cameraId: number; objDetections: string[]; active: boolean; imageUrl: string; }[] = []
+    let stationBuilded: Station[] = [];
     this.dataService.getStations().subscribe(res => {
-      res.stations.forEach((station: any) => {
-        stationBuilded.push({
-          id: station.id!,
-          name: station.name,
-          cameraId: 0,
-          objDetections: ['towel', 'human', 'dumbbell'],
-          active: (Math.random() < 0.5),
-          imageUrl: "../../../assets/station-example-1.png"
-        });
+      res.forEach((station: any) => {
+        stationBuilded.push(station);
         console.log(station);
       });
     });

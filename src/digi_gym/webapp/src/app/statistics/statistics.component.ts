@@ -1,5 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { multi } from './data';
+import { Data } from '@angular/router';
+import { DataService } from '../services/data.service';
+//import { multi } from './data';
 
 @Component({
   selector: 'app-statistics',
@@ -27,8 +29,9 @@ export class StatisticsComponent implements OnInit {
   };
 
 
-  constructor() {
-    Object.assign(this, { multi });
+  constructor(private dataService: DataService) {
+    //Object.assign(this, { multi });
+    this.dataService.getStatistics().subscribe(res => {this.multi = res});
   }
 
   ngOnInit(): void {

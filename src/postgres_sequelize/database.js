@@ -1,6 +1,7 @@
 const config = require('./config.json');
 const Sequelize = require('sequelize');
 const {associate} = require('./associations');
+const camera_station_mappingModel = require('./models/camera_station_mapping.model');
 
 
 const sequelize = new Sequelize('trainerai_db',
@@ -38,6 +39,7 @@ module.exports = {
     Stations: sequelize.models.station,
     Cameras: sequelize.models.camera,
     Frames: sequelize.models.frame,
+    CameraStationMappings: sequelize.models.camera_station_mapping,
     StationUsages: sequelize.models.station_usage,
     DigiGymUsers: sequelize.models.dguser,
     DigiGymRoles: sequelize.models.dgrole

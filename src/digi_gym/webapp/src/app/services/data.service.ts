@@ -18,4 +18,6 @@ export class DataService {
 
   getStatistics() {
     return this.http.get<any>("/api/statistics/all");  }
+
+  postEmergencyDone() {}
 }

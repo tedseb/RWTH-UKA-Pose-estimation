@@ -14,7 +14,7 @@ export class EmergenciesService {
   
 
   constructor(private http: HttpClient) { 
-    this.emergencies$ = timer(0, 3000).pipe(
+    this.emergencies$ = timer(0, 1000).pipe(
       switchMap(() => http.get<any[]>('/api/emergencies/all')), retry(), share(), takeUntil(this.stopPolling)
     )
   }

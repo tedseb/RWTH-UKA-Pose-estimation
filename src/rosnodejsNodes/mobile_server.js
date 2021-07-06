@@ -59,7 +59,7 @@ const nh = rosnodejs.nh;
 
 // We use this to advertise the Exercise name, read with the current QR Code
 const station_usage_publisher = nh.advertise('/station_usage', StationUsage);
-
+const emergeny_publisher = nh.advertise('/emergency', StringMsg);
 
 // We use this user_state and deprecate the very first API structure "repetition"
 const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
@@ -81,6 +81,10 @@ const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
     });
 });
 
+app.get("/api/announcements", (req, res) => {
+
+});
+
 // Add new client connections
 wss.on('connection', (ws, req) => {
     const location = url.parse(req.url, true);
@@ -88,10 +92,14 @@ wss.on('connection', (ws, req) => {
     console.log("Orhan hat sich verbunden :)");
     
     ws.on('message', function incoming(message) {
+        
         console.log(message);
         //console.log(JSON.parse(message));
         
         const qr = JSON.parse(message);
+        if(qr['emergency']) {
+            emergeny_publisher.publish({data: qr['emergency']});
+        }
         console.log(qr);
         const msg = new StationUsage({
             stationID: qr['stationID'],

@@ -60,6 +60,11 @@ exports.statisticsAll = async(req, res) => {
   res.status(200).send(JSON.stringify(objs));
 }
 
+exports.emergenciesAll = async(req, res) => {
+  const emergencies = await db.Emergency.findAll();
+  res.status(200).send(JSON.stringify(emergencies));
+}
+
 function parseFrameBox(value) {
   console.log(value);
   value.dataValues.frame_box = parse(value.dataValues.frame_box);

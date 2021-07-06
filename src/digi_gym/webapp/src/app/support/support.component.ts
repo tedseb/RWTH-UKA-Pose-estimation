@@ -1,4 +1,6 @@
 import { Component, OnInit } from '@angular/core';
+import { take } from 'rxjs/operators';
+import { EmergenciesService } from '../services/emergencies.service';
 
 @Component({
   selector: 'app-support',
@@ -7,11 +9,19 @@ import { Component, OnInit } from '@angular/core';
 })
 export class SupportComponent implements OnInit {
 
-  requests =  [{description: "Hey, Station 2 stinkt brutal", user: {name: "Basti"}, date: "Today, 12:14"}, {description: "Moin, kann mir jemand zeigen wie die Übung geht??", user: {name: "Thomas"}, date: "Today, 12:14"}]
-
-  constructor() { }
+  requests: any;
+  
+  constructor(private emergencyService: EmergenciesService) {
+    this.emergencyService.getAllEmergencies().pipe(take(1)).subscribe(res => {
+      this.requests  = res;
+    });
+  }
 
   ngOnInit(): void {
   }
+
+
+
+
 
 }

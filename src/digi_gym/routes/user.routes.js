@@ -18,6 +18,8 @@ module.exports = function(app) {
 
   app.get("/api/statistics/all", controller.statisticsAll);
 
+  app.get("/api/emergencies/all", controller.emergenciesAll);
+
   app.get(
     "/api/test/user",
     [authJwt.verifyToken],

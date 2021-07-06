@@ -9,6 +9,7 @@
       <button mat-icon-button routerLink="/support" routerLinkActive="primary">
         <mat-icon>support_agent</mat-icon>
       </button>
+      <button *ngIf="emergency" mat-icon-button><mat-icon>medical_services</mat-icon></button>
       <button mat-icon-button routerLink="/login" routerLinkActive="primary">
         <mat-icon>login</mat-icon>
       </button>

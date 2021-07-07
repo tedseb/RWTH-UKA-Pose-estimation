@@ -10,13 +10,11 @@ by experts, i.e. data from the expert system.
 Whatever information is gained is sent via outgoing message queues.
 """
 
-import queue
 import time
 from functools import lru_cache
 from threading import Thread
 from traceback import print_exc
 from typing import NoReturn
-from queue import Queue
 
 import collections
 import redis
@@ -49,9 +47,9 @@ class NoExerciseDataAvailable(Exception):
 
 
 def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
-    """Compute a custom metric that represents how probable it is for the user to be at a certain point of the reference trajectory.
+    """Compute a custom metric that represents the differences between a trajectory and the reference trajectory or shifted versions thereof.
 
-    This function computes the l2 norm of signals - signal, but influence to the error fades out linearly form the 
+    This function computes the l2 norm of hankel_matrix - feature_trajectory, but influence to the error fades out linearly form the 
     newest to the oldest measurement according to beta.
 
     Args:

@@ -34,7 +34,7 @@ class Receiver():
     def __init__(self, 
     spot_queue_load_balancer_class: QueueLoadBalancerInterface = RedisQueueLoadBalancerInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
-    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor):
+    feature_extractor_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
         self.spot_queue_interface = spot_queue_interface_class()

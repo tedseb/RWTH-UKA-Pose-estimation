@@ -14,7 +14,7 @@ except (ImportError, ModuleNotFoundError):
 
 class Visualizer():
     def __init__(self,
-    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor):
+    feature_extractor_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter):
         # define a publisher to publish the 3D skeleton of multiple people
         self.input_pub = rp.Publisher('comparing_input_marker', MarkerArray, queue_size=100)
         self.reference_pub = rp.Publisher('comparing_reference_prediction_marker', MarkerArray, queue_size=100)
@@ -72,5 +72,5 @@ class Visualizer():
 
 if __name__ == '__main__':
     rp.init_node('ComparingSystem_Visualizer', anonymous=False)
-    visualization = Visualizer(SpinFeatureExtractor)
+    visualization = Visualizer(SpinPoseDefinitionAdapter)
     rp.spin()

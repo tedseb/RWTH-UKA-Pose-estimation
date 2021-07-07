@@ -119,10 +119,10 @@ def compare_high_level_features(spot_info_dict: dict,
             # With the current feature value and the last resampled feature value, we can compute new resampled feature values
             feature_value = features_states[feature_type][k]['feature_value']
             resolution = exercise_data['reference_feature_data'][feature_type][k]['range_of_motion'] * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
-            scale = exercise_data['reference_feature_data'][feature_type][k]['resampled_reference_trajectory_scale_array']
+            scale = exercise_data['reference_feature_data'][feature_type][k]['scale']
             try:
                 last_resampled_feature_value = float(last_resampled_features[feature_type][k][-1])
-                new_resampled_feature_values = compute_resampled_feature_values(feature_value, last_resampled_feature_value, resolution)
+                new_resampled_feature_values = discritize_feature_values(feature_value, last_resampled_feature_value, resolution)
                 if new_resampled_feature_values:
                     new_resampled_features[feature_type][k] = new_resampled_feature_values
             except (KeyError, TypeError):
@@ -195,33 +195,20 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
         else:
             return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
 
-    # return {"lower_boundary": lower_boundary, \
-    #         "upper_boundary": upper_boundary, \
-    #             "lowest_value": lowest_value, \
-    #                 "highest_value": highest_value, \
-    #                     "range_of_motion": range_of_motion, \
-    #                         "resampled_values_reference_trajectory_indices": resampled_values_reference_trajectory_indices, \
-    #                             "reference_trajectory_hankel_matrices": reference_trajectory_hankel_matrices, \
-    #                                 "resampled_reference_trajectory_scale_array": resampled_reference_trajectory_scale_array, \
-    #                                     "median_trajectory": median_reference_trajectory, \
-    #                                         "median_reference_trajectory_feature_states": median_reference_trajectory_feature_states, \
-    #                                             "median_resampled_values_reference_trajectory_fractions": median_resampled_values_reference_trajectory_fractions,
-    #                                                 "number_of_changes_in_decided_feature_states": number_of_changes_in_decided_feature_states}
-
     reference_poses = exercise_data['recording']
     predicted_indices = []
     median_resampled_values_reference_trajectory_fractions = []
 
     for feature_type, features in exercise_data['reference_feature_data'].items():
         for k, v in features.items():
-            resampled_values_reference_trajectory_indices = v['resampled_values_reference_trajectory_indices']
-            reference_trajectory_hankel_matrices = v['reference_trajectory_hankel_matrices']
+            discretization_reference_trajectory_indices_tensor = v['discretization_reference_trajectory_indices_tensor']
+            hankel_tensor = v['hankel_tensor']
             feature_trajectory = np.asarray(feature_trajectories[feature_type][k], np.float16)
 
-            for idx, reference_trajectory_hankel_matrix in enumerate(reference_trajectory_hankel_matrices):
+            for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor):
                 errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                 prediction = np.argmin(errors)
-                index = resampled_values_reference_trajectory_indices[idx][prediction]
+                index = discretization_reference_trajectory_indices_tensor[idx][prediction]
                 median_resampled_values_reference_trajectory_fractions.append(v['median_resampled_values_reference_trajectory_fractions'][prediction])
 
                 predicted_indices.append(index)
@@ -254,13 +241,13 @@ class Comparator(Thread):
     spot_key: str,
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
-    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor,
+    pose_definition_adapter_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter,
     feature_data_queues_interface_class: PastFeatureDataQueuesInterface = RedisFeatureDataQueuesInterface):
         super(Comparator, self).__init__()
 
         self.spot_queue_interface = spot_queue_interface_class()
         self.spot_metadata_interface = spot_metadata_interface_class()
-        self.feature_extractor = feature_extractor_class()
+        self.pose_definition_adapter = pose_definition_adapter_class()
         # Use the same interface class for these two, because they have the same needs to the interface 
         self.past_features_queue_interface = feature_data_queues_interface_class()
         self.past_resampled_features_queue_interface = feature_data_queues_interface_class()
@@ -278,6 +265,7 @@ class Comparator(Thread):
 
         self.last_feature_progressions = {}
         self.last_resampled_features = {}
+        self.last_feature_states = {}
 
         self.spot_key = spot_key
 
@@ -312,7 +300,9 @@ class Comparator(Thread):
                 # Extract feature states
                 exercise_data = spot_info_dict['exercise_data']
                 used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
-                features_states = self.feature_extractor.extract_states(used_joint_ndarray, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'])
+                features_states = extract_states(used_joint_ndarray, self.last_feature_states, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'], self.pose_definition_adapter)
+
+                self.last_feature_states = features_states
 
                 # Compare joints with expert system data
                 increase_reps, bad_repetition, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states, self.bad_repetition)
@@ -347,14 +337,14 @@ class Comparator(Thread):
                     if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
                         self.bad_repetition = True
                         
-                    reference_body_parts = self.feature_extractor.ndarray_to_body_parts(reference_pose)
+                    reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()
                     reference_person_msg.stationID = self.spot_key
                     reference_person_msg.sensorID = -1
                     reference_person_msg.bodyParts = reference_body_parts
                     self.predicted_skelleton_publisher.publish(reference_person_msg)
 
-                    user_body_parts = self.feature_extractor.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
+                    user_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
                     user_person_msg = Person()
                     user_person_msg.stationID = self.spot_key
                     user_person_msg.sensorID = -1

@@ -41,14 +41,14 @@ class ComparingSystemHandler():
     def __init__(self, 
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
-    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor,
+    pose_definition_adapter_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter,
     past_features_queue_interface_class: PastFeatureDataQueuesInterface = RedisFeatureDataQueuesInterface):
 
         self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
         self.spots = dict()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.spot_queue_interface = spot_queue_interface_class()
-        self.feature_extractor = feature_extractor_class()
+        self.pose_definition_adapter = pose_definition_adapter_class()
         self.past_features_queue_interface = past_features_queue_interface_class()
         self.comparators = {} # A dictionary, with spot IDs as keys
 
@@ -69,15 +69,15 @@ class ComparingSystemHandler():
             exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
             
             # TODO: In the future: Possibly use multiple recordings
-            recording = self.feature_extractor.recording_to_ndarray(exercise_data['recording'])
+            recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
 
             # TODO: Tamer must let experts specify the features of interest
-            feature_of_interest_specification = self.feature_extractor.extract_feature_of_interest_specification_dictionary(exercise_data)
+            feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(exercise_data, self.pose_definition_adapter)
 
-            reference_feature_data = self.feature_extractor.extract_reference_feature_data_from_recordings([recording], feature_of_interest_specification)
+            reference_feature_data = extract_reference_feature_data_from_recordings([recording], feature_of_interest_specification, self.pose_definition_adapter)
 
             beginning_pose = recording[0]
-            exercise_data['beginning_state_dict'] = self.feature_extractor.extract_states(beginning_pose, reference_feature_data, feature_of_interest_specification)
+            exercise_data['beginning_state_dict'] = extract_states(beginning_pose, None, reference_feature_data, feature_of_interest_specification, self.pose_definition_adapter)
 
             # The 'stages' entry is an artifact of an older interface to tamer
             del exercise_data['stages']

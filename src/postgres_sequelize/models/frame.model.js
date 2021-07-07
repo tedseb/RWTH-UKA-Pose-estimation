@@ -14,6 +14,10 @@ module.exports = (sequelize) => {
         frame_box: {
             allowNull: false,
             type: DataTypes.BOX
+        },
+        type: {
+            type: DataTypes.INTEGER,
+            allowNull: false
         }
     });
 };

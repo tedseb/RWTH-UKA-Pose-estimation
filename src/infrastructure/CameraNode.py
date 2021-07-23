@@ -34,6 +34,7 @@ videos_mit_ted = {
 "pullups_good": "https://www.youtube.com/watch?v=YiVXPZQhHSA",
 "orhan_ted_buero": "https://youtu.be/bqpCkbAr8dY",
 "artur_zuhause": "https://youtu.be/ETYFGYjXcUw",
+"artur_minitests": "https://youtu.be/yC-8upm5kBc",
 }
 
 class CameraNode():

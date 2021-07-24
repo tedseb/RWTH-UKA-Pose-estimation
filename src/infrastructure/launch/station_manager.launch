@@ -1,0 +1,4 @@
+<launch>
+  <arg name="args" default=" "/>
+  <node name="station_manager" pkg="infrastructure" output="screen" type="station_manager.py" args="$(arg args)"/>
+</launch> 

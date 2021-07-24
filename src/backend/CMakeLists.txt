@@ -59,6 +59,7 @@ add_message_files(
   Bboxes.msg
   StationUsage.msg
   Images.msg
+  LabelsCameraID.msg
 )
 
 ## Generate services in the 'srv' folder

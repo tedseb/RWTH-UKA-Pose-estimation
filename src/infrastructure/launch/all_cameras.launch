@@ -1,6 +1,7 @@
 <launch>
   <arg name="cam_args" default=" "/>
-  <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="1 0 0 0 0 0 1 map dev0 100" />
+  <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="1 0 0 0 0 0 1 map dev0 1000" />
+  <node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="1 0 0 0 0 0 1 map dev1 1000" />
   <node name="camera0" pkg="infrastructure" type="CameraNode.py" output="screen" args="$(arg cam_args)" />
 </launch> 
  

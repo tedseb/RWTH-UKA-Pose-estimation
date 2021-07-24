@@ -9,8 +9,6 @@ import yaml
 import os
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
-
-
 class run_spin():
     def __init__(self,station_ID,incSpace ):
         

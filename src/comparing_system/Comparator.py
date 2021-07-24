@@ -158,7 +158,7 @@ class Comparator(Thread):
         This method uses lru caching because exercise information is usually obtained on every step, which makes
         it a very costly operation if it includes fetching data from a stata store (like Redis) and deserializing it.
         """
-        return self.spot_metadata_interface.get_spot_info_dict(spot_key, ["exercise_data"])
+        return self.spot_metadata_interface.get_(spot_key, ["exercise_data"])
 
     def run(self) -> NoReturn:
         while(self.running):

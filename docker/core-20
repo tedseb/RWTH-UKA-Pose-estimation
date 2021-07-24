@@ -45,6 +45,10 @@ RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-pyt
 
 RUN pip3 install msgpack_numpy
 
+RUN apt-get install libpq-dev
+RUN pip3 install psycopg2
+RUN pip3 install websocket-client
+
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
 ENTRYPOINT ["/home/trainerai/start_script.sh"]

@@ -1,0 +1,4 @@
+<launch>
+  <arg name="dev" default=" "/>
+  <node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="1 0 0 0 0 0 1 map dev$(arg dev) 1000" />
+</launch> 

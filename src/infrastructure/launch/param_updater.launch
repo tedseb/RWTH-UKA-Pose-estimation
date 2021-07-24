@@ -1,3 +1,0 @@
-<launch>
-  <node name="param_updater" pkg="infrastructure" type="RosParamUpdater.py" />
-</launch> 

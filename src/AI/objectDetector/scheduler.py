@@ -1,47 +1,48 @@
 #!/usr/bin/python3
-import os
-import sys
-import os.path as osp
-import numpy as np
-import cv2
-import json
-import pickle
-import time
 import rospy
-from sensor_msgs.msg import Image
 from std_msgs.msg import String
-from backend.msg import Bboxes
-import yaml
-
 
 class getBoxesInStation:
     def __init__(self):
-        result = rospy.get_param('param_server')
-        self.station_dic =yaml.load(result, Loader=yaml.Loader) 
-        rospy.Subscriber('pullparam', String, self.setStation)
+        try:
+            self.station_boxes = rospy.get_param('station_frames')
+        except KeyError:
+            self.station_boxes = {}
 
-    def setStation(self,msg):
-        """
-        Callback function for reloading the parameter server when a user logs in to TrainerAI.  
-        """  
-        result = rospy.get_param('param_server')
-        self.station_dic =yaml.load(result, Loader=yaml.Loader)
+        try:
+            self.weight_boxes = rospy.get_param('weight_frames')
+        except KeyError:
+            self.weight_boxes = {}
 
-    def run_BoxStationChk(self,box, frame_id,stationChk):
+        rospy.Subscriber('pull_param', String, self.setStation)
+
+    def setStation(self, msg):
         """
-        Function that checks if the BBOX is in one of the stations named in the server parameters.  
-        """  
-        print("self.station_dic: ",self.station_dic)
-        if stationChk == True:
-            if frame_id in self.station_dic:
-                for stationID, stationXY in self.station_dic[frame_id].items(): 
-                    station_end_x= stationXY[0]+stationXY[2]
-                    station_end_y= stationXY[1]+stationXY[3]
-                    if (box[0]>=stationXY[0]) and (box[1]>=stationXY[1])  and (box[2]<=station_end_x) and (box[3]<=station_end_y): #X0 Y0 X1 Y1
-                        return True,stationID
+        Callback function for reloading the parameter server when a user logs in to TrainerAI.
+        """
+
+        self.station_boxes = rospy.get_param('station_frames')
+        self.weight_boxes = rospy.get_param('weight_frames')
+        #print("SCHEDULER STATIONS: ", self.station_boxes)
+        #print("SCHEDULER WEIGHT FRAMES: ", self.station_boxes)
+
+
+    def run_BoxStationChk(self, box, frame_id, station_check):
+        """
+        Function that checks if the BBOX is in one of the stations named in the server parameters.
+        """
+
+        #print("self.station_dic: ",self.station_boxes)
+        frame_id_str = str(frame_id)
+        if station_check:
+            if frame_id_str in self.station_boxes:
+                for station_id, station_box in self.station_boxes[frame_id_str].items():
+                    station_end_x= station_box[0]+station_box[2]
+                    station_end_y= station_box[1]+station_box[3]
+                    if (box[0]>=station_box[0]) and (box[1]>=station_box[1]) and (box[2]<=station_end_x) and (box[3]<=station_end_y): #X0 Y0 X1 Y1
+                        return True, int(station_id)
                 return False,0
-            else:       
+            else:
                 return False,0
         else:
             return True,0
-    

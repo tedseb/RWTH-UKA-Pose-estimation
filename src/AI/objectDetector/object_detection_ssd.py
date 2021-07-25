@@ -33,7 +33,7 @@ def run_objectdetector(img_msg):
 
     msg_cropImage = Image()
     msg_cropImage.header.stamp = rospy.Time.now()
-    msg_cropImage.header.frame_id = 'dev0'
+    msg_cropImage.header.frame_id = img_msg.header.frame_id
     msg_cropImage.encoding = "bgr8"
     msg_cropImage.data = np.array(img, dtype=np.uint8).tostring()
     msg_cropImage.height, msg_cropImage.width = img.shape[:-1]

@@ -60,7 +60,7 @@ class StationManager():
 
         if self._debug_mode:
             return
-
+        print("active cameras ", self._active_cameras)
         turn_on = cameras - self._active_cameras
         turn_off = self._active_cameras - cameras
 
@@ -99,7 +99,9 @@ class StationManager():
         print(f"Start webcam on index: {camera_id}")
 
     def stop_camera(self, camera_id : int):
-        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)
+        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)#
+        if camera_id in self._active_cameras: 
+            self._active_cameras.remove(camera_id)
         if camera_id in self._camera_process:
             self._camera_process[camera_id].terminate()
             try:

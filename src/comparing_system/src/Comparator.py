@@ -140,11 +140,12 @@ def compare_high_level_features(spot_info_dict: dict,
                 in_beginning_state = False
             new_feature_progression = compute_new_feature_progression(beginning_state, features_state, last_feature_progression)
             new_feature_progressions[feature_type][k] = new_feature_progression
+
             if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
             elif new_feature_progression > exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 bad_repetition = True
-                
+
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
             del new_feature_progressions[feature_type]
@@ -305,6 +306,12 @@ class Comparator(Thread):
                 # Compare joints with expert system data
                 increase_reps, bad_repetition, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states, self.bad_repetition)
 
+                # if self.bad_repetition != bad_repetition:
+                #     rp.logerr(self.bad_repetition)
+                #     rp.logerr(bad_repetition)
+                #     rp.logerr(features_states)
+                #     rp.logerr(new_features_progressions)
+                    
                 self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions)
                 self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features)
 
@@ -334,6 +341,7 @@ class Comparator(Thread):
                         del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
                     if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
                         self.bad_repetition = True
+                        rp.logerr("bad_repetition detected")
                         
                     reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()

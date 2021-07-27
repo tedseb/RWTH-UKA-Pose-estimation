@@ -84,7 +84,7 @@ class run_spin():
         pred_output_list.extend(pred_output_list1)
         fps = int(1/(time.time()-tmpTime))
 
-        print("FPS : ",fps)
+        # print("FPS : ",fps)
         self.publish_results(pred_output_list, self.msg_image.img1,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
 
 

@@ -228,7 +228,9 @@ def extract_angle(pose_array: np.ndarray, inner_joint: int, outer_joints: set) -
     ba = create_vector_from_two_points(pose_array[inner_joint], pose_array[outer_joints[0]])
     bc = create_vector_from_two_points(pose_array[inner_joint], pose_array[outer_joints[1]])
     x = dot_product(ba, bc) / (length_of_vector(ba) * length_of_vector(bc))
-    return math.acos(x) * 180 / math.pi
+
+    angle = math.acos(min(max(x, -1), 1)) * 180 / math.pi
+    return angle
 
 
 def extract_rotation(pose_array: np.ndarray, joint: int) -> float:
@@ -543,7 +545,7 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
     median_length = np.int(np.median([len(values) for values in discrete_trajectories_tensor]))
     for i in range(median_length):
         median_resampled_values_reference_trajectory_fraction_from = np.average([discretization_reference_trajectory_indices_tensor[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
-        median_resampled_values_reference_trajectory_fraction_to = np.average([discretization_reference_trajectory_indices_tensor[j, i + 1 % len(discretization_reference_trajectory_indices_tensor)]/recording_lengths[j] for j in range(len(recording_lengths))])
+        median_resampled_values_reference_trajectory_fraction_to = np.average([discretization_reference_trajectory_indices_tensor[j, (i + 1) % len(discretization_reference_trajectory_indices_tensor[j])]/recording_lengths[j] for j in range(len(recording_lengths))])
         median_feature_value = np.median(all_feature_values_array[:, i])
         while not np.where(all_feature_values_array[:, i] != median_feature_value):
             bad_feature_state_indices = np.where(all_feature_values_array[:, i] != median_feature_value)
@@ -579,12 +581,11 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
 
 
 def compute_numer_of_dicided_state_changes(median_feature_states_array):
-    decided_median_feature_states = median_feature_states_array[median_feature_states_array != 0]
+    decided_median_feature_states = median_feature_states_array[abs(median_feature_states_array) > 1]
     decided_median_feature_state_change_indices = np.where(decided_median_feature_states[:-1] * decided_median_feature_states[1:] < 0 )[0] + 1
     number_of_dicided_state_changes = len(decided_median_feature_state_change_indices)
     if decided_median_feature_states[0] != decided_median_feature_states[-1]:
         number_of_dicided_state_changes += 1
-    
     return number_of_dicided_state_changes
 
 

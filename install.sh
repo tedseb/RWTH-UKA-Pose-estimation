@@ -1,3 +1,7 @@
+# Man wird nach einer Email eingabe gefragt
+# Email: trainerai@trainerai.de
+# Passwort: esel1212
+
 sudo apt-get update
 sudo apt-get install -y postgresql
 sudo systemctl is-active postgresql
@@ -13,3 +17,7 @@ sudo /usr/pgadmin4/bin/setup-web.sh
 sudo apt-get -y install nodejs
 sudo apt-get -y install npm
 npm install sequelize
+
+#Jetzt auf www.http://127.0.0.1/pgadmin4 und einen neuen Server erstellen. Name: trainerai_db, Host = localhost, passwort esel1212
+#---- Siehe: Überschrift "Accessing pgAdmin4 Web Interface" auf https://www.tecmint.com/install-postgresql-and-pgadmin-in-ubuntu/
+# jetzt "node src/postgres_sequelize/migrate.js" ausführen

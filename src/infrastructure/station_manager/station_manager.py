@@ -5,6 +5,7 @@ import subprocess
 import argparse
 import sys
 import signal
+import psutil
 from src import DataManager, ParamUpdater, VideoSelection, StationSelection
 import rospy
 from backend.msg import StationUsage
@@ -59,7 +60,7 @@ class StationManager():
 
         if self._debug_mode:
             return
-
+        print("active cameras ", self._active_cameras)
         turn_on = cameras - self._active_cameras
         turn_off = self._active_cameras - cameras
 
@@ -98,12 +99,24 @@ class StationManager():
         print(f"Start webcam on index: {camera_id}")
 
     def stop_camera(self, camera_id : int):
-        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)
+        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)#
+        if camera_id in self._active_cameras: 
+            self._active_cameras.remove(camera_id)
         if camera_id in self._camera_process:
             self._camera_process[camera_id].terminate()
+            try:
+                self._camera_process[camera_id].wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.kill(self._camera_process[camera_id].pid)
+            del self._camera_process[camera_id]
 
         if camera_id in self._transform_process:
             self._transform_process[camera_id].terminate()
+            try:
+                self._transform_process[camera_id].wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.kill(self._transform_process[camera_id].pid)
+            del self._transform_process[camera_id]
 
     def debug_callback(self, index : int):
         if not self._verbose:
@@ -114,6 +127,12 @@ class StationManager():
             self.stop_camera(cam_index)
 
         self.start_camera(index)
+
+    def kill(self, proc_pid):
+        process = psutil.Process(proc_pid)
+        for proc in process.children(recursive=True):
+            proc.kill()
+        process.kill()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

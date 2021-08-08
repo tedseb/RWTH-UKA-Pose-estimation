@@ -61,7 +61,7 @@ class ObjectDetectionPipeline:
         img = self.obj_detectYolo(img_original_bgr)
 
         fps = int(1/(time.time()-tmpTime))
-        print("FPS : ",fps)
+        # print("FPS : ",fps)
         if self.renderer==True:
             msg_renderImage = Image()
             msg_renderImage.header.stamp = rospy.Time.now()

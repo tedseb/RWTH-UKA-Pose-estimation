@@ -208,7 +208,9 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
                 prediction = np.argmin(errors)
                 index = discretization_reference_trajectory_indices_tensor[idx][prediction]
-                median_resampled_values_reference_trajectory_fractions.append(v['median_resampled_values_reference_trajectory_fractions'][prediction])
+                progress = v['median_resampled_values_reference_trajectory_fractions'][prediction]
+                rp.logerr(progress)
+                median_resampled_values_reference_trajectory_fractions.append(progress)
 
                 predicted_indices.append(index)
 

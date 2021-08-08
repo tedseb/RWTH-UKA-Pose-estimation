@@ -691,3 +691,36 @@ def extract_reference_feature_data_from_recordings(recordings: List[np.ndarray],
             raise NotImplementedError("Trying to extract boundaries for an unspecified feature type")
 
     return reference_feature_data_trajectory_dict
+
+
+def map_progress_to_vector(progress: float):
+    """ Calculate the cartesian represenation of a progress as a unit vector.
+    
+    We specift a progress as a number in the range (0...1).
+    We interpret 0 and 1 as the same progress, i.e. beginning and end of a repetition.
+    Hence, the progress can be interpreted as an angle between 0 and 2*PI.
+
+    Args:
+        progress: A float value in the range (0...1), representing the progress in a repetition, as indicated by a feature.
+    
+    Return:
+        An np.array containing x and y values of the progress.
+    """
+    return np.array([np.sin(progress*2*np.pi), np.cos(progress*2*np.pi)])
+
+def map_vectors_to_progress_and_alignment(vectors: list):
+    """ Sum a list of 2D vectors up to a single vector, representing the overall, averaged progress.
+
+    The avaraged progress has a direction and therefore an angle.
+    We use this angle to calculate the overall progress.
+    The length of overall progress vector, divided by the number of vectors is a measurement for its alignment.
+
+    Args:
+        vectors: A list of progress vectors
+
+    Return:
+        The angle of the overall progress and the alignment of the vectors
+    
+    """
+    progress_vector_sum = np.sum(vectors)
+    return np.angle(progress_vector_sum), np.abs(progress_vector_sum) / len(vectors)

@@ -725,8 +725,11 @@ def map_vectors_to_progress_and_alignment(vectors: list):
     
     """
     progress_vector_sum = sum(vectors)
+    rp.logerr(vectors)
+    rp.logerr(progress_vector_sum)
     progress = np.angle(progress_vector_sum) + (2 * np.pi)
     progress = progress % (2 * np.pi) # Bring progress back our notation of a value in range (0...1)
+    rp.logerr(progress)
     progress = progress / (2 * np.pi)
     alignment = np.abs(progress_vector_sum) / len(vectors)
     progress_alignment_vector = progress_vector_sum / len(vectors)

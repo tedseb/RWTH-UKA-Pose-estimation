@@ -221,17 +221,11 @@ class RedisFeatureDataQueuesInterface(RedisInterface, PastFeatureDataQueuesInter
                 elif isinstance(v, list):
                     if not v:
                         continue
-                    queue_size = self.redis_connection.lpush(new_key, *v)
-
-                    if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-                        # TODO: Make this more efficient, do not delete every time
-                        self.redis_connection.ltrim(new_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+                    self.redis_connection.lpush(new_key, *v)
                 else:
-                    queue_size = self.redis_connection.lpush(new_key, v)
-
-                    if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-                        # TODO: Make this more efficient, do not delete every time
-                        self.redis_connection.ltrim(new_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+                    self.redis_connection.lpush(new_key, v)
+                
+                self.redis_connection.ltrim(new_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
 
         enqueue_child_featuers_dictionary(featuers_dict, spot_key)
 

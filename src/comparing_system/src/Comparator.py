@@ -64,17 +64,17 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight, min_weight):
     """
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
-    # rp.logerr(hankel_matrix_shortened)
+    # rp.logerr("hankel_matrix_shortened:" + str(hankel_matrix_shortened))
     feature_trajectory_shortened = feature_trajectory[-comparing_length:]
-    # rp.logerr(feature_trajectory_shortened)
-    # np.flip(feature_trajectory_shortened)
+    # rp.logerr("feature_trajectory_shortened:" + str(feature_trajectory_shortened))
     distances = np.power(hankel_matrix_shortened - feature_trajectory_shortened, 2)
-    # rp.logerr(distances)
-    fading_factor = np.linspace(min_weight, max_weight, comparing_length) # Let older signals have less influence on the error
+    # rp.logerr("distances:" + str(distances))
+    fading_factor = np.geomspace(min_weight, max_weight, comparing_length) # Let older signals have less influence on the error
     errors = np.linalg.norm(distances * fading_factor, axis=1)
-    # rp.logerr(fading_factor)
-    # rp.logerr(errors)
-    return errors
+    # rp.logerr("fading_factor:" + str(fading_factor))
+    normed_errors = errors / sum(errors)
+    # rp.logerr("normed_errors:" + str(normed_errors))
+    return normed_errors
 
 
 def compare_high_level_features(spot_info_dict: dict, 
@@ -227,8 +227,9 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
     # rp.logerr(progress_vectors)
-    rp.logerr(progress)
-    rp.logerr("alignment:" + str(alignment))
+    if progress >= 0.5:
+        rp.logerr("progress:" + str(progress))
+        rp.logerr("alignment:" + str(alignment))
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant

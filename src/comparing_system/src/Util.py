@@ -20,6 +20,9 @@ except ImportError:
 
 m.patch()
 
+class ContinueToOuterLoop(Exception):
+    pass
+
 # Alias for features states
 FEATURE_LOW: int = -2
 FEATURE_LOW_UNDECIDED = -1
@@ -117,3 +120,39 @@ def compute_new_feature_progression(beginning_state, features_state, last_featur
         new_feature_progression = last_feature_progression
 
     return new_feature_progression
+
+
+def remove_jitter_from_trajectory(trajectory, _range):
+    """Remove repeated ups and downs in a trajectory.
+    
+    A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
+    For example measurements of an angle can jitter if the adjecent joints jitter.
+    With this method we remove such measurements from a trajectory.
+    
+    Args:
+        trajectory: A list of values that we want to free from jitter.
+        _range: The range of values that can be part of the jitter. i.e. 3 ups and 3 downs is a range of 3.
+        
+    Return:
+        The trimmed trajectory
+    """
+    done = False
+    while not done:
+        done = True
+        try:
+            for i in range(1, _range):
+                for j in range(i, len(trajectory) - 3 * i):
+                    window = trajectory[j: j + 3 * i]
+                    if np.array_equal(window[:i], window[2 * i:]):
+                        done = False
+                        try:
+                            del(trajectory[j: j + 3 * i])
+                        except ValueError:
+                            trajectory = np.delete(trajectory, range(j, j + 3 * i - 1))
+                            raise ContinueToOuterLoop
+        except ContinueToOuterLoop:
+            pass
+                        
+    return trajectory
+
+

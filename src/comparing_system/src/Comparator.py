@@ -62,6 +62,7 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight, min_weight):
     Returns:
         An error for every step in the feature_trajectory
     """
+    feature_trajectory = remove_jitter_from_trajectory(feature_trajectory, REMOVE_JITTER_RANGE)
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
     # rp.logerr("hankel_matrix_shortened:" + str(hankel_matrix_shortened))
@@ -219,6 +220,9 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 index = discretization_reference_trajectory_indices_tensor[idx][prediction]
                 median_resampled_values_reference_trajectory_fraction_dict = v['median_resampled_values_reference_trajectory_fractions'][prediction]
                 progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+                rp.logerr(v['median_resampled_values_reference_trajectory_fractions'])
+                rp.logerr(median_resampled_values_reference_trajectory_fraction_dict)
+                rp.logerr(progress)
                 progress_vectors.append(map_progress_to_vector(progress))
                 median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
 
@@ -227,9 +231,8 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
     # rp.logerr(progress_vectors)
-    if progress >= 0.5:
-        rp.logerr("progress:" + str(progress))
-        rp.logerr("alignment:" + str(alignment))
+    rp.logerr("progress:" + str(progress))
+    rp.logerr("alignment:" + str(alignment))
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant

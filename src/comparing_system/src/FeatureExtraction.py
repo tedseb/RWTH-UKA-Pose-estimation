@@ -474,7 +474,9 @@ def compute_discrete_trajectoreis_hankel_matrices_and_feature_states(feature_tra
                     feature_states.append(feature_state)
                     last_feature_state = feature_state
         discrete_trajectories_tensor.append(discrete_values)
-        hankel_tensor.append(hankel(discrete_trajectories_tensor, np.roll(discrete_trajectories_tensor, -1)))
+        hankel_matrix = hankel(discrete_trajectories_tensor, np.roll(discrete_trajectories_tensor, -1))
+        hankel_matrix = np.roll(hankel_matrix, -1, axis=0) # The first column of the hankel matrix represents the last frame of the recording
+        hankel_tensor.append(hankel_matrix)
         discretization_reference_trajectory_indices_tensor.append(feature_trajectory_indices)
         feature_states_matrix.append(feature_states)
 
@@ -706,7 +708,7 @@ def map_progress_to_vector(progress: float):
     Return:
         An np.array containing x and y values of the progress.
     """
-    return np.array([np.sin(progress*2*np.pi), np.cos(progress*2*np.pi)])
+    return complex(np.cos(progress*2*np.pi), np.sin(progress*2*np.pi))
 
 def map_vectors_to_progress_and_alignment(vectors: list):
     """ Sum a list of 2D vectors up to a single vector, representing the overall, averaged progress.
@@ -719,8 +721,13 @@ def map_vectors_to_progress_and_alignment(vectors: list):
         vectors: A list of progress vectors
 
     Return:
-        The angle of the overall progress and the alignment of the vectors
+        The angle of the overall progress, the alignment of the vectors and the progress alignment vector
     
     """
-    progress_vector_sum = np.sum(vectors)
-    return np.angle(progress_vector_sum), np.abs(progress_vector_sum) / len(vectors)
+    progress_vector_sum = sum(vectors)
+    progress = np.angle(progress_vector_sum) + (2 * np.pi)
+    progress = progress % (2 * np.pi) # Bring progress back our notation of a value in range (0...1)
+    progress = progress / (2 * np.pi)
+    alignment = np.abs(progress_vector_sum) / len(vectors)
+    progress_alignment_vector = progress_vector_sum / len(vectors)
+    return  progress, alignment, progress_alignment_vector

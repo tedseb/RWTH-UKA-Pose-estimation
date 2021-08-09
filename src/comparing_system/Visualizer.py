@@ -54,7 +54,7 @@ class Visualizer():
 
         for pair in self.feature_extractor.joint_connections:
             m = Marker()
-            m.header = Header(self.markerid, rp.Time.now(), "dev0")
+            m.header = Header(self.markerid, rp.Time.now(), "map")
             self.markerid += 1
             m.id = idx
             idx+=1

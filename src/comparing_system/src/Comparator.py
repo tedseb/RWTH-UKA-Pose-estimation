@@ -15,6 +15,7 @@ from functools import lru_cache
 from threading import Thread
 from traceback import print_exc
 from typing import NoReturn
+from collections import deque
 
 import collections
 import redis
@@ -46,7 +47,7 @@ class NoExerciseDataAvailable(Exception):
     pass
 
 
-def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
+def custom_metric(hankel_matrix, feature_trajectory, max_weight, min_weight):
     """Compute a custom metric that represents the differences between a trajectory and the reference trajectory or shifted versions thereof.
 
     This function computes the l2 norm of hankel_matrix - feature_trajectory, but influence to the error fades out linearly form the 
@@ -62,12 +63,17 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight_, min_weight):
         An error for every step in the feature_trajectory
     """
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
-    hankel_matrix_shortened = hankel_matrix[:, :comparing_length]
+    hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
+    # rp.logerr(hankel_matrix_shortened)
     feature_trajectory_shortened = feature_trajectory[-comparing_length:]
-    np.flip(feature_trajectory_shortened)
-    distances = hankel_matrix_shortened - feature_trajectory_shortened
-    fading_factor = np.linspace(min_weight, max_weight_, comparing_length) # Let older signals have less influence on the error
-    errors = np.linalg.norm((distances) * fading_factor, axis=1)
+    # rp.logerr(feature_trajectory_shortened)
+    # np.flip(feature_trajectory_shortened)
+    distances = np.power(hankel_matrix_shortened - feature_trajectory_shortened, 2)
+    # rp.logerr(distances)
+    fading_factor = np.linspace(min_weight, max_weight, comparing_length) # Let older signals have less influence on the error
+    errors = np.linalg.norm(distances * fading_factor, axis=1)
+    # rp.logerr(fading_factor)
+    # rp.logerr(errors)
     return errors
 
 
@@ -94,6 +100,7 @@ def compare_high_level_features(spot_info_dict: dict,
         new_resampled_features (dict): Resembles the features of interest specification dictionary but has lists inplace for every feature
                                         that contain the resampled values.
     """
+
     def reset_child_featuers(d):
         for k, v in d.items():
             if isinstance(v, collections.MutableMapping):
@@ -144,6 +151,8 @@ def compare_high_level_features(spot_info_dict: dict,
             if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
             elif new_feature_progression > exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
+                if bad_repetition == False:
+                    rp.logerr("bad_repetition detected : Too much feature progression")
                 bad_repetition = True
 
         # If a data type has no updates, remove it again
@@ -159,7 +168,6 @@ def compare_high_level_features(spot_info_dict: dict,
     if bad_repetition:
         increase_reps = False
 
-    # TODO: Do something safe here, this might not reset all features
     if increase_reps:
         new_feature_progressions = reset_child_featuers(new_feature_progressions)
 
@@ -181,7 +189,6 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     Returns:
         reference_pose: The reference pose that we think the user is in
     """
-
     def my_weird_metric(a, b):
         """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
         a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
@@ -195,8 +202,10 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
             return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
 
     reference_poses = exercise_data['recording']
+
     predicted_indices = []
     median_resampled_values_reference_trajectory_fractions = []
+    progress_vectors = []
 
     for feature_type, features in exercise_data['reference_feature_data'].items():
         for k, v in features.items():
@@ -205,14 +214,21 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
             feature_trajectory = np.asarray(feature_trajectories[feature_type][k], np.float16)
 
             for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor):
-                errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 4, 0)
+                errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 100, 1)
                 prediction = np.argmin(errors)
                 index = discretization_reference_trajectory_indices_tensor[idx][prediction]
-                progress = v['median_resampled_values_reference_trajectory_fractions'][prediction]
-                rp.logerr(progress)
-                median_resampled_values_reference_trajectory_fractions.append(progress)
+                median_resampled_values_reference_trajectory_fraction_dict = v['median_resampled_values_reference_trajectory_fractions'][prediction]
+                progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+                progress_vectors.append(map_progress_to_vector(progress))
+                median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
 
                 predicted_indices.append(index)
+
+    progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
+
+    # rp.logerr(progress_vectors)
+    rp.logerr(progress)
+    rp.logerr("alignment:" + str(alignment))
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
@@ -222,8 +238,13 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 continue
             median_resampled_values_reference_trajectory_fractions_errors.append(my_weird_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
     
-    predicted_pose_index = int(np.average(predicted_indices))
-    reference_pose = reference_poses[predicted_pose_index]
+    # reference_pose_index = int(np.mean((predicted_indices)))
+    reference_pose = reference_poses[int(len(reference_poses) * progress)]
+
+    # rp.logerr(predicted_indices)
+    # rp.logerr(reference_pose_index)
+    # rp.logerr(discretization_reference_trajectory_indices_tensor)
+    # rp.logerr(len(reference_poses))
 
     mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
         
@@ -273,6 +294,8 @@ class Comparator(Thread):
         self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
         self.bad_repetition = False
 
+        self.last_used_joint_ndarray = []
+
         self.start()
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
@@ -282,6 +305,11 @@ class Comparator(Thread):
         This method uses lru caching because exercise information is usually obtained on every step, which makes
         it a very costly operation if it includes fetching data from a stata store (like Redis) and deserializing it.
         """
+        rp.logerr("Uncached data fetched")
+        self.last_feature_progressions = {}
+        self.last_resampled_features = {}
+        self.last_feature_states = {}
+        
         return self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data"])
 
     def run(self) -> NoReturn:
@@ -296,12 +324,19 @@ class Comparator(Thread):
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
 
                 # As long as there are skelletons available for this spot, continue
-                past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
+                past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
+
+                self.last_used_joint_ndarray.append(present_joints_with_timestamp['used_joint_ndarray'])
+
+                if len(self.last_used_joint_ndarray) > AVERAGE_SKELETON_QUEUE_LENGTH:
+                    self.last_used_joint_ndarray.pop(0)
 
                 # Extract feature states
                 exercise_data = spot_info_dict['exercise_data']
-                used_joint_ndarray = joints_with_timestamp['used_joint_ndarray']
+                used_joint_ndarray = np.mean(self.last_used_joint_ndarray, axis=0)
                 features_states = extract_states(used_joint_ndarray, self.last_feature_states, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'], self.pose_definition_adapter)
+
+                # rp.logerr(used_joint_ndarray)
 
                 self.last_feature_states = features_states
 
@@ -309,10 +344,11 @@ class Comparator(Thread):
                 increase_reps, bad_repetition, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states, self.bad_repetition)
 
                 # if self.bad_repetition != bad_repetition:
-                #     rp.logerr(self.bad_repetition)
-                #     rp.logerr(bad_repetition)
-                #     rp.logerr(features_states)
-                #     rp.logerr(new_features_progressions)
+                    # rp.logerr(self.bad_repetition)
+                    # rp.logerr(bad_repetition)
+                    # rp.logerr(features_states)
+                    # rp.logerr(new_features_progressions)
+                    # rp.logerr(self.last_resampled_features)
                     
                 self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions)
                 self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features)
@@ -343,7 +379,11 @@ class Comparator(Thread):
                         del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
                     if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
                         self.bad_repetition = True
-                        rp.logerr("bad_repetition detected")
+
+                        self.last_feature_progressions = {}
+                        self.last_resampled_features = {}
+                        self.last_feature_states = {}
+                        rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
                         
                     reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()
@@ -352,7 +392,7 @@ class Comparator(Thread):
                     reference_person_msg.bodyParts = reference_body_parts
                     self.predicted_skelleton_publisher.publish(reference_person_msg)
 
-                    user_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(joints_with_timestamp['used_joint_ndarray'])
+                    user_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(used_joint_ndarray)
                     user_person_msg = Person()
                     user_person_msg.stationID = self.spot_key
                     user_person_msg.sensorID = -1

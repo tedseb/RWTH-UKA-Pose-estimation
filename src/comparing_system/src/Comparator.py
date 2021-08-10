@@ -152,9 +152,12 @@ def compare_high_level_features(spot_info_dict: dict,
             if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
             elif new_feature_progression > exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
-                if bad_repetition == False:
-                    rp.logerr("bad_repetition detected : Too much feature progression")
-                bad_repetition = True
+                rp.logerr("new feature progression:" + str(new_feature_progression))
+                if not MESSY_INPUTS:
+                    bad_repetition = True
+
+                    if bad_repetition == False:
+                        rp.logerr("bad_repetition detected : Too much feature progression")
 
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
@@ -220,9 +223,9 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 index = discretization_reference_trajectory_indices_tensor[idx][prediction]
                 median_resampled_values_reference_trajectory_fraction_dict = v['median_resampled_values_reference_trajectory_fractions'][prediction]
                 progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-                rp.logerr(v['median_resampled_values_reference_trajectory_fractions'])
-                rp.logerr(median_resampled_values_reference_trajectory_fraction_dict)
-                rp.logerr(progress)
+                # rp.logerr(v['median_resampled_values_reference_trajectory_fractions'])
+                # rp.logerr(median_resampled_values_reference_trajectory_fraction_dict)
+                # rp.logerr(progress)
                 progress_vectors.append(map_progress_to_vector(progress))
                 median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
 
@@ -231,8 +234,8 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
     # rp.logerr(progress_vectors)
-    rp.logerr("progress:" + str(progress))
-    rp.logerr("alignment:" + str(alignment))
+    # rp.logerr("progress:" + str(progress))
+    # rp.logerr("alignment:" + str(alignment))
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
@@ -309,7 +312,7 @@ class Comparator(Thread):
         This method uses lru caching because exercise information is usually obtained on every step, which makes
         it a very costly operation if it includes fetching data from a stata store (like Redis) and deserializing it.
         """
-        rp.logerr("Uncached data fetched")
+        # rp.logerr("Uncached data fetched")
         self.last_feature_progressions = {}
         self.last_resampled_features = {}
         self.last_feature_states = {}
@@ -382,12 +385,13 @@ class Comparator(Thread):
                     if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
                         del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
                     if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
-                        self.bad_repetition = True
+                        if not MESSY_INPUTS:
+                            self.bad_repetition = True
 
-                        self.last_feature_progressions = {}
-                        self.last_resampled_features = {}
-                        self.last_feature_states = {}
-                        rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
+                            self.last_feature_progressions = {}
+                            self.last_resampled_features = {}
+                            self.last_feature_states = {}
+                            rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
                         
                     reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
                     reference_person_msg = Person()

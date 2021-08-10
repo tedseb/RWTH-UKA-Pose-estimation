@@ -549,9 +549,9 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
     median_trajectory = list()
     median_length = np.int(np.median([len(values) for values in discrete_trajectories_tensor]))
     for i in range(median_length):
-        rp.logerr(discrete_trajectories_tensor)
-        rp.logerr(discretization_reference_trajectory_indices_tensor)
-        rp.logerr(recording_lengths)
+        # rp.logerr(discrete_trajectories_tensor)
+        # rp.logerr(discretization_reference_trajectory_indices_tensor)
+        # rp.logerr(recording_lengths)
         median_resampled_values_reference_trajectory_fraction_from = np.average([discretization_reference_trajectory_indices_tensor[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
         median_resampled_values_reference_trajectory_fraction_to = np.average([discretization_reference_trajectory_indices_tensor[j, (i + 1) % len(discretization_reference_trajectory_indices_tensor[j])]/recording_lengths[j] for j in range(len(recording_lengths))])
         median_feature_value = np.median(all_feature_values_array[:, i])
@@ -731,11 +731,11 @@ def map_vectors_to_progress_and_alignment(vectors: list):
     
     """
     progress_vector_sum = sum(vectors)
-    rp.logerr(vectors)
-    rp.logerr(progress_vector_sum)
+    # rp.logerr(vectors)
+    # rp.logerr(progress_vector_sum)
     progress = np.angle(progress_vector_sum) + (2 * np.pi)
     progress = progress % (2 * np.pi) # Bring progress back our notation of a value in range (0...1)
-    rp.logerr(progress)
+    # rp.logerr(progress)
     progress = progress / (2 * np.pi)
     alignment = np.abs(progress_vector_sum) / len(vectors)
     progress_alignment_vector = progress_vector_sum / len(vectors)

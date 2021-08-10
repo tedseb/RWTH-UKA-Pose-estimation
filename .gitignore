@@ -15,3 +15,4 @@ bagfiles
 package-lock.json
 .gitignore
 trainerai.sh
+qt-station-calibration

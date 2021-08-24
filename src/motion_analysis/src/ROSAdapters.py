@@ -13,10 +13,11 @@ try:
     from motion_analysis.src.DataConfig import *
     from motion_analysis.src.DataUtils import *
 except ImportError:
-    from DataConfig import *
-    from DataUtils import *
+    from src.DataConfig import *
+    from src.DataUtils import *
 
 from backend.msg import Bodypart
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class FeatureExtractorException(Exception):

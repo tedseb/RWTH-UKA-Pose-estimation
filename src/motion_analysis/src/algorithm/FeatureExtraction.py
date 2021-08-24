@@ -37,11 +37,13 @@ import hashlib
 import numpy as np
 
 try:
-    from motion_analysis.algorithm.config import *
-    from motion_analysis.algorithm.AlgoUtils import *
-except ImportError:
-    from algorithm.config import *
-    from algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.AlgoConfig import *
+    from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.ROSAdapters import *
+except (ModuleNotFoundError, ImportError):
+    from src.algorithm.AlgoConfig import *
+    from src.algorithm.AlgoUtils import *
+    from src.ROSAdapters import *
 
 from scipy.linalg import hankel
 

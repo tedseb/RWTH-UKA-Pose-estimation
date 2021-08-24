@@ -15,9 +15,9 @@ import json
 import collections
 
 try:
-    from motion_analysis.algorithm.config import *
-except ImportError:
-    from algorithm.config import *
+    from motion_analysis.src.algorithm.AlgoConfig import *
+except (ModuleNotFoundError, ImportError):
+    from src.algorithm.AlgoConfig import *
 
 m.patch()
 

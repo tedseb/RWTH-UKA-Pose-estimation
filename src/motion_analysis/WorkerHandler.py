@@ -2,34 +2,49 @@
 # -*- coding: utf-8 -*-
 
 """
-This file contains the Spot MetaDataHandler Node.
+This file contains the WorkerHandler Node.
 It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 try:
-    from comparing_system.src.Comparator import Comparator
-    from comparing_system.src.config import *
-    from comparing_system.src.FeatureExtraction import *
-    from comparing_system.src.InterCom import *
-    from comparing_system.src.Util import *
+    from motion_analysis.src.Worker import *
+    from motion_analysis.src.DataConfig import *
+    from motion_analysis.src.InterCom import *
+    from motion_analysis.src.DataUtils import *
+    from motion_analysis.src.ROSAdapters import *
+    from motion_analysis.src.algorithm.AlgoConfig import *
+    from motion_analysis.src.algorithm.FeatureExtraction import *
+    from motion_analysis.src.algorithm.AlgoUtils import *
 except ImportError:
-    from src.Comparator import Comparator
-    from src.config import *
-    from src.FeatureExtraction import *
+    from src.Worker import *
+    from src.DataConfig import *
     from src.InterCom import *
-    from src.Util import *
+    from src.DataUtils import *
+    from src.ROSAdapters import *
+    from src.algorithm.AlgoConfig import *
+    from src.algorithm.FeatureExtraction import *
+    from src.algorithm.AlgoUtils import *
+
 
 import time
-import rospy as rp
 import yaml
-from std_msgs.msg import String
 from typing import NoReturn
 
+try:
+    from std_msgs.msg import String
+except ImportError:
+    try: 
+        from motion_analysis.src.ROSDummies import Dummy
+    except ImportError:
+        from src.ROSDummies import Dummy
+    String = Dummy
 
-class ComparingSystemHandler():
+rp = try_import_rp()
+
+class WorkerHandler():
     """Waits for updates on the usage of spots and communicates them through the a SpotMetaDataInterface.
     
-    The ComparingSystemHandler waits for stringified YAMLs from the HMI. This data includes recordings of experts and further
+    The WorkerHandler waits for stringified YAMLs from the HMI. This data includes recordings of experts and further
     data regarding the exercise. It uses a feature extractor to extract information that is found in the recording.
     These includes expecially, but is not limited to, trajectories of features of interest. For example the trajectory of
     the angle of the left and right knee.

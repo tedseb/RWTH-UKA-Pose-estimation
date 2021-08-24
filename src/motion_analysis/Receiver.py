@@ -6,23 +6,27 @@ This file contains the Receiver Node.
 It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
+import rospy as rp
 from typing import Any
-
-import rospy as rp    
-from backend.msg import Persons
-
+ 
 try:
-    from comparing_system.src.Comparator import Comparator
-    from comparing_system.src.config import *
-    from comparing_system.src.FeatureExtraction import *
-    from comparing_system.src.InterCom import *
-    from comparing_system.src.Util import *
+    from motion_analysis.src.Worker import *
+    from motion_analysis.src.DataConfig import *
+    from motion_analysis.src.InterCom import *
+    from motion_analysis.src.DataUtils import *
+    from motion_analysis.src.ROSAdapters import *
+    from motion_analysis.src.algorithm.AlgoConfig import *
+    from motion_analysis.src.algorithm.FeatureExtraction import *
+    from motion_analysis.src.algorithm.AlgoUtils import *
 except ImportError:
-    from src.Comparator import Comparator
-    from src.config import *
-    from src.FeatureExtraction import *
+    from src.Worker import *
+    from src.DataConfig import *
     from src.InterCom import *
-    from src.Util import *
+    from src.DataUtils import *
+    from src.ROSAdapters import *
+    from src.algorithm.AlgoConfig import *
+    from src.algorithm.FeatureExtraction import *
+    from src.algorithm.AlgoUtils import *
 
 
 class Receiver():

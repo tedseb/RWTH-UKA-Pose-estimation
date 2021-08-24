@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 """
 This file contains a code snippets that have nowhere else to go.
 """
@@ -6,17 +9,15 @@ import sys
 from functools import reduce
 from typing import Any, Dict
 
-import msgpack
 import msgpack_numpy as m
 import numpy as np
-import rospy as rp
 import json
 import collections
 
 try:
-    from comparing_system.src.config import *
+    from motion_analysis.algorithm.config import *
 except ImportError:
-    from src.config import *
+    from algorithm.config import *
 
 m.patch()
 
@@ -30,6 +31,21 @@ FEATURE_UNDECIDED: int = 0
 FEATURE_HIGH_UNDECIDED = 1
 FEATURE_HIGH: int = 2
 
+def try_import_rp():
+    if "rospy" in sys.modules:
+        rp_module = sys.modules["rospy"]
+    else:
+        try:
+            import comparing_system.src.FakeRospy as FakeRospy
+        except ImportError:
+            import src.FakeRospy as FakeRospy
+        
+        rp_module = FakeRospy
+
+    return rp_module
+
+rp = try_import_rp()
+    
 # TODO: Check more sizes of exercise objects frequently
 def get_size_of_object(obj, seen=None):
     """
@@ -53,18 +69,6 @@ def get_size_of_object(obj, seen=None):
     elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
         size += sum([get_size(i, seen) for i in obj])
     return size
-
-
-def publish_message(publisher, topic, data):
-    try:
-        # This is currently how our REST API wants messages to be formed
-        message = json.dumps({'topic': topic, 'data': data})
-        publisher.publish(message)
-        if HIGH_VERBOSITY:
-            rp.logerr("ComparingSystem_Sender.py sent message: " + str(message))
-    except Exception as e:
-        if HIGH_VERBOSITY:
-            rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
 
 
 def enqueue_dictionary(previous_dict, enqueued_dict):

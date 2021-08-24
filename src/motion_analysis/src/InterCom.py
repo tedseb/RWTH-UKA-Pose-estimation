@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 """
 In order to implement low latency, high throughput and scalable queueing, we may want to employ different queues.
 This file defines the several interfaces that cover queueing of data and handling of shared data.
@@ -6,9 +9,7 @@ The queueing should be trasparent to the Comparator and the ComparingNode.
 """
 
 import hashlib
-import threading
 from abc import ABC, abstractmethod
-from collections import OrderedDict, ChainMap
 from traceback import print_exc
 from typing import Any, Dict, List, Tuple
 from copy import deepcopy
@@ -17,16 +18,17 @@ import collections
 import msgpack  # TODO: Use Protobufs?
 import msgpack_numpy as m
 import redis
-import rospy as rp
 import yaml
+import rospy as rp
 
 try:
-    from comparing_system.src.config import *
+    from motion_analysis.src.DataConfig import *
 except ImportError:
-    from src.config import *
+    from src.DataConfig import *
 
 # Patch msgpack to understand numpy arrays
 m.patch()
+
 
 redis_connection_pool = redis.ConnectionPool(host='localhost', port=5678, db=0)
 

@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 """
 This file contains code that deals with the  manual extraction of low-level features from skelletons.
 It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
@@ -24,28 +27,23 @@ We define our numpy arrays representing skelletons as follows:
 ]
 """
 
-from dis import dis
+
 import math
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from itertools import combinations
-from typing import Any, Dict, List, Tuple
+from typing import List, Tuple
 
 import hashlib
-import collections
-import msgpack
 import numpy as np
-import rospy as rp
-import scipy
+
 try:
-    from comparing_system.src.config import *
-    from comparing_system.src.Util import *
+    from motion_analysis.algorithm.config import *
+    from motion_analysis.algorithm.AlgoUtils import *
 except ImportError:
-    from src.config import *
-    from src.Util import *
+    from algorithm.config import *
+    from algorithm.AlgoUtils import *
 
 from scipy.linalg import hankel
-from scipy.spatial.distance import euclidean
-from backend.msg import Bodypart
 
 
 class FeatureExtractorException(Exception):
@@ -55,118 +53,14 @@ class UnknownAngleException(FeatureExtractorException):
     pass
 
 
-class PoseDefinitionAdapter():
-    @abstractmethod
-    def __init__():
-        pass
+def create_vector_from_two_points(a, b):
+        return np.array([b[X] - a[X], b[Y] - a[Y], b[Z] - a[Z]])
 
-    @abstractmethod
-    def get_joint_index(self, joint_name: str) -> int:
-        """Get the index of a joint from its name"""
-        raise NotImplementedError("This is an interface, it should not be called directly.")
+def dot_product(a, b):
+    return a[X] * b[X] + a[Y] * b[Y] + a[Z] * b[Z]
 
-    @abstractmethod
-    def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
-        """Take a Bodyparts object, defined by the backend messages turn it into an ndarray.
-        
-        Every bodyParts object, for now, is an iterable of bodyPart objects.
-        The exact specification of such bodyPart object can be found in the ROS backend messages.
-        For now, it contains at least a point in three dimensional space, with x, y and z coordinate.
-        This method turns such an object into a numpy array that contains only the joints that are used acoording
-        to our joint adapter.
-
-        Args:
-            body_parts: The body parts to be converted into a numpy array.
-        
-        Returns:
-            An array corresponding to the used body parts found in the body_parts argument.
-        """
-        raise NotImplementedError("This is an interface, it should not be called directly.")
-
-    def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
-        """Take an ndarray, and turn it into a Bodyparts object defined by the backend messages
-        
-        Every bodyParts object, for now, is an iterable of bodyPart objects.
-        The exact specification of such bodyPart object can be found in the ROS backend messages.
-        For now, it contains at least a point in three dimensional space, with x, y and z coordinate.
-        This method turns such an object into a numpy array that contains only the joints that are used acoording
-        to our joint adapter.
-
-        Args:
-            ndarray: An array representing parts parts.
-        
-        Returns:
-            A Bodyparts object converted from the ndarray array.
-        """
-        raise NotImplementedError("Work in progress.")
-
-    def recording_to_ndarray(self, recording: list) -> np.ndarray:
-        """ Take a list of Bodyparts objects and turn them into an array of pose_arrays."""
-        raise NotImplementedError("Work in progress.")
-
-
-    
-class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
-    """This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper."""
-    def __init__(self):
-        # The indices of the joints that we use (of all the joints from the spin paper)
-        self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43];
-
-        self.joint_labels = ['OP_Nose', 'OP_Neck', 'OP_R_Shoulder', 'OP_R_Elbow', 'OP_R_Wrist', 'OP_L_Shoulder', 'OP_L_Elbow', 'OP_L_Wrist', 'OP_Middle_Hip', 'OP_R_Hip', 'OP_R_Knee', 'OP_R_Ankle', 'OP_L_Hip', 'OP_L_Knee', 'OP_L_Ankle', 'OP_R_Eye', 'OP_L_Eye', 'OP_R_Ear', 'OP_L_Ear', 'OP_L_Big_Toe', 'OP_L_Small_Toe', 'OP_L_Heel', 'OP_R_Big_Toe', 'OP_R_Small_Toe', 'OP_R_Heel', 'R_Ankle', 'R_Knee', 'R_Hip', 'L_Hip', 'L_Knee', 'L_Ankle', 'R_Wrist', 'R_Elbow', 'R_Shoulder', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'Neck_LSP', 'Top_of_Head_LSP', 'Pelvis_MPII', 'Thorax_MPII', 'Spine_HM', 'Jaw_HM', 'Head_HM', 'Nose', 'L_Eye', 'R_Eye', 'L_Ear', 'R_Ear']
-
-        self.joints_used_labels = [self.joint_labels[i] for i in self.joints_used]
-
-        # Connections that connect two joints (in many cases bones)
-        self.joint_connections = [[2, 3], [3, 4], [5, 6], [6, 7], [27, 9], [9, 12], [27, 28], [27, 10], [10, 11], [12, 13], [9, 10], [28, 12], [28, 13], [13, 14], [14, 21], [21, 20], [21, 19], [20, 19], [11, 24], [24, 22], [22, 23], [23, 24], [5, 28], [2, 27], [5, 2], [42, 17], [42, 18], [42, 0], [0, 15], [0, 16], [15, 16], [17, 43], [18, 43], [1, 37], [37, 43], [41, 37], [41, 39]]
-
-        # The joint connections, represented with their lables from the spin paper
-        # TODO: Maybe use sorted list for compatibility with C++
-        self.joint_connections_labels = set(frozenset((self.joint_labels[x], self.joint_labels[y])) for [x, y] in self.joint_connections)
-
-        self.center_of_body_label = 'Pelvis_MPII'
-
-    def get_joint_index(self, joint_name: str):
-        return self.joints_used_labels.index(joint_name)
-
-
-    def recording_to_ndarray(self, recording: list) -> np.ndarray:
-        array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
-
-        for idx_recording, step in enumerate(recording):
-            skelleton = step[1]
-            for joint, coordinates in skelleton.items():
-                idx_step = self.get_joint_index(joint)
-                array[idx_recording][idx_step][0] = coordinates['x']
-                array[idx_recording][idx_step][1] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
-                array[idx_recording][idx_step][2] = coordinates['z'] 
-        
-        return array
-
-
-    def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
-        array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
-
-        body_parts_used = [body_parts[i] for i in self.joints_used]
-
-        for idx, bodyPart in enumerate(body_parts_used):
-            array[idx][0] = bodyPart.point.x
-            array[idx][1] = bodyPart.point.z
-            array[idx][2] = bodyPart.point.y
-
-        return array
-
-    def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
-        # We need some dummy body parts that we do not actually use but are still part of the Person defined by SPIN
-        body_parts = [Bodypart()] * len(self.joint_labels)
-
-        for used_index, body_part_ndarray in zip(self.joints_used, ndarray):
-            b = Bodypart()
-            b.point.x = body_part_ndarray[0]
-            b.point.y = body_part_ndarray[2]
-            b.point.z = body_part_ndarray[1]
-            body_parts[used_index] = b
-        
-        return body_parts
+def length_of_vector(x):
+    return math.sqrt(math.pow(x[X], 2) + math.pow(x[Y], 2) + math.pow(x[Z], 2))
 
 
 def discritize_feature_values(feature_value, last_resampled_feature_value, resolution):
@@ -182,16 +76,48 @@ def discritize_feature_values(feature_value, last_resampled_feature_value, resol
     return new_resampled_feature_values
 
 
-def extract_average_hight_of_joints(pose_array: np.ndarray) -> float:
-    """Compute the hight of a person as the average of the height of its joints.
+def extract_average_height_of_joints(pose_array: np.ndarray) -> float:
+    """Compute the height of a person as the average of the height of its joints.
     
     Args:
-        pose: A pose, according to the ROS Message 'Person'.
+        pose_array: A pose, according to the ROS Message 'Person'.
         
     Returns:
-        A float value corresponding to the hight of the person.
+        A float value corresponding to the height of the person.
     """
-    raise NotImplementedError("Work in progress.")
+    height = 0
+    for pose in pose_array:
+        height += pose[Z]
+    
+    return height
+
+def extract_height_of_joint(pose_array: np.ndarray, index: int) -> float:
+    """Extract the height of a joint.
+    
+    Args:
+        pose_array: A pose, according to the ROS Message 'Person'.
+        
+    Returns:
+        A float value corresponding to the height of the joint
+    """
+
+    return pose_array[index][Z]
+
+def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter) -> float:
+    """Compute the average height of pelvis and neck, representing the height of the body's core.
+    
+    Args:
+        pose_array: A pose, according to the ROS Message 'Person'.
+
+    Returns:
+    A float value corresponding to the height of the body's core.
+    """
+    
+    neck_idx = pose_definition_adapter.get_joint_index("OP_Neck")
+    pelvis_idx = pose_definition_adapter.get_joint_index("Pelvis_MPII")
+
+    return np.average([pose_array[neck_idx][Z], pose_array[pelvis_idx][Z]])
+    
     
 def extract_distance(pose_array: np.ndarray, joint_a: int, joint_b: int) -> float:
     """Compute the distance between two joints.
@@ -204,7 +130,9 @@ def extract_distance(pose_array: np.ndarray, joint_a: int, joint_b: int) -> floa
     Returns:
         A float value corresponding to the euclidean distance between joint_a and joint_b.
     """
-    raise NotImplementedError("Work in progress.")
+    vector = create_vector_from_two_points(pose_array[joint_a], pose_array[joint_b])
+
+    return length_of_vector(vector)
 
 def extract_angle(pose_array: np.ndarray, inner_joint: int, outer_joints: set) -> float:
     """Compute the angle between three connected joints.
@@ -217,14 +145,6 @@ def extract_angle(pose_array: np.ndarray, inner_joint: int, outer_joints: set) -
     Returns:
         A float value corresponding to the inner angle between the three defined joints.
     """
-    def create_vector_from_two_points(a, b):
-        return np.array([b[0] - a[0], b[1] - a[1], b[2] - a[2]])
-
-    def dot_product(a, b):
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-    
-    def length_of_vector(x):
-        return math.sqrt(math.pow(x[0], 2) + math.pow(x[1], 2) + math.pow(x[2], 2))
 
     ba = create_vector_from_two_points(pose_array[inner_joint], pose_array[outer_joints[0]])
     bc = create_vector_from_two_points(pose_array[inner_joint], pose_array[outer_joints[1]])
@@ -459,10 +379,10 @@ def compute_discrete_trajectoreis_hankel_matrices_and_feature_states(feature_tra
     hankel_tensor = [] # In the comparing algorithm, we need a hankel matrix of every resampled reference trajectory
     feature_states_matrix = list()
     for trajectory in feature_trajectories:
-        last_values = [trajectory[0]]
+        last_values = [trajectory[X]]
         last_feature_state = decide_feature_state(last_values[-1], None, lower_boundary, upper_boundary)
         discrete_values = last_values
-        feature_trajectory_indices = [0]
+        feature_trajectory_indices = [X]
         feature_states = list()
         for index, value in enumerate(trajectory):
             already_discritized_values = discritize_feature_values(value, last_values[-1], resolution)
@@ -590,9 +510,9 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
 
 def compute_numer_of_dicided_state_changes(median_feature_states_array):
     decided_median_feature_states = median_feature_states_array[abs(median_feature_states_array) > 1]
-    decided_median_feature_state_change_indices = np.where(decided_median_feature_states[:-1] * decided_median_feature_states[1:] < 0 )[0] + 1
+    decided_median_feature_state_change_indices = np.where(decided_median_feature_states[:-1] * decided_median_feature_states[1:] < 0 )[X] + 1
     number_of_dicided_state_changes = len(decided_median_feature_state_change_indices)
-    if decided_median_feature_states[0] != decided_median_feature_states[-1]:
+    if decided_median_feature_states[X] != decided_median_feature_states[-1]:
         number_of_dicided_state_changes += 1
     return number_of_dicided_state_changes
 

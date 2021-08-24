@@ -7,9 +7,9 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 try:
-    import comparing_system.src.FeatureExtraction as FeatureExtractionModule
+    import motion_analysis.algorithm.FeatureExtraction as FeatureExtractionModule
 except ModuleNotFoundError:
-    import src.FeatureExtraction as FeatureExtractionModule
+    import algorithm.FeatureExtraction as FeatureExtractionModule
 
 from flask import Flask
 from flask import request

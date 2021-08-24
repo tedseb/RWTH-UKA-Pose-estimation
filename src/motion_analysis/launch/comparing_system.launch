@@ -1,0 +1,7 @@
+<launch>
+  <node name="ComparingSystem_Receiver" pkg="motion_analysis" type="Receiver.py" />
+  <node name="ComparingSystem_WorkerHandler" pkg="motion_analysis" type="WorkerHandler.py" />
+  <node name="ComparingSystem_Visualizer" pkg="motion_analysis" type="Visualizer.py" />
+  <node name="ComparingSystem_Comparator" pkg="motion_analysis" type="Comparator.py" />
+  <node name="ComparingSystem_FeatureExtractionServer" pkg="motion_analysis" type="FeatureExtractionServer.py" />
+</launch> 

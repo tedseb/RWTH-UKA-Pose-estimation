@@ -10,12 +10,12 @@ gauth.LocalWebserverAuth()
 drive = GoogleDrive(gauth)
 
 # Set the id of the Google Drive folder. You can find it in the URL of the google drive folder.
-parent_folder_id = '1blrQs1DdKdHWyDIK_n26rMyuGTergp75'
+parent_folder_id_1 = '1blrQs1DdKdHWyDIK_n26rMyuGTergp75'
+parent_folder_id_2 = '1FvP7f1_QbXqfhqPeV4HXguo2gtwUDQdC'
 # Set the parent folder, where you want to store the contents of the google drive folder
-parent_folder_dir = './src/AI/spin/extra_data/'
+parent_folder_dir_1 = './src/AI/spin/extra_data/'
+parent_folder_dir_2 = './test/'
 
-if parent_folder_dir[-1] != '/':
-    parent_folder_dir = parent_folder_dir + '/'
 
 # This is the base wget command that we will use. This might change in the future due to changes in Google drive
 wget_text = '"wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&amp;confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate \'https://docs.google.com/uc?export=download&amp;id=FILE_ID\' -O- | sed -rn \'s/.*confirm=([0-9A-Za-z_]+).*/\\1\\n/p\')&id=FILE_ID" -O FILE_NAME && rm -rf /tmp/cookies.txt"'.replace('&amp;', '&')
@@ -23,9 +23,14 @@ wget_text = '"wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?e
 
 # Get the folder structure
 file_dict = dict()
-folder_queue = [parent_folder_id]
-dir_queue = [parent_folder_dir]
+folder_queue = [parent_folder_id_1, parent_folder_id_2]
+dir_queue = [parent_folder_dir_1, parent_folder_dir_2]
+dir_queue_copy = dir_queue.copy()
 cnt = 0
+
+for i, folder in enumerate(dir_queue):
+    if folder[-1] != '/':
+        folder_queue[i] = folder + '/'
 
 while len(folder_queue) != 0:
     current_folder_id = folder_queue.pop(0)
@@ -54,7 +59,10 @@ pd.DataFrame(file_dict).transpose().head(10)
 # Write the bash script
 f = open('script.sh', 'w')
 file_dict.keys()
-f.write('mkdir ' + parent_folder_dir + '\n')
+print(dir_queue_copy)
+for folder in dir_queue_copy:
+    f.write('mkdir ' + folder + '\n')
+
 for file_iter in file_dict.keys():
     if file_dict[file_iter]['type'] == 'folder':
         f.write('mkdir ' + file_dict[file_iter]['dir'] + '\n')

@@ -4,11 +4,11 @@ import pathlib
 import subprocess
 import argparse
 import sys
-import signal
 import psutil
 from src import DataManager, ParamUpdater, VideoSelection, StationSelection
 import rospy
 from backend.msg import StationUsage
+from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from src.config import *
 
 class ComputerWorkload:
@@ -22,6 +22,7 @@ class StationManager():
     def __init__(self, debug_mode=False, verbose=False):
         rospy.init_node('param_updater', anonymous=True)
         rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
+        self._weigth_detection = rospy.Service('sm/weight_detection', WeightDetection, self.handle_weight_detection_request)
         self._data_manager = DataManager()
         #Todo: verbose in args
         self._verbose = verbose or VERBOSE_MODE
@@ -60,7 +61,7 @@ class StationManager():
 
         if self._debug_mode:
             return
-        print("active cameras ", self._active_cameras)
+
         turn_on = cameras - self._active_cameras
         turn_off = self._active_cameras - cameras
 
@@ -99,9 +100,7 @@ class StationManager():
         print(f"Start webcam on index: {camera_id}")
 
     def stop_camera(self, camera_id : int):
-        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)#
-        if camera_id in self._active_cameras: 
-            self._active_cameras.remove(camera_id)
+        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)
         if camera_id in self._camera_process:
             self._camera_process[camera_id].terminate()
             try:
@@ -133,6 +132,9 @@ class StationManager():
         for proc in process.children(recursive=True):
             proc.kill()
         process.kill()
+
+    def handle_weight_detection_request(self, req : WeightDetectionRequest):
+        print("test")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

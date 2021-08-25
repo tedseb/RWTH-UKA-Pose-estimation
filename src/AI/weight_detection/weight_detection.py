@@ -35,7 +35,7 @@ class WeightDetection:
     def __init__(self, debug=False, verbose=False):
         self._verbose = verbose
         self._debug = debug
-        self._weigth_detection = rospy.Service('sm/weight_detection', RosWeightDetection, self.handle_weight_detection_request)
+        self._weigth_detection = rospy.Service('ai/weight_detection', RosWeightDetection, self.handle_weight_detection_request)
         self._model = YoloWeightModel()
         print("init")
 
@@ -51,7 +51,7 @@ class WeightDetection:
         try:
             frame = rospy.wait_for_message(image_channel, Image, timeout=5)
         except ROSException:
-            LOG_ERROR("No Image on the channel '{image_channel}'")
+            LOG_ERROR(f"No Image on the channel '{image_channel}'")
 
         frame = ros_image_to_cv_image(frame)
         frame = cv2.resize(frame, (1280, 720))
@@ -98,5 +98,5 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-    weigh_detection = WeightDetection(debug_mode=args.debug, verbose=args.verbose)
+    weigh_detection = WeightDetection(debug=args.debug, verbose=args.verbose)
     weigh_detection.start()

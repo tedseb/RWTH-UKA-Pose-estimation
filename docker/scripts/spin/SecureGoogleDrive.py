@@ -11,10 +11,10 @@ drive = GoogleDrive(gauth)
 
 # Set the id of the Google Drive folder. You can find it in the URL of the google drive folder.
 parent_folder_id_1 = '1blrQs1DdKdHWyDIK_n26rMyuGTergp75'
-parent_folder_id_2 = '1FvP7f1_QbXqfhqPeV4HXguo2gtwUDQdC'
+parent_folder_id_2 = '1u9ajkYKKm6tvPrXYNrNn6xdrBsnJ4gql'
 # Set the parent folder, where you want to store the contents of the google drive folder
 parent_folder_dir_1 = './src/AI/spin/extra_data/'
-parent_folder_dir_2 = './test/'
+parent_folder_dir_2 = './src/AI/weight_detection/models/'
 
 
 # This is the base wget command that we will use. This might change in the future due to changes in Google drive

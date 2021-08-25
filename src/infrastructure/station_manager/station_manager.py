@@ -7,6 +7,7 @@ import sys
 import psutil
 from src import DataManager, ParamUpdater, VideoSelection, StationSelection
 import rospy
+from rospy.exceptions import ROSException
 from backend.msg import StationUsage
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from src.config import *
@@ -22,6 +23,12 @@ class StationManager():
     def __init__(self, debug_mode=False, verbose=False):
         rospy.init_node('param_updater', anonymous=True)
         rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
+        try:
+            rospy.wait_for_service('ai/weight_detection', 2)
+        except ROSException:
+            LOG_ERROR("Time out on channel  'ai/weight_detection'")
+        self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
+
         self._weigth_detection = rospy.Service('sm/weight_detection', WeightDetection, self.handle_weight_detection_request)
         self._data_manager = DataManager()
         #Todo: verbose in args

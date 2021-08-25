@@ -11,3 +11,6 @@ def LOG_DEBUG(msg, debug = VERBOSE_MODE):
 
 def LOG_INFO(msg):
     rospy.loginfo(f"[SM] {msg}", logger_name="StationManager")
+
+def LOG_ERROR(msg):
+    rospy.logerr(f"[SM] {msg}", logger_name="StationManager")

@@ -24,7 +24,7 @@ class StationManager():
         rospy.init_node('param_updater', anonymous=True)
         rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
         try:
-            rospy.wait_for_service('ai/weight_detection', 2)
+            rospy.wait_for_service('ai/weight_detection', 10)
         except ROSException:
             LOG_ERROR("Time out on channel  'ai/weight_detection'")
         self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
@@ -61,7 +61,7 @@ class StationManager():
         rospy.spin()
 
     def station_usage_callback(self, msg):
-        LOG_DEBUG(f"Station Usage Callback", self._verbose)
+        LOG_DEBUG("Station Usage Callback", self._verbose)
 
         self._param_updater.set_station(msg)
         cameras = self._param_updater.get_active_cameras()
@@ -77,6 +77,10 @@ class StationManager():
 
         for cam_index in turn_off:
             self.stop_camera(cam_index)
+
+        LOG_DEBUG("Call weight detection service", self._verbose)
+        result :  WeightDetectionResponse = self._ai_weight_detection("Test")
+        LOG_DEBUG(f"Weight detection result = {result.weight}, code = {result.response}", self._verbose)
 
     def start_camera(self, camera_id : int):
         LOG_DEBUG(f"Start Camera with id {camera_id}", self._verbose)

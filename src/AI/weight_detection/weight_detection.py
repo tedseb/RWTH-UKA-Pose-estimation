@@ -53,7 +53,7 @@ class WeightDetection:
 
     def handle_weight_detection_request(self, req : WeightDetectionRequest):    
         LOG_DEBUG(f"Service started. Token: '{req.token}'", self._debug)
-        image_channel = "Image"
+        image_channel = "image"
         time_limit = 2
 
         #Todo: Mehrere Frames warten

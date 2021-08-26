@@ -80,7 +80,7 @@ class StationManager():
 
         LOG_DEBUG("Call weight detection service", self._verbose)
         result :  WeightDetectionResponse = self._ai_weight_detection("Test")
-        LOG_DEBUG(f"Weight detection result = {result.weight}, code = {result.response}", self._verbose)
+        LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
 
     def start_camera(self, camera_id : int):
         LOG_DEBUG(f"Start Camera with id {camera_id}", self._verbose)

@@ -10,7 +10,7 @@
   <include file="$(find spin)/launch/spin.launch"/>
   <include file="$(find objectDetector)/launch/objectDetector.launch" />
   <include file="$(find weight_detection)/launch/objectDetector.launch" />
-  <include file="$(find comparing_system)/launch/comparing_system.launch" />
+  <!-- <include file="$(find comparing_system)/launch/comparing_system.launch" />-->
   <node name="SpinVis" pkg="backend" type="SpinVis.py" />
 </launch> 
  

@@ -18,6 +18,7 @@ try:
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from backend.msg import Persons
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -27,6 +28,7 @@ except ImportError:
     from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
+    from backend.msg import Persons
 
 
 class Receiver():
@@ -60,7 +62,7 @@ class Receiver():
 
 if __name__ == '__main__':
     # initialize ros node
-    rp.init_node('ComparingSystem_Receiver', anonymous=False)
+    rp.init_node('Motion_Analysis_Receiver', anonymous=False)
 
     receiver = Receiver()
 

@@ -86,6 +86,6 @@ class Visualizer():
 
 
 if __name__ == '__main__':
-    rp.init_node('ComparingSystem_Visualizer', anonymous=False)
+    rp.init_node('Motion_Analysis_Visualizer', anonymous=False)
     visualization = Visualizer(SpinPoseDefinitionAdapter)
     rp.spin()

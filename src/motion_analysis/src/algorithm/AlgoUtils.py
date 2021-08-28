@@ -31,62 +31,48 @@ FEATURE_UNDECIDED: int = 0
 FEATURE_HIGH_UNDECIDED = 1
 FEATURE_HIGH: int = 2
 
-def try_import_rp():
-    if "rospy" in sys.modules:
-        rp_module = sys.modules["rospy"]
-    else:
-        try:
-            import comparing_system.src.FakeRospy as FakeRospy
-        except ImportError:
-            import src.FakeRospy as FakeRospy
-        
-        rp_module = FakeRospy
 
-    return rp_module
-
-rp = try_import_rp()
-    
-# TODO: Check more sizes of exercise objects frequently
-def get_size_of_object(obj, seen=None):
-    """
-    Recursively finds size of objects
-    Taken from: https://goshippo.com/blog/measure-real-size-any-python-object/
-    """
-    size = sys.getsizeof(obj)
-    if seen is None:
-        seen = set()
-    obj_id = id(obj)
-    if obj_id in seen:
-        return 0
-    # Important mark as seen *before* entering recursion to gracefully handle
-    # self-referential objects
-    seen.add(obj_id)
-    if isinstance(obj, dict):
-        size += sum([get_size(v, seen) for v in obj.values()])
-        size += sum([get_size(k, seen) for k in obj.keys()])
-    elif hasattr(obj, '__dict__'):
-        size += get_size(obj.__dict__, seen)
-    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
-        size += sum([get_size(i, seen) for i in obj])
-    return size
+# # TODO: Check more sizes of exercise objects frequently
+# def get_size_of_object(obj, seen=None):
+#     """
+#     Recursively finds size of objects
+#     Taken from: https://goshippo.com/blog/measure-real-size-any-python-object/
+#     """
+#     size = sys.getsizeof(obj)
+#     if seen is None:
+#         seen = set()
+#     obj_id = id(obj)
+#     if obj_id in seen:
+#         return 0
+#     # Important mark as seen *before* entering recursion to gracefully handle
+#     # self-referential objects
+#     seen.add(obj_id)
+#     if isinstance(obj, dict):
+#         size += sum([get_size(v, seen) for v in obj.values()])
+#         size += sum([get_size(k, seen) for k in obj.keys()])
+#     elif hasattr(obj, '__dict__'):
+#         size += get_size(obj.__dict__, seen)
+#     elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+#         size += sum([get_size(i, seen) for i in obj])
+#     return size
 
 
-def enqueue_dictionary(previous_dict, enqueued_dict):
+def enqueue_dictionary(previous_dict, enqueued_dict, max_queue_size):
     for k, v in enqueued_dict.items():
         if isinstance(v, collections.MutableMapping):
-            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v)
+            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v, max_queue_size)
         elif isinstance(v, list):
             previous_dict[k] = previous_dict.get(k, [])
             previous_dict[k].extend(v)
-            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][-REDIS_MAXIMUM_QUEUE_SIZE:]
+            if (len(previous_dict[k]) >= max_queue_size):
+                previous_dict[k] = previous_dict[k][-max_queue_size:]
         else:
             previous_dict[k] = previous_dict.get(k, [])
             if previous_dict[k] == None:
                 previous_dict[k] = []
             previous_dict[k].append(v)
-            if (len(previous_dict[k]) >= REDIS_MAXIMUM_QUEUE_SIZE):
-                previous_dict[k] = previous_dict[k][-REDIS_MAXIMUM_QUEUE_SIZE:]
+            if (len(previous_dict[k]) >= max_queue_size):
+                previous_dict[k] = previous_dict[k][-max_queue_size:]
     
     return previous_dict
 

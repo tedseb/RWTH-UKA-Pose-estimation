@@ -7,9 +7,9 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 try:
-    import motion_analysis.algorithm.FeatureExtraction as FeatureExtractionModule
+    import motion_analysis.src.algorithm.FeatureExtraction as FeatureExtractionModule
 except ModuleNotFoundError:
-    import algorithm.FeatureExtraction as FeatureExtractionModule
+    import src.algorithm.FeatureExtraction as FeatureExtractionModule
 
 from flask import Flask
 from flask import request

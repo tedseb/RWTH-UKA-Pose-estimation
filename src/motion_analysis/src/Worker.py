@@ -19,6 +19,9 @@ from typing import NoReturn
 import redis
 import numpy as np
 import rospy as rp
+from std_msgs.msg import String
+
+from backend.msg import Person
 
 try:
     from motion_analysis.src.Worker import *
@@ -29,6 +32,7 @@ try:
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.Algorithm import *
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -38,6 +42,7 @@ except ImportError:
     from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
+    from src.algorithm.Algorithm import *
 
 
 class NoJointsAvailable(Exception):
@@ -148,8 +153,8 @@ class Worker(Thread):
                     # rp.logerr(new_features_progressions)
                     # rp.logerr(self.last_resampled_features)
                     
-                self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions)
-                self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features)
+                self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions, REDIS_MAXIMUM_QUEUE_SIZE)
+                self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features, REDIS_MAXIMUM_QUEUE_SIZE)
 
                 self.bad_repetition = bad_repetition
 

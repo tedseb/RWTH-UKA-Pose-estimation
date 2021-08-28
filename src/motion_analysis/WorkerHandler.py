@@ -25,21 +25,11 @@ except ImportError:
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
 
-
 import time
 import yaml
 from typing import NoReturn
-
-try:
-    from std_msgs.msg import String
-except ImportError:
-    try: 
-        from motion_analysis.src.ROSDummies import Dummy
-    except ImportError:
-        from src.ROSDummies import Dummy
-    String = Dummy
-
-rp = try_import_rp()
+import rospy as rp
+from std_msgs.msg import String
 
 class WorkerHandler():
     """Waits for updates on the usage of spots and communicates them through the a SpotMetaDataInterface.
@@ -65,7 +55,7 @@ class WorkerHandler():
         self.spot_queue_interface = spot_queue_interface_class()
         self.pose_definition_adapter = pose_definition_adapter_class()
         self.past_features_queue_interface = past_features_queue_interface_class()
-        self.comparators = {} # A dictionary, with spot IDs as keys
+        self.workers = {} # A dictionary, with spot IDs as keys
 
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
@@ -97,7 +87,7 @@ class WorkerHandler():
             # The 'stages' entry is an artifact of an older interface to tamer
             del exercise_data['stages']
             
-            # Set all entries that are needed by the comparators threads later on
+            # Set all entries that are needed by the handler threads later on
             exercise_data['recording'] = recording
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_data'] = reference_feature_data
@@ -106,20 +96,20 @@ class WorkerHandler():
             
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
-            current_comparator = self.comparators.get(station_id, None)
-            if not current_comparator:
-                self.comparators[station_id] = Comparator(spot_key=station_id)
+            current_worker = self.workers.get(station_id, None)
+            if not current_worker:
+                self.workers[station_id] = Worker(spot_key=station_id)
         else:
-            current_comparator = self.comparators.get(station_id, None)
-            if current_comparator:
-                current_comparator.running = False
-                del self.comparators[station_id]
+            current_worker = self.workers.get(station_id, None)
+            if current_worker:
+                current_worker.running = False
+                del self.workers[station_id]
 
 
 if __name__ == '__main__':
     # initialize ros node
-    rp.init_node('ComparingSystem_ComparingSystemHandler', anonymous=False)
+    rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
 
-    spot_info_handler = ComparingSystemHandler()
+    spot_info_handler = WorkerHandler()
 
     rp.spin()

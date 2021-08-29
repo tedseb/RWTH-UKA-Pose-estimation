@@ -11,33 +11,45 @@ try:
 except ModuleNotFoundError:
     import src.algorithm.FeatureExtraction as FeatureExtractionModule
 
-from flask import Flask
-from flask import request
-
+import rospy as rp
 import inspect
+import asyncio
+import websockets
+import json
+
+adapter = FeatureExtractionModule.SpinPoseDefinitionAdapter()
 
 functions = inspect.getmembers(FeatureExtractionModule, inspect.isfunction)
+functions = {a: b for a, b in functions}
 
-app = Flask(__name__)
+async def extract_features(websocket, path):
+    async for message in websocket:
+        data = json.loads(message)
+        method_string = data.get('function_name')
 
-@app.route('/', methods=['GET'])
-def extract_features():
-    if request.method == 'GET':
-        method_string = request.args.get('function_name')
+        if method_string is None:
+            json.dumps({})
 
         try:
             function = functions[method_string]
         except KeyError:
-            raise 
+            raise
+
         var_names = function.__code__.co_varnames
 
         var_list = []
         for var_name in var_names:
             if var_name == "pose_array":
-                var_list.append(FeatureExtractionModule.SpinPoseDefinitionAdapter.body_parts_to_ndarray(request.args.get(var_name)))
-                continue
-            var_list.append(request.args.get(var_name))
+                var_list.append(adapter.pose_to_nd_array(data[var_name]))
+            else:
+                var_list.append(data[var_name])
 
-        # find out function and use pose for it
-        return function(*var_names)
-            
+    return_value = function(*var_names)
+    rp.logerr(return_value)
+
+    await websocket.send(return_value)
+
+start_server = websockets.serve(extract_features, "localhost", 4444)
+
+asyncio.get_event_loop().run_until_complete(start_server)
+asyncio.get_event_loop().run_forever()

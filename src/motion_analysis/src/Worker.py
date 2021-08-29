@@ -97,8 +97,6 @@ class Worker(Thread):
         self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
         self.bad_repetition = False
 
-        self.last_used_joint_ndarray = []
-
         self.start()
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
@@ -129,17 +127,10 @@ class Worker(Thread):
                 # As long as there are skelletons available for this spot, continue
                 past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
 
-                self.last_used_joint_ndarray.append(present_joints_with_timestamp['used_joint_ndarray'])
-
-                if len(self.last_used_joint_ndarray) > AVERAGE_SKELETON_QUEUE_LENGTH:
-                    self.last_used_joint_ndarray.pop(0)
-
                 # Extract feature states
                 exercise_data = spot_info_dict['exercise_data']
-                used_joint_ndarray = np.mean(self.last_used_joint_ndarray, axis=0)
+                used_joint_ndarray = present_joints_with_timestamp['used_joint_ndarray']
                 features_states = extract_states(used_joint_ndarray, self.last_feature_states, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'], self.pose_definition_adapter)
-
-                # rp.logerr(used_joint_ndarray)
 
                 self.last_feature_states = features_states
 

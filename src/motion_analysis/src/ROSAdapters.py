@@ -18,8 +18,12 @@ except ImportError:
     from src.DataUtils import *
     from src.algorithm.AlgoConfig import X, Y, Z
 
-from backend.msg import Bodypart
-from visualization_msgs.msg import Marker, MarkerArray
+try:
+    from backend.msg import Bodypart
+    from visualization_msgs.msg import Marker, MarkerArray
+except ModuleNotFoundError:
+    # We are not running python from the ROS venv
+    Bodypart = Marker = MarkerArray = object
 
 
 class FeatureExtractorException(Exception):
@@ -107,13 +111,23 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
 
         for idx_recording, step in enumerate(recording):
-            skelleton = step[Y]
+            skelleton = step[1]
             for joint, coordinates in skelleton.items():
                 idx_step = self.get_joint_index(joint)
                 array[idx_recording][idx_step][X] = coordinates['x']
                 array[idx_recording][idx_step][Y] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
                 array[idx_recording][idx_step][Z] = coordinates['z'] 
         
+        return array
+
+
+    def pose_to_nd_array(self, pose: dict):
+        array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
+        for joint, coordinates in pose.items():
+                idx_step = self.get_joint_index(joint)
+                array[idx_step][X] = coordinates['x']
+                array[idx_step][Y] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
+                array[idx_step][Z] = coordinates['z'] 
         return array
 
 

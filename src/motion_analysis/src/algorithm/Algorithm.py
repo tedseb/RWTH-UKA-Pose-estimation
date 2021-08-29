@@ -124,12 +124,7 @@ def compare_high_level_features(spot_info_dict: dict,
             if new_feature_progression < exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
                 increase_reps = False
             elif new_feature_progression > exercise_data['reference_feature_data'][feature_type][k]['number_of_changes_in_decided_feature_states']:
-                rp.logerr("new feature progression:" + str(new_feature_progression))
-                if not MESSY_INPUTS:
-                    bad_repetition = True
-
-                    if bad_repetition == False:
-                        rp.logerr("bad_repetition detected : Too much feature progression")
+                bad_repetition = True
 
         # If a data type has no updates, remove it again
         if new_feature_progressions[feature_type] == {}:
@@ -193,8 +188,12 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 100, 1)
                 prediction = np.argmin(errors)
                 index = discretization_reference_trajectory_indices_tensor[idx][prediction]
+                rp.logerr(discretization_reference_trajectory_indices_tensor)
+                rp.logerr(index)
                 median_resampled_values_reference_trajectory_fraction_dict = v['median_resampled_values_reference_trajectory_fractions'][prediction]
                 progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+                rp.logerr(errors)
+                rp.logerr(reference_trajectory_hankel_matrix)
                 # rp.logerr(v['median_resampled_values_reference_trajectory_fractions'])
                 # rp.logerr(median_resampled_values_reference_trajectory_fraction_dict)
                 # rp.logerr(progress)

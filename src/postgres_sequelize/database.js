@@ -20,6 +20,7 @@ const modelDefiners = [
     require('./models/camera.model'),
     require('./models/frame.model'),
     require('./models/station.model'),
+    require('./models/station_weight_color.model'),
     require('./models/camera_station_mapping.model'),
     require('./models/stations_usage.model'),
     require('./models/digigym/user.model'),

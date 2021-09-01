@@ -9,6 +9,8 @@ devel
 build_isolated
 devel_isolated
 src/AI/spin/extra_data
+src/AI/weight_detection/data
+src/AI/weight_detection/models
 node_modules
 package-lock.json
 bagfiles

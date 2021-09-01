@@ -1,6 +1,6 @@
 function associate(sequelize) {
     frame_station_onetomany(sequelize);
-    frame_station_onetomany(sequelize)
+    color_station_onetomany(sequelize)
 /*     station_camera_mapping_camera(sequelize);
     station_camera_mapping_station(sequelize); */
     station_usage_station_onetomany(sequelize);
@@ -14,7 +14,7 @@ function frame_station_onetomany(sequelize) {
     frame.belongsTo(camera_station_mapping);
 }
 
-function frame_station_onetomany(sequelize) {
+function color_station_onetomany(sequelize) {
     const {station_weight_color, camera_station_mapping} = sequelize.models;
     camera_station_mapping.hasMany(station_weight_color);
     station_weight_color.belongsTo(camera_station_mapping);

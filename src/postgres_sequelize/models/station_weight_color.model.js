@@ -12,7 +12,6 @@ module.exports = (sequelize) => {
         name: {
             allowNull: false,
             type: DataTypes.STRING(40),
-            unique: true,
         },
         weight: {
             type: DataTypes.FLOAT,

@@ -79,7 +79,7 @@ class StationManager():
             self.stop_camera(cam_index)
 
         LOG_DEBUG("Call weight detection service", self._verbose)
-        result :  WeightDetectionResponse = self._ai_weight_detection("Test")
+        result :  WeightDetectionResponse = self._ai_weight_detection("image", 2.0)
         LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
 
     def start_camera(self, camera_id : int):

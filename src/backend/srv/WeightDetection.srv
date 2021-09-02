@@ -1,4 +1,5 @@
-string token
+string channel
+float32 time #in seconds
 ---
 int8 weight
 int8 response

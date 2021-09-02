@@ -52,9 +52,9 @@ class WeightDetection:
         rospy.spin()
 
     def handle_weight_detection_request(self, req : WeightDetectionRequest):    
-        LOG_DEBUG(f"Service started. Token: '{req.token}'", self._debug)
-        image_channel = "image"
-        time_limit = 2
+        LOG_DEBUG(f"Service started. Channel: '{req.channel}'", self._debug)
+        image_channel = str(req.channel)
+        time_limit = float(req.time)
 
         #Todo: Mehrere Frames warten
         try:

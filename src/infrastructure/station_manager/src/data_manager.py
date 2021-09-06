@@ -67,7 +67,7 @@ class DataManager():
 
     def get_weight_colors(self, camera_id : int, station_id : int):
         try:
-            select_query = 'SELECT station_weight_colors.id, name, weight, hsv_low, hsv_high, cameraStationMappingId ' + \
+            select_query = 'SELECT station_weight_colors.id, name, weight, hsv_low, hsv_high, "cameraStationMappingId" ' + \
             'FROM camera_station_mappings ' + \
             'INNER JOIN station_weight_colors ON camera_station_mappings.id=station_weight_colors."cameraStationMappingId" ' + \
             f'WHERE camera_station_mappings."cameraId"={camera_id} and camera_station_mappings."stationId"={station_id};'
@@ -75,7 +75,7 @@ class DataManager():
             mobile_records = self._cursor.fetchall()
             data = {}
             for record in mobile_records:
-                data[record[0]] = [record[1], record[2], record[3], record[4]]
+                data[record[0]] = [record[1], record[2], record[3], record[4], record[5]]
             return data
         except psycopg2.Error as error:
             raise RuntimeError("Error while inserting data into weight color") from error

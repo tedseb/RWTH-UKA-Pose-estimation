@@ -71,10 +71,12 @@ class WeightDetection:
         pred = output.pred
 
         color_ranges = []
-        ros_weight_colors : List[WeightColor] = WeightDetectionRequest.colors
+        ros_weight_colors : List[WeightColor] = req.colors
+        
         for color in ros_weight_colors:
-            color_ranges.append((color.name, color.weight, color.hsv_low, color.hsv_high))
-        print("Color Ranges ", color_ranges)
+            hsv_low = [int(binary) for binary in color.hsv_low]
+            hsv_high = [int(binary) for binary in color.hsv_high]
+            color_ranges.append((color.name, color.weight, hsv_low, hsv_high))
 
         if self._model.is_valid_prediction(pred):
             left_box = self._model.get_left_box(pred)
@@ -84,7 +86,7 @@ class WeightDetection:
             LOG_ERROR("No Valid Prediction")
             return WeightDetectionResponse(0, -1)
 
-        dumbbell = Dumbbell(left_box, right_box, frame)
+        dumbbell = Dumbbell(left_box, right_box, frame, color_ranges)
         sub = rospy.Subscriber(image_channel, Image, self.process_image, callback_args=(dumbbell))
         time.sleep(time_limit)
         sub.unregister()
@@ -93,11 +95,11 @@ class WeightDetection:
 
         weight_left = 0
         for code in barcode_left:
-            weight_left += COLOR_RANGES[code][1]
+            weight_left += int(color_ranges[code][1])
 
         weight_right = 0
         for code in barcode_right:
-            weight_right += COLOR_RANGES[code][1]
+            weight_right += int(color_ranges[code][1])
 
         return WeightDetectionResponse(weight_left + weight_right, 1)
 

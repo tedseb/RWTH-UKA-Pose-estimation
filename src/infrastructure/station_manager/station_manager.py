@@ -78,18 +78,18 @@ class StationManager():
         for cam_index in turn_off:
             self.stop_camera(cam_index)
 
-        if len(turn_on) > 0: 
+        if len(turn_on) > 0:
             station_id = msg.stationID
-            camera_id = turn_on[0]
+            camera_id = list(turn_on)[0]
             LOG_DEBUG("Call weight detection service", self._verbose)
-            
+
             color_msg_list = []
             weight_colors = self._data_manager.get_weight_colors(camera_id, station_id)
             for color_id, color_data in weight_colors.items():
-                color_msg_list.append(WeightColor(id=color_id, name=color_data[0], weight=color_data[1], hsv_low=color_data[2],
-                                        hsv_high=color_data[2], camera_station_id=color_data[3]))
-                
-            result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0)
+                color_msg_list.append(WeightColor(id=color_id, name=color_data[0], weight=color_data[1],
+                    hsv_low=color_data[2], hsv_high=color_data[3], camera_station_id=color_data[4]))
+
+            result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
             LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
 
     def start_camera(self, camera_id : int):

@@ -65,6 +65,21 @@ class DataManager():
         except psycopg2.Error as error:
             print("Error while fetching frame data from PostgreSQL", error)
 
+    def get_weight_colors(self, camera_id : int, station_id : int):
+        try:
+            select_query = 'SELECT station_weight_colors.id, name, weight, hsv_low, hsv_high, cameraStationMappingId ' + \
+            'FROM camera_station_mappings ' + \
+            'INNER JOIN station_weight_colors ON camera_station_mappings.id=station_weight_colors."cameraStationMappingId" ' + \
+            f'WHERE camera_station_mappings."cameraId"={camera_id} and camera_station_mappings."stationId"={station_id};'
+            self._cursor.execute(select_query)
+            mobile_records = self._cursor.fetchall()
+            data = {}
+            for record in mobile_records:
+                data[record[0]] = [record[1], record[2], record[3], record[4]]
+            return data
+        except psycopg2.Error as error:
+            raise RuntimeError("Error while inserting data into weight color") from error
+
     def update_camera_infos(self):
         try:
             select_query = 'SELECT cameras.id, cameras.name, cameras.type, cameras."typeInfo" ' + \

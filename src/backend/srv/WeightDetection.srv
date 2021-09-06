@@ -1,5 +1,6 @@
 string channel
 float32 time #in seconds
+WeightColor[] colors
 ---
 int8 weight
 int8 response

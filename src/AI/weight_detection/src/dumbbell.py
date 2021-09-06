@@ -6,8 +6,9 @@ from src.weight_boxes import WeightBoxes
 from src.config import *
 
 class Dumbbell:
-    def __init__(self, left_box, right_box, img):
+    def __init__(self, left_box, right_box, img, color_ranges):
         #self._merged_boxes = []
+        self._color_ranges = color_ranges
         self._left_box = left_box
         self._right_box = right_box
         self._box_contours_left = ContourBoxes()
@@ -28,7 +29,7 @@ class Dumbbell:
         self.add_masks_right(right_img, combine_bitwise)
 
     def add_masks_left(self, img, combine_bitwise = True):
-        masks = get_masks(img, COLOR_RANGES)
+        masks = get_masks(img, self._color_ranges)
         cnts = get_contours(masks)
         self._box_contours_left.add_contours(cnts)
         if combine_bitwise:
@@ -38,7 +39,7 @@ class Dumbbell:
             self._masks_left = masks
 
     def add_masks_right(self, img, combine_bitwise = True):
-        masks = get_masks(img, COLOR_RANGES)
+        masks = get_masks(img, self._color_ranges)
         cnts = get_contours(masks)
         self._box_contours_right.add_contours(cnts)
         if combine_bitwise:

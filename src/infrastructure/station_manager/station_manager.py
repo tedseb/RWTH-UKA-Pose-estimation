@@ -8,7 +8,7 @@ import psutil
 from src import DataManager, ParamUpdater, VideoSelection, StationSelection
 import rospy
 from rospy.exceptions import ROSException
-from backend.msg import StationUsage
+from backend.msg import StationUsage, WeightColor
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from src.config import *
 
@@ -60,9 +60,9 @@ class StationManager():
         LOG_DEBUG("Started StationManager", self._verbose)
         rospy.spin()
 
-    def station_usage_callback(self, msg):
+    def station_usage_callback(self, msg : StationUsage):
         LOG_DEBUG("Station Usage Callback", self._verbose)
-
+        
         self._param_updater.set_station(msg)
         cameras = self._param_updater.get_active_cameras()
 
@@ -78,9 +78,19 @@ class StationManager():
         for cam_index in turn_off:
             self.stop_camera(cam_index)
 
-        LOG_DEBUG("Call weight detection service", self._verbose)
-        result :  WeightDetectionResponse = self._ai_weight_detection("image", 2.0)
-        LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
+        if len(turn_on) > 0: 
+            station_id = msg.stationID
+            camera_id = turn_on[0]
+            LOG_DEBUG("Call weight detection service", self._verbose)
+            
+            color_msg_list = []
+            weight_colors = self._data_manager.get_weight_colors(camera_id, station_id)
+            for color_id, color_data in weight_colors.items():
+                color_msg_list.append(WeightColor(id=color_id, name=color_data[0], weight=color_data[1], hsv_low=color_data[2],
+                                        hsv_high=color_data[2], camera_station_id=color_data[3]))
+                
+            result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0)
+            LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
 
     def start_camera(self, camera_id : int):
         LOG_DEBUG(f"Start Camera with id {camera_id}", self._verbose)

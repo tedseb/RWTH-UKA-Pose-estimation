@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 from backend.srv import WeightDetection as RosWeightDetection
 from backend.srv import WeightDetectionResponse, WeightDetectionRequest
+from backend.msg import WeightColor
 from rospy.exceptions import ROSException
 from sensor_msgs.msg import Image
 from src.yolo_model import YoloWeightModel
@@ -15,6 +16,7 @@ from src.utils import crop_weights_into_image
 from src.dumbbell import Dumbbell
 #pylint: disable=unused-wildcard-import
 from src.config import *
+from typing import List
 
 VERBOSE_MODE = True
 def LOG_DEBUG(msg, debug = VERBOSE_MODE):
@@ -68,10 +70,16 @@ class WeightDetection:
         output = self._model.inference(frame)
         pred = output.pred
 
+        color_ranges = []
+        ros_weight_colors : List[WeightColor] = WeightDetectionRequest.colors
+        for color in ros_weight_colors:
+            color_ranges.append((color.name, color.weight, color.hsv_low, color.hsv_high))
+        print("Color Ranges ", color_ranges)
+
         if self._model.is_valid_prediction(pred):
             left_box = self._model.get_left_box(pred)
             right_box = self._model.get_right_box(pred)
-            dumbbell = Dumbbell(left_box, right_box, frame)
+            dumbbell = Dumbbell(left_box, right_box, frame, color_ranges)
         else:
             LOG_ERROR("No Valid Prediction")
             return WeightDetectionResponse(0, -1)

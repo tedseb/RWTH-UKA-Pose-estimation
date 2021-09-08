@@ -60,7 +60,7 @@ class WeightDetection:
 
         #Todo: Mehrere Frames warten
         try:
-            frame = rospy.wait_for_message(image_channel, Image, timeout=5)
+            frame = rospy.wait_for_message(image_channel, Image, timeout=10)
         except ROSException:
             LOG_ERROR(f"No Image on the channel '{image_channel}'")
             return WeightDetectionResponse(0, -1)

@@ -5,6 +5,7 @@ import pathlib
 import subprocess
 import argparse
 import sys
+import signal
 import psutil
 
 from src import DataManager, CameraStationController, VideoSelection, StationSelection
@@ -14,6 +15,11 @@ from rospy.exceptions import ROSException
 from backend.msg import StationUsage, WeightColor
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from src.config import *
+from twisted.internet import reactor
+
+def signal_handler(signal, frame):
+    print("EXIT")
+    reactor.callFromThread(reactor.stop)
 
 class ComputerWorkload:
     def __init__(self):
@@ -25,20 +31,26 @@ class ComputerWorkload:
 class StationManager():
     def __init__(self, debug_mode=False, verbose=False):
         rospy.init_node('param_updater', anonymous=True)
-        rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
-        try:
-            rospy.wait_for_service('ai/weight_detection', 10)
-        except ROSException:
-            LOG_ERROR("Time out on channel  'ai/weight_detection'")
-        self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
+        #rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
+        # try:
+        #     rospy.wait_for_service('ai/weight_detection', 0.5)
+        # except ROSException:
+        #     LOG_ERROR("Time out on channel  'ai/weight_detection'")
+        # self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
 
         self._data_manager = DataManager()
         #Todo: verbose in args
         self._verbose = verbose or VERBOSE_MODE
         self._debug_mode = debug_mode or DEBUG_MODE
 
-        self._path_camera_node = str(pathlib.Path(__file__).parent.parent.absolute()) + "/CameraNode.py"
-        self._path_transform_node = str(pathlib.Path(__file__).parent.absolute()) + "/launch/static_transform.launch"
+        self._path_camera_node = str(pathlib.Path(pathlib.Path(__file__).absolute().parent.parent)) + "/CameraNode.py"
+        self._path_transform_node = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
+        print(__file__)
+        #self._path_camera_node = str(pathlib.Path(__file__).parent.parent.parent.parent.absolute()) + "/CameraNode.py"
+        #self._path_transform_node = str(pathlib.Path(__file__).parent.parent.absolute()) + "/launch/static_transform.launch"
+        print(self._path_camera_node)
+        print(self._path_transform_node)
+
 
         if self._debug_mode:
             self.video_selection_gui = VideoSelection(self._data_manager)
@@ -153,6 +165,8 @@ class StationManager():
         for cam_index in turn_on:
             self.start_camera(cam_index)
 
+        return ResponseAnswer(501, 1, {})
+
     def logout_station(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
         if "station" not in payload or "exercise" not in payload:
@@ -167,6 +181,8 @@ class StationManager():
 
         for cam_index in turn_off:
             self.stop_camera(cam_index)
+
+        return ResponseAnswer(502, 1, {})
 
     def get_weight_detection(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"weight detection {user_id}, payload : {payload}", self._verbose)
@@ -185,11 +201,13 @@ class StationManager():
                 color_msg_list.append(WeightColor(id=color_id, name=color_data[0], weight=color_data[1],
                     hsv_low=color_data[2], hsv_high=color_data[3], camera_station_id=color_data[4]))
 
-            result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
-            LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
-            return ResponseAnswer(507, 0, {"weight" : result.weight, "probability" : 1})
+            #result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
+            #LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
+            #return ResponseAnswer(507, 0, {"weight" : result.weight, "probability" : 1})
+            return ResponseAnswer(507, 0, {"weight" : 30, "probability" : 1})
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
@@ -202,4 +220,4 @@ if __name__ == '__main__':
         args = parser.parse_args()
 
     station_manager = StationManager(debug_mode=args.debug, verbose=args.verbose)
-    station_manager.start()
+    #station_manager.start()

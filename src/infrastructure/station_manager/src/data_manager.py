@@ -23,8 +23,9 @@ class DataManager():
         except psycopg2.Error as error:
             raise RuntimeError('Failed to open database') from error
 
-        self.update_frames()
-        self.update_camera_infos()
+        self._update_frames()
+        self._update_camera_infos()
+        self._update_station_camera()
 
         self._frame_mutex = Lock()
         self._camera_info_mutex = Lock()

@@ -1,4 +1,6 @@
 import copy
+import sys
+import traceback
 from typing import Callable, Dict
 import json
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
@@ -35,8 +37,12 @@ class ServerSocket(WebSocketServerProtocol):
             result : ResponseAnswer = function(self._id, pyaload)
         except Exception as exception:
             self.send_error_ts(str(exception))
+            traceback.print_exc()
+            
             return
-
+            
+        print("###########")
+        traceback.print_exc()
         if not result.request_requiered:
             return
             

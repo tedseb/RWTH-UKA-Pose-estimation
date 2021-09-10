@@ -26,10 +26,16 @@ class ServerSocket(WebSocketServerProtocol):
 
     def onConnect(self, request):
         print("Client connecting: {0}".format(request.peer))
-        self._id = "ID"
+        self._id = "id123"
 
     def onOpen(self):
         print("WebSocket connection open.")
+        response = copy.deepcopy(RESPONSE_DICT)
+        response["id"] = self._id
+        response["response"] = 500
+        response["status_code"] = 1
+        response = json.dumps(response).encode('utf8')
+        self.sendMessage(response, False)
 
     def callback_wrapper(self, function : Callable, pyaload : Dict):
         #pylint: disable=broad-except
@@ -37,11 +43,9 @@ class ServerSocket(WebSocketServerProtocol):
             result : ResponseAnswer = function(self._id, pyaload)
         except Exception as exception:
             self.send_error_ts(str(exception))
-            traceback.print_exc()
-            
+            traceback.print_exc()           
             return
-            
-        print("###########")
+
         traceback.print_exc()
         if not result.request_requiered:
             return

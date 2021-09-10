@@ -43,14 +43,16 @@ class StationManager():
         self._verbose = verbose or VERBOSE_MODE
         self._debug_mode = debug_mode or DEBUG_MODE
 
-        self._path_camera_node = str(pathlib.Path(pathlib.Path(__file__).absolute().parent.parent)) + "/CameraNode.py"
+        self._path_camera_node = str(pathlib.Path(__file__).absolute().parent.parent) + "/CameraNode.py"
         self._path_transform_node = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
+        self._path_station_selection = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
         print(__file__)
         #self._path_camera_node = str(pathlib.Path(__file__).parent.parent.parent.parent.absolute()) + "/CameraNode.py"
         #self._path_transform_node = str(pathlib.Path(__file__).parent.parent.absolute()) + "/launch/static_transform.launch"
         print(self._path_camera_node)
         print(self._path_transform_node)
 
+        self._station_selection_process = subprocess.Popen([self._path_station_selection])
 
         if self._debug_mode:
             self.video_selection_gui = VideoSelection(self._data_manager)

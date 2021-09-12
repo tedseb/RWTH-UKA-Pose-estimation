@@ -13,10 +13,12 @@ try:
     from motion_analysis.src.DataConfig import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.algorithm.AlgoConfig import X, Y, Z
+    from motion_analysis.src.algorithm.AlgoUtils import PoseDefinitionAdapter
 except ImportError:
     from src.DataConfig import *
     from src.DataUtils import *
     from src.algorithm.AlgoConfig import X, Y, Z
+    from src.algorithm.AlgoUtils import PoseDefinitionAdapter
 
 try:
     from backend.msg import Bodypart
@@ -33,57 +35,6 @@ class UnknownAngleException(FeatureExtractorException):
     pass
 
 
-class PoseDefinitionAdapter():
-    @abstractmethod
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def get_joint_index(self, joint_name: str) -> int:
-        """Get the index of a joint from its name"""
-        raise NotImplementedError("This is an interface, it should not be called directly.")
-
-    @abstractmethod
-    def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
-        """Take a Bodyparts object, defined by the backend messages turn it into an ndarray.
-        
-        Every bodyParts object, for now, is an iterable of bodyPart objects.
-        The exact specification of such bodyPart object can be found in the ROS backend messages.
-        For now, it contains at least a point in three dimensional space, with x, y and z coordinate.
-        This method turns such an object into a numpy array that contains only the joints that are used acoording
-        to our joint adapter.
-
-        Args:
-            body_parts: The body parts to be converted into a numpy array.
-        
-        Returns:
-            An array corresponding to the used body parts found in the body_parts argument.
-        """
-        raise NotImplementedError("This is an interface, it should not be called directly.")
-
-    def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
-        """Take an ndarray, and turn it into a Bodyparts object defined by the backend messages
-        
-        Every bodyParts object, for now, is an iterable of bodyPart objects.
-        The exact specification of such bodyPart object can be found in the ROS backend messages.
-        For now, it contains at least a point in three dimensional space, with x, y and z coordinate.
-        This method turns such an object into a numpy array that contains only the joints that are used acoording
-        to our joint adapter.
-
-        Args:
-            ndarray: An array representing parts parts.
-        
-        Returns:
-            A Bodyparts object converted from the ndarray array.
-        """
-        raise NotImplementedError("Work in progress.")
-
-    def recording_to_ndarray(self, recording: list) -> np.ndarray:
-        """ Take a list of Bodyparts objects and turn them into an array of pose_arrays."""
-        raise NotImplementedError("Work in progress.")
-
-
-    
 class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
     """This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper."""
     def __init__(self):

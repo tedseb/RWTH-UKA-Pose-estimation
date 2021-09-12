@@ -20,6 +20,7 @@ import redis
 import numpy as np
 import rospy as rp
 from std_msgs.msg import String
+from unittest import mock
 
 from backend.msg import Person
 
@@ -29,8 +30,10 @@ try:
     from motion_analysis.src.InterCom import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.ROSAdapters import *
+    from motion_analysis.src.GUI import *
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
+    from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Algorithm import *
 except ImportError:
@@ -39,8 +42,10 @@ except ImportError:
     from src.InterCom import *
     from src.DataUtils import *
     from src.ROSAdapters import *
+    from src.GUI import *
     from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
+    from src.algorithm.Features import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Algorithm import *
 
@@ -64,18 +69,18 @@ class Worker(Thread):
     """
     def __init__(self,
     spot_key: str,
+    gui: MotionAnaysisGUI = mock.MagicMock(),
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter,
-    feature_data_queues_interface_class: PastFeatureDataQueuesInterface = RedisFeatureDataQueuesInterface):
-        super(Worker, self).__init__()
+    features_interface_interface_class: FeaturesInterface = RedisFeaturesInterface):
+        super().__init__()
 
         self.spot_queue_interface = spot_queue_interface_class()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.pose_definition_adapter = pose_definition_adapter_class()
         # Use the same interface class for these two, because they have the same needs to the interface 
-        self.past_features_queue_interface = feature_data_queues_interface_class()
-        self.past_resampled_features_queue_interface = feature_data_queues_interface_class()
+        self.features_interface = features_interface_interface_class()
         
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
@@ -88,13 +93,14 @@ class Worker(Thread):
         self.predicted_skelleton_publisher = rp.Publisher("comparing_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("comparing_input", Person, queue_size=1000)
 
-        self.last_feature_progressions = {}
-        self.last_resampled_features = {}
-        self.last_feature_states = {}
-
         self.spot_key = spot_key
 
+        self.gui = gui
+
+        self.features = []
+
         self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
+
         self.bad_repetition = False
 
         self.start()
@@ -106,18 +112,13 @@ class Worker(Thread):
         This method uses lru caching because exercise information is usually obtained on every step, which makes
         it a very costly operation if it includes fetching data from a stata store (like Redis) and deserializing it.
         """
-        # rp.logerr("Uncached data fetched")
-        self.last_feature_progressions = {}
-        self.last_resampled_features = {}
-        self.last_feature_states = {}
-        
         return self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data"])
 
     def run(self) -> NoReturn:
-        _, _, spot_info_key, spot_state_key, spot_feature_progression_key, spot_resampled_features_key = generate_redis_key_names(self.spot_key)
-        # Fetch last feature progressions and resampled feature lists
-        self.last_feature_progressions = self.past_features_queue_interface.get_features(spot_feature_progression_key, latest_only=True)
-        self.last_resampled_features = self.past_resampled_features_queue_interface.get_features(spot_resampled_features_key, latest_only=True)
+        _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key)
+        # Fetch last feature data
+        self.features = self.features_interface.get(spot_feature_key)
+
         while(self.running):
             try:
                 # The following lines fetch data that we need to analyse
@@ -130,22 +131,12 @@ class Worker(Thread):
                 # Extract feature states
                 exercise_data = spot_info_dict['exercise_data']
                 used_joint_ndarray = present_joints_with_timestamp['used_joint_ndarray']
-                features_states = extract_states(used_joint_ndarray, self.last_feature_states, exercise_data['reference_feature_data'], exercise_data['feature_of_interest_specification'], self.pose_definition_adapter)
 
-                self.last_feature_states = features_states
+                for f in self.features.values():
+                    f.update(used_joint_ndarray, self.pose_definition_adapter)
 
                 # Compare joints with expert system data
-                increase_reps, bad_repetition, new_features_progressions, new_resampled_features = compare_high_level_features(spot_info_dict, self.last_feature_progressions, self.last_resampled_features, features_states, self.bad_repetition)
-
-                # if self.bad_repetition != bad_repetition:
-                    # rp.logerr(self.bad_repetition)
-                    # rp.logerr(bad_repetition)
-                    # rp.logerr(features_states)
-                    # rp.logerr(new_features_progressions)
-                    # rp.logerr(self.last_resampled_features)
-                    
-                self.last_feature_progressions = enqueue_dictionary(self.last_feature_progressions, new_features_progressions, REDIS_MAXIMUM_QUEUE_SIZE)
-                self.last_resampled_features = enqueue_dictionary(self.last_resampled_features, new_resampled_features, REDIS_MAXIMUM_QUEUE_SIZE)
+                increase_reps, bad_repetition, self.features = compare_high_level_features(spot_info_dict, self.features, self.bad_repetition)
 
                 self.bad_repetition = bad_repetition
 
@@ -166,33 +157,33 @@ class Worker(Thread):
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
 
                 # Calculate a new reference pose mapping
-                if new_resampled_features:
-                    reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.last_resampled_features, spot_info_dict['exercise_data'])
-                    self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
-                    if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
-                        del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
-                    if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
-                        if not MESSY_INPUTS:
-                            self.bad_repetition = True
+                # TODO: make this pretty
+                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, spot_info_dict['exercise_data'])
+                self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
+                if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
+                    del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
+                if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
+                    if not MESSY_INPUTS:
+                        self.bad_repetition = True
 
-                            self.last_feature_progressions = {}
-                            self.last_resampled_features = {}
-                            self.last_feature_states = {}
-                            rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
-                        
-                    reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
-                    reference_person_msg = Person()
-                    reference_person_msg.stationID = self.spot_key
-                    reference_person_msg.sensorID = -1
-                    reference_person_msg.bodyParts = reference_body_parts
-                    self.predicted_skelleton_publisher.publish(reference_person_msg)
+                        self.last_feature_progressions = {}
+                        self.last_resampled_features = {}
+                        self.last_feature_states = {}
+                        rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
+                    
+                reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
+                reference_person_msg = Person()
+                reference_person_msg.stationID = self.spot_key
+                reference_person_msg.sensorID = -1
+                reference_person_msg.bodyParts = reference_body_parts
+                self.predicted_skelleton_publisher.publish(reference_person_msg)
 
-                    user_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(used_joint_ndarray)
-                    user_person_msg = Person()
-                    user_person_msg.stationID = self.spot_key
-                    user_person_msg.sensorID = -1
-                    user_person_msg.bodyParts = user_body_parts
-                    self.user_skelleton_publisher.publish(user_person_msg)
+                user_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(used_joint_ndarray)
+                user_person_msg = Person()
+                user_person_msg.stationID = self.spot_key
+                user_person_msg.sensorID = -1
+                user_person_msg.bodyParts = user_body_parts
+                self.user_skelleton_publisher.publish(user_person_msg)
 
                 # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -216,5 +207,4 @@ class Worker(Thread):
                     rp.logerr("Encountered an Error while Comparing: " + str(e))
             
         # Enqueue data for feature progressions and resampled feature lists
-        self.past_features_queue_interface.enqueue(spot_feature_progression_key, self.last_feature_progressions)
-        self.past_resampled_features_queue_interface.enqueue(spot_resampled_features_key, self.last_resampled_features)
+        self.features_interface.put(self.spot_key, self.features)

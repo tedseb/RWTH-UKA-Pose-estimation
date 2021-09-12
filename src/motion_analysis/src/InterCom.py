@@ -20,6 +20,7 @@ import msgpack_numpy as m
 import redis
 import yaml
 import rospy as rp
+import pickle
 
 try:
     from motion_analysis.src.DataConfig import *
@@ -148,21 +149,20 @@ class SpotMetaDataInterface(ABC):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
 
-class PastFeatureDataQueuesInterface(ABC):
+class FeaturesInterface(ABC):
     """This interface queues past features of interest for a spot.
 
     Said features have separate queues with keys that are generated on the way, using featires_of_interest_specification dictionaries.    
     """
     @abstractmethod
-    def get_features(self, spot_key: str, latest_only: bool = False) -> List[dict]:
+    def get(self, spot_key: str, latest_only: bool = False) -> List[dict]:
         """Get the feature queues of a spot, according to the features_of_interest_specification."""
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
-    def enqueue(self, spot_key: str, featuers_dict: dict,  reset: bool = False) -> None:
-        """Enqueue the features of a spot, according to the features_of_interest_specification."""
+    def set(self, spot_key: str, featuers_dict: dict,  reset: bool = False) -> None:
+        """Put the features of a spot, according to the features_of_interest_specification."""
         raise NotImplementedError("This is an interface and shold not be called directly")
-
 
     def delete(self, spot_key: str) -> None:
         """Delete the content of a spot queue."""
@@ -177,64 +177,30 @@ class RedisInterface:
         return self.redis_connection.delete(key)
 
 
-class RedisFeatureDataQueuesInterface(RedisInterface, PastFeatureDataQueuesInterface):
+class RedisFeaturesInterface(RedisInterface, FeaturesInterface):
     # TODO: These methods will let the Redis memory grow overtime, as different exercises are used. Prevent this.
     # TODO: Use redis pipelines
     # TODO: Use hmap or scan+get, test different implementations
     def __init__(self):
         # We need a separate constructor in order to force decode_responses=True for this Redis connection
-        self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=True)
+        self.redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=False)
 
-    def get_features(self, spot_key: str, latest_only: bool = False) -> dict:
+    def get(self, spot_features_key: str) -> dict:
         # TODO: Optimize this
-        feature_redis_keys = self.redis_connection.scan_iter(match=spot_key + "*")
+        features_dict = self.redis_connection.hgetall(spot_features_key)
+        for key, feature_string in features_dict.items():
+            features_dict[key] = pickle.loads(feature_string)
+        return features_dict
 
-        def construct_child_features_dict(d, remaining_path, full_path):
-            d.setdefault(remaining_path[0], {})
-            d = d[remaining_path[0]]
-            remaining_path = remaining_path[1:]
-            
-            if not remaining_path or remaining_path[0] == '':
-                try:
-                    if latest_only:
-                        return self.redis_connection.lrange(full_path, 0, 0)[0]
-                    else:
-                        return self.redis_connection.lrange(full_path, 0, -1)
-                except IndexError:
-                    raise QueueEmpty("Feature queue ist empty.")
-
-            d[remaining_path[0]] = construct_child_features_dict(d, remaining_path, full_path)
-        
-        root_dict = {}
-
-        for redis_key in feature_redis_keys:
-            complete_path = redis_key.split(":")[3:]
-            construct_child_features_dict(root_dict, complete_path, redis_key)
-
-        return root_dict
-
-    def enqueue(self, spot_key: str, featuers_dict: dict) -> None:
-        # TODO: Enqueue only if timestamp of queue is after last enqueue operation
-        def enqueue_child_featuers_dictionary(d, parent_key):
-            for k, v in d.items():
-                new_key = parent_key + REDIS_KEY_SEPARATOR + k if parent_key else k
-                if isinstance(v, collections.MutableMapping):
-                    enqueue_child_featuers_dictionary(v, new_key)
-                elif isinstance(v, list):
-                    if not v:
-                        continue
-                    self.redis_connection.lpush(new_key, *v)
-                else:
-                    self.redis_connection.lpush(new_key, v)
+    def set(self, spot_features_key: str, features_dict: dict) -> None:
+        _features_dict = deepcopy(features_dict)
+        for key, feature in _features_dict.items():
+            _features_dict[key] = pickle.dumps(feature)
                 
-                self.redis_connection.ltrim(new_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+        self.redis_connection.hset(spot_features_key, mapping=_features_dict)
 
-        enqueue_child_featuers_dictionary(featuers_dict, spot_key)
-
-    def delete(self, spot_key: str) -> None:
-        feature_redis_keys = self.redis_connection.scan_iter(match=spot_key + "*")
-        for feature_key in feature_redis_keys:
-            self.redis_connection.delete(feature_key)
+    def delete(self, spot_features_key: str) -> None:
+        self.redis_connection.delete(spot_features_key)
         
 
 class RedisSpotMetaDataInterface(RedisInterface, SpotMetaDataInterface):
@@ -345,7 +311,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         # TODO: Maybe use https://github.com/RedisTimeSeries/RedisTimeSeries
         # TODO: Investigate if these redis instructions can be optimized, possibly use a distributed lock
 
-        spot_queue_key, spot_past_queue_key, _, _, _, _ = generate_redis_key_names(spot_key)
+        spot_queue_key, spot_past_queue_key, _, _ = generate_redis_key_names(spot_key)
 
         try:
             joints_with_timestame_bytes = self.redis_connection.rpoplpush(spot_queue_key, spot_past_queue_key)
@@ -366,7 +332,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         return past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
 
     def enqueue(self, spot_key: str, data: Any) -> int:
-        spot_queue_key, _, _, _, _, _ = generate_redis_key_names(spot_key)
+        spot_queue_key, _, _, _ = generate_redis_key_names(spot_key)
 
         queue_size = self.redis_connection.rpush(spot_queue_key, msgpack.packb(data))
 
@@ -382,11 +348,11 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         return 1
 
     def size(self, spot_key: str):
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_state_key, redis_spot_feature_progression_key, redis_spot_past_features_key = generate_redis_key_names(key)
-        return self.redis_connection.llen(spot_queue_key), self.redis_connection.llen(spot_past_queue_key), self.redis_connection.llen(spot_info_key), self.redis_connection.llen(spot_state_key), self.redis_connection.llen(redis_spot_feature_progression_key), self.redis_connection.llen(redis_spot_resampled_features_key)
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_features_key  = generate_redis_key_names(spot_key)
+        return self.redis_connection.llen(spot_queue_key), self.redis_connection.llen(spot_past_queue_key), self.redis_connection.llen(spot_info_key), self.redis_connection.llen(spot_features_key)
 
     def delete(self, spot_key: str):
-        spot_queue_key, spot_past_queue_key, _, _, _, _ = generate_redis_key_names(spot_key)
+        spot_queue_key, spot_past_queue_key, _,  _ = generate_redis_key_names(spot_key)
         self.redis_connection.delete(spot_queue_key)
         self.redis_connection.delete(spot_past_queue_key)
             
@@ -405,16 +371,12 @@ def generate_redis_key_names(spot_key: str) -> List[str]:
         * Queue for spot with ID N is           <spot_key:queue>                    :Redis FIFO Queue
         * Past queue for spot with ID N is      <spot_key:queue_past>               :Redis FIFO Queue
         * Info for spot with ID N is            <spot_key:info>                     :Redis Hashmap
-        * Feature-state of spot with ID N is    <spot_key:state:*>                  :multiple Redis FIFO Queues
-        * Progression state of features is      <spot_key:feature_progression:*>    :multiple Redis FIFO Queues
-        * Resampled features, queued is         <spot_key:resampled_features:*>     :multiple Redis FIFO Queues
+        * Features of spot with ID N is         <spot_key:features:*>               :multiple Redis FIFO Queues
     """
     redis_spot_queue_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_QUEUE_POSTFIX
     redis_spot_past_queue_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + redis_spot_queue_key + REDIS_KEY_SEPARATOR + REDIS_SPOT_PAST_QUEUE_POSTFIX
     redis_spot_info_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_INFO_POSTFIX
-    redis_spot_state_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_STATE_POSTFIX
-    redis_spot_feature_progression_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_FEATURE_PROGRESSION_POSTFIX
-    redis_spot_resampled_features_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_RESAMPLED_FEATURES_POSTFIX
+    redis_spot_features_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_FEATURES
 
-    return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_state_key, redis_spot_feature_progression_key, redis_spot_resampled_features_key
+    return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_features_key
 

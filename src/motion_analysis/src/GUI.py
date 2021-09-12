@@ -10,7 +10,6 @@ from os import error
 from PyQt5.QtWidgets import QApplication, QComboBox, QGridLayout, QLabel, QMainWindow, QPushButton, QSizePolicy, QWidget, QVBoxLayout
 from pyqtgraph.Qt import QtGui, QtCore
 import sys
-from PyQt5.QtChart import QChart, QChartView, QLineSeries
 from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QPainter
 from PyQt5.QtCore import Qt
@@ -18,13 +17,22 @@ import time
 import numpy as np
 from numpy import arange, sin, cos, pi
 import pyqtgraph as pg
+from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
+from pyqtgraph.graphicsItems.PlotCurveItem import PlotCurveItem
 from pyqtgraph.graphicsItems.PlotItem.PlotItem import PlotItem
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
-dummy_trajectory_discrete = [1, 2, 3, 2, 1, 2, 1, 2, 3, 4, 5, 4, 3, 2, 1]
-dummy_trajectory = [1, 1.3, 3, 2.1, 2.2, 2.1, 0.5, 2.3, 3, 4.5, 5.1, 5.3, 3, 2.1, 1]
 
-class SpotGraphWidget(QWidget):
+UPDATE_RATE = 30
+
+RED = (217, 83, 25)
+
+dummy_trajectory_discrete = [1, 2, 3, 2, 1, 2, 1, 2, 3, 4, 5, 4, 3, 2, 1]
+
+dummy_trajectory_values = [1, 1.3, 3, 2.1, 2.2, 2.1, 0.5, 2.3, 3, 4.5, 5.1, 5.3, 3, 2.1, 1]
+dummy_trajectory_t = range(len(dummy_trajectory_values))
+
+class FeatureGraphsWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setLayout(QGridLayout())
@@ -37,6 +45,16 @@ class SpotGraphWidget(QWidget):
         self.errors = pg.PlotWidget(title="errors")
         self.progress_vector = pg.PlotWidget(title="progress_vector")
         self.progress_vector.setAspectLocked()
+        self.progress_vector.setXRange(-1, 1)
+        self.progress_vector.setYRange(-1, 1)
+        self.feature_progression = pg.PlotWidget(title="feature_progression")
+
+        self.discrete_reference_trajectory_curve = pg.PlotCurveItem([0], [0])
+
+        self.discrete_reference_trajectory.addItem(self.discrete_reference_trajectory_curve)
+        
+        self.feature_index_pointer = CurveArrow(self.discrete_reference_trajectory_curve, 0)
+        self.feature_index_pointer.setStyle(angle=90, headWidth=5, pen=RED, brush= RED)
 
         layout.addWidget(self.progress_vector, 0, 0, 1, 1)
         layout.addWidget(self.user_trajectory, 1, 0, 4, 1)
@@ -51,48 +69,32 @@ class SpotGraphWidget(QWidget):
     def heightForWidth(self, w):
         return w * 3
     
-    def trace(self, name, data):
-        user_trajectory_x = data["user_trajectory_t"]
-        user_trajectory_y = data["user_trajectory_values"]
+    def update(self, user_trajectory, reference_trajectory, discrete_user_trajectory, discrete_reference_trajectory, errors, progress_vector, index):
+        self.user_trajectory.plot(*user_trajectory)
+        self.reference_trajectory.plot(*reference_trajectory)
 
-        self.user_trajectory.plot(user_trajectory_x, user_trajectory_y)
-
-        reference_trajectory_x = data["reference_trajectory_t"]
-        reference_trajectory_y = data["reference_trajectory_values"]
-
-        self.reference_trajectory.plot(reference_trajectory_x, reference_trajectory_y)
-
-        discrete_user_trajectory_x = range(len(data["discrete_user_trajectory"]))
-        discrete_user_trajectory_y = data["discrete_user_trajectory"]
-
+        discrete_user_trajectory_x = np.array(range(len(discrete_user_trajectory)))
+        discrete_user_trajectory_y = discrete_user_trajectory
         self.discrete_user_trajectory.plot(discrete_user_trajectory_x, discrete_user_trajectory_y)
         
-        discrete_reference_trajectory_x = range(len(data["discrete_reference_trajectory"]))
-        discrete_reference_trajectory_y = data["discrete_reference_trajectory"]
+        discrete_reference_trajectory_x = np.array(range(len(discrete_reference_trajectory)))
+        discrete_reference_trajectory_y = discrete_reference_trajectory
 
-        self.discrete_reference_trajectory.plot(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
+        self.discrete_reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
+        self.feature_index_pointer.setIndex(index)
 
-        errors_x = range(len(data["errors"]))
-        errors_y = data["errors"]
-
+        errors_x = range(len(errors))
+        errors_y = errors
         self.errors.plot(errors_x, errors_y)
 
-        progress_vector = data["progress_vector"]
-
-        # TODO: draw vector here
-        self.progress_vector.plot(progress_vector)
-
-        if name in self.graphs:
-            self.graphs[name].setData(dataset_x, dataset_y)
-        else:
-            self.graphs[name]["plot"] = self.canvas.plot(pen='y')
+        # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
+        self.progress_vector.plot(progress_vector, pen = RED)
 
 
 class MotionAnaysisGUI(QMainWindow):
     def __init__(self):
         self.app = QtGui.QApplication([])
         super().__init__()
-        self.setLayout(QVBoxLayout())
         sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         sizePolicy.setHeightForWidth(True)
         self.setSizePolicy(sizePolicy)
@@ -118,37 +120,46 @@ class MotionAnaysisGUI(QMainWindow):
 
         self.setWindowTitle("Motion Analysis GUI")
 
-        self.graphs = dict()
+        self.feature_widgets = dict()
 
         self.chosen_spot = None
         self.spot_data = dict()
 
-        self.chosen_spot = "Spot with 2 features"
-        self.update_available_spots("Spot with 1 feature", True, 1)
-        self.update_available_spots("Spot with 2 features", True, 2)
+        self.chosen_spot = None
         self.create_graphs()
 
         self.show()
-
     
     def heightForWidth(self, width):
-        return width * (1 + self.spot_data[self.chosen_spot]["num_features"])
+        return width * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0)))
 
-    def update_available_spots(self, spot_name, active, num_features=0):
+    def update_available_spots(self, spot_name, active, feature_hashes=[]):
         """When a spot goes active and has an exercise, update the available spots for our drop down menu."""
         if active:
-            self.spot_chooser.addItem(spot_name)
-            self.spot_data[spot_name] = {"num_features": num_features}
+            self.spot_chooser.addItem(str(spot_name))
+            self.spot_data[spot_name] = {"feature_hashes": feature_hashes}
         else:
-            self.spot_chooser.removeItem(spot_name)
-            del self.spot_data[spot_name]
+            self.spot_chooser.removeItem(str(spot_name))
+            try:
+                del self.spot_data[spot_name]
+            except KeyError: # For now, if whe start the GUI at a "bad" time, ignore this step because the spot what never active
+                pass
+
+    def choose_spot(self, spot):
+        self.chosen_spot = spot
+        self.create_graphs()
 
     def create_graphs(self):
         """Our main window has a container with all the graphs for all features of an exercise. """
         container = QWidget()
         container.setLayout(QGridLayout())
 
-        num_features = self.spot_data[self.chosen_spot]["num_features"]
+        spot_data = self.spot_data.get(self.chosen_spot)
+
+        if not spot_data:
+            return
+
+        feature_hashes = spot_data["feature_hashes"]
 
         layout = container.layout()
 
@@ -162,19 +173,15 @@ class MotionAnaysisGUI(QMainWindow):
         layout.addWidget(overall_progress_vector, 0, 0, 2, 1)
         layout.addWidget(overall_errors, 2, 0, 4, 1)
 
-        for i in range(1, num_features + 1):
-            spot_widget = SpotGraphWidget()
-            self.graphs[i] = {"user_trajectory": spot_widget.user_trajectory, \
-                "discrete_user_trajectory": spot_widget.discrete_user_trajectory, \
-                "reference_trajectory": spot_widget.reference_trajectory, \
-                    "errors": spot_widget.errors, \
-                        "progress_vector": spot_widget.progress_vector}
-            layout.addWidget(spot_widget, 0, i, 10, 1)
+        for i, h in enumerate(feature_hashes):
+            feature_widget = FeatureGraphsWidget()
+            self.feature_widgets[h] = feature_widget
+            layout.addWidget(feature_widget, 0, i, 10, 1)
 
         layout.addWidget(self.controls, 6, 0, 4, 1)
 
-        self.setFixedWidth(300 + num_features * 300)
-        self.setFixedHeight(800)
+        self.setFixedWidth(300 + feature_hashes * 300)
+        self.setFixedHeight(1000)
  
         self.setCentralWidget(container)
         
@@ -184,23 +191,34 @@ class MotionAnaysisGUI(QMainWindow):
             QtGui.QApplication.instance().exec_()
 
 
+# # Start Qt event loop unless running in interactive mode or using pyside.
+# if __name__ == '__main__':
+#     gui = MotionAnaysisGUI()
+#     i = 0
 
-# Start Qt event loop unless running in interactive mode or using pyside.
-if __name__ == '__main__':
-    gui = MotionAnaysisGUI()
-    i = 0
+#     def update():
+#         data = {"user_trajectory": (dummy_trajectory_t, dummy_trajectory_values), \
+#                 "reference_trajectory": (dummy_trajectory_t, dummy_trajectory_values), \
+#                 "discrete_user_trajectory": dummy_trajectory_discrete, \
+#                 "discrete_reference_trajectory": dummy_trajectory_discrete, \
+#                 "errors": dummy_trajectory_discrete, \
+#                 "progress_vector": [0, 1], \
+#                 "index": 3}
+#         global gui, i
+#         # t = np.arange(0, 3.0, 0.01)
+#         # s = t + i
+#         # gui.trace("sin", t, s)
 
-    def update():
-        global gui, i
-        t = np.arange(0, 3.0, 0.01)
-        s = t + i
-        gui.trace("sin", t, s)
-        i += 0.1
+#         for name, w in gui.feature_widgets.items():
+#             w.update(**data)
 
-    timer = QtCore.QTimer()
-    timer.timeout.connect(update)
-    timer.start(50)
+#         i += 0.1
 
-    gui.start()
+#     timer = QtCore.QTimer()
+#     timer.timeout.connect(update)
+#     timer.start(UPDATE_RATE)
+
+
+#     gui.start()
 
 

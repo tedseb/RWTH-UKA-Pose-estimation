@@ -4,5 +4,4 @@
   <node name="MotionAnalysis_Visualizer" pkg="motion_analysis" type="Visualizer.py" />
   <node name="MotionAnalysis_Worker" pkg="motion_analysis" type="Worker.py" />
   <node name="MotionAnalysis_FeatureExtractionServer" pkg="motion_analysis" type="FeatureExtractionServer.py" />
-  <node name="MotionAnalysis_GUI" pkg="motion_analysis" type="GUI.py" />
 </launch> 

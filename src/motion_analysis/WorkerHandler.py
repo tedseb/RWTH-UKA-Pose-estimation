@@ -66,6 +66,8 @@ class WorkerHandler(QThread):
         self.gui = MotionAnaysisGUI()
         self.gui_handler.run(self.gui)
 
+        self.gui.update_available_spots("0", True, [0])
+
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
         station_id = spot_update_data["stationID"]

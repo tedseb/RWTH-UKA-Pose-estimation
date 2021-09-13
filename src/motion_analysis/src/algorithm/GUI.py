@@ -7,16 +7,11 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 from os import error
-from PyQt5.QtWidgets import QApplication, QComboBox, QGridLayout, QLabel, QMainWindow, QPushButton, QSizePolicy, QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QComboBox, QGridLayout, QLabel, QMainWindow, QPushButton, QSizePolicy, QWidget, QVBoxLayout
 from pyqtgraph.Qt import QtGui, QtCore
 import sys
-from PyQt5.QtCore import QPointF
 from PyQt5.QtCore import QThread
-from PyQt5.QtGui import QPainter
-from PyQt5.QtCore import Qt
-import time
 import numpy as np
-from numpy import arange, sin, cos, pi
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
 from pyqtgraph.graphicsItems.PlotCurveItem import PlotCurveItem
@@ -106,6 +101,7 @@ class MotionAnaysisGUI(QMainWindow):
         self.spot_chooser = QComboBox(self)
         self.spot_chooser.setEditable(False)
         self.spot_chooser.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.spot_chooser.currentTextChanged.connect(self.choose_spot)
 
         controls_layout.addWidget(label1)
         controls_layout.addWidget(self.spot_chooser, 1)
@@ -121,6 +117,7 @@ class MotionAnaysisGUI(QMainWindow):
 
         self.chosen_spot = None
         self.spot_data = dict()
+
 
         self.chosen_spot = None
         self.create_graphs()
@@ -142,6 +139,9 @@ class MotionAnaysisGUI(QMainWindow):
             except KeyError: # For now, if whe start the GUI at a "bad" time, ignore this step because the spot what never active
                 pass
 
+        self.update()
+
+    @QtCore.pyqtSlot(str)
     def choose_spot(self, spot):
         self.chosen_spot = spot
         self.create_graphs()
@@ -161,11 +161,13 @@ class MotionAnaysisGUI(QMainWindow):
         label1.setText("Aggregated data:")
         layout.addWidget(label1, 0, 0, 4, 1)
 
-        overall_progress_vector = pg.PlotWidget(title="overall_progress_vector")
-        overall_progress_vector.setAspectLocked()
-        overall_errors = pg.PlotWidget(title="overall_errors")
-        layout.addWidget(overall_progress_vector, 0, 0, 2, 1)
-        layout.addWidget(overall_errors, 2, 0, 4, 1)
+        self.overall_progress_vector_widget = pg.PlotWidget(title="overall_progress_vector")
+        self.overall_progress_vector_widget.setAspectLocked()
+        self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
+        layout.addWidget(self.overall_progress_vector_widget, 0, 0, 2, 1)
+        layout.addWidget(self.overall_errors_widget, 2, 0, 4, 1)
+
+        layout.addWidget(self.controls, 6, 0, 4, 1)
 
         # Feature specific data
 
@@ -184,7 +186,7 @@ class MotionAnaysisGUI(QMainWindow):
         else:
             self.setFixedWidth(300)
         
-        self.setFixedHeight(1000)
+        self.setFixedHeight(600)
     
         self.setCentralWidget(container)
         

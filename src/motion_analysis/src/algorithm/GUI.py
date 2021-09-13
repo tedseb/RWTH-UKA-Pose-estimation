@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import QApplication, QComboBox, QGridLayout, QLabel, QMainW
 from pyqtgraph.Qt import QtGui, QtCore
 import sys
 from PyQt5.QtCore import QPointF
+from PyQt5.QtCore import QThread
 from PyQt5.QtGui import QPainter
 from PyQt5.QtCore import Qt
 import time
@@ -27,10 +28,6 @@ UPDATE_RATE = 30
 
 RED = (217, 83, 25)
 
-dummy_trajectory_discrete = [1, 2, 3, 2, 1, 2, 1, 2, 3, 4, 5, 4, 3, 2, 1]
-
-dummy_trajectory_values = [1, 1.3, 3, 2.1, 2.2, 2.1, 0.5, 2.3, 3, 4.5, 5.1, 5.3, 3, 2.1, 1]
-dummy_trajectory_t = range(len(dummy_trajectory_values))
 
 class FeatureGraphsWidget(QWidget):
     def __init__(self):
@@ -191,34 +188,6 @@ class MotionAnaysisGUI(QMainWindow):
             QtGui.QApplication.instance().exec_()
 
 
-# # Start Qt event loop unless running in interactive mode or using pyside.
-# if __name__ == '__main__':
-#     gui = MotionAnaysisGUI()
-#     i = 0
-
-#     def update():
-#         data = {"user_trajectory": (dummy_trajectory_t, dummy_trajectory_values), \
-#                 "reference_trajectory": (dummy_trajectory_t, dummy_trajectory_values), \
-#                 "discrete_user_trajectory": dummy_trajectory_discrete, \
-#                 "discrete_reference_trajectory": dummy_trajectory_discrete, \
-#                 "errors": dummy_trajectory_discrete, \
-#                 "progress_vector": [0, 1], \
-#                 "index": 3}
-#         global gui, i
-#         # t = np.arange(0, 3.0, 0.01)
-#         # s = t + i
-#         # gui.trace("sin", t, s)
-
-#         for name, w in gui.feature_widgets.items():
-#             w.update(**data)
-
-#         i += 0.1
-
-#     timer = QtCore.QTimer()
-#     timer.timeout.connect(update)
-#     timer.start(UPDATE_RATE)
-
-
-#     gui.start()
-
-
+class GUIHandler(QThread):
+    def run(self, gui):
+        gui.start()

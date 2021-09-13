@@ -30,7 +30,7 @@ try:
     from motion_analysis.src.InterCom import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.ROSAdapters import *
-    from motion_analysis.src.GUI import *
+    from motion_analysis.src.algorithm.GUI import *
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.Features import *
@@ -42,7 +42,7 @@ except ImportError:
     from src.InterCom import *
     from src.DataUtils import *
     from src.ROSAdapters import *
-    from src.GUI import *
+    from src.algorithm.GUI import *
     from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.Features import *
@@ -73,7 +73,7 @@ class Worker(Thread):
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter,
-    features_interface_interface_class: FeaturesInterface = RedisFeaturesInterface):
+    features_interface_interface_class: FeaturesInterface = RedisFeaturesInterface,):
         super().__init__()
 
         self.spot_queue_interface = spot_queue_interface_class()
@@ -95,13 +95,13 @@ class Worker(Thread):
 
         self.spot_key = spot_key
 
-        self.gui = gui
-
-        self.features = []
+        self.features = {}
 
         self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
 
         self.bad_repetition = False
+
+        self.gui = gui
 
         self.start()
 
@@ -118,6 +118,8 @@ class Worker(Thread):
         _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key)
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
+
+        self.gui.update_available_spots(spot_name=self.spot_key, active=True, feature_hashes=self.features.keys())
 
         while(self.running):
             try:
@@ -136,9 +138,7 @@ class Worker(Thread):
                     f.update(used_joint_ndarray, self.pose_definition_adapter)
 
                 # Compare joints with expert system data
-                increase_reps, bad_repetition, self.features = compare_high_level_features(spot_info_dict, self.features, self.bad_repetition)
-
-                self.bad_repetition = bad_repetition
+                increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
 
                 # Send info back to REST API
                 if increase_reps:
@@ -207,4 +207,4 @@ class Worker(Thread):
                     rp.logerr("Encountered an Error while Comparing: " + str(e))
             
         # Enqueue data for feature progressions and resampled feature lists
-        self.features_interface.put(self.spot_key, self.features)
+        self.features_interface.set(self.spot_key, self.features)

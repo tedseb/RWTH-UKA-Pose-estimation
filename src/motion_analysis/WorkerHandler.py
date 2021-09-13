@@ -12,20 +12,20 @@ try:
     from motion_analysis.src.InterCom import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.ROSAdapters import *
-    from motion_analysis.src.GUI import *
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.GUI import *
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
     from src.InterCom import *
     from src.DataUtils import *
     from src.ROSAdapters import *
-    from src.GUI import *
     from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
+    from src.algorithm.GUI import *
 
 import time
 from PyQt5.QtCore import QThread
@@ -61,8 +61,10 @@ class WorkerHandler(QThread):
         self.pose_definition_adapter = pose_definition_adapter_class()
         self.features_interface = features_interface_class()
         self.workers = {} # A dictionary, with spot IDs as keys
+        
+        self.gui_handler = GUIHandler()
         self.gui = MotionAnaysisGUI()
-        self.gui.start()
+        self.gui_handler.run(self.gui)
 
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
@@ -98,7 +100,7 @@ class WorkerHandler(QThread):
             del exercise_data['stages']
             
             # Set all entries that are needed by the handler threads later on
-            exercise_data['recordings'] = recordings
+            exercise_data['recordings'] = {hash(str(r)): r for r in recordings}
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_feature_collections
             

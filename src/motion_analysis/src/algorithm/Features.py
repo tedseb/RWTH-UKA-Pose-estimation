@@ -44,6 +44,11 @@ except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoUtils import *
 
 
+# We need this to implement some loop logic further down this file
+class ContinueToOuterLoop(Exception):
+    pass
+
+
 class FeatureState(IntEnum):
     # Alias for features states
     FEATURE_LOW: int = -2
@@ -84,19 +89,25 @@ class BaseFeature(ABC):
 
     @property
     def state(self):
-        return self.states[-1]
+        try:
+            return self.states[-1]
+        except IndexError:
+            return FeatureState.FEATURE_UNDECIDED
 
 
 class ReferenceFeature(BaseFeature):
     def __init__(self, \
         feature_hash: str, \
-            specification_dict: object = {}):
+            recording_hash: str, \
+                specification_dict: object = {}):
         super().__init__(feature_hash, specification_dict)
 
         self.values = deque()
         self.progression = 0
         self.resampled_values = deque()
         self.states = deque()
+        
+        self.recording_hash = recording_hash
 
         self.lower_boundary = None
         self.upper_boundary = None
@@ -138,7 +149,8 @@ class ReferenceFeatureCollection(BaseFeature):
         self.update_data()
         
     def add_recording(self, recording: np.ndarray, pose_definition_adapter):
-        reference_feature = ReferenceFeature(self.feature_hash, self.specification_dict)
+        recording_hash = hash(str(recording))
+        reference_feature = ReferenceFeature(self.feature_hash, recording_hash, self.specification_dict)
         for pose in recording:
             # For now, we use the same pose_defninition_adapter for all recordings. This may change
             reference_feature.add_pose(pose, pose_definition_adapter)
@@ -166,18 +178,18 @@ class ReferenceFeatureCollection(BaseFeature):
         self.upper_boundary = self.highest_value - self.range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
 
         discrete_trajectories_tensor, \
-            discretization_reference_trajectory_indices_tensor, \
+            self.discretization_reference_trajectory_indices_tensor, \
                 self.hankel_tensor, \
-                    feature_states_matrix, \
+                    self.feature_states_matrix, \
                         self.scale, \
                             self.resolution = compute_discrete_trajectoreis_hankel_matrices_and_feature_states(trajectories, self.range_of_motion, self.lower_boundary, self.upper_boundary)
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
-        median_feature_states_array = compute_median_feature_states(feature_states_matrix)
+        median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
 
         self.number_of_dicided_state_changes = compute_numer_of_dicided_state_changes(median_feature_states_array)
 
-        self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, recording_lengths)
+        self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, self.discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, recording_lengths)
         # TODO: Check wether median_reference_trajectory_feature_states match the median state trajectory
 
         beginning_states = [r.beginning_state for r in self.reference_features]
@@ -208,11 +220,13 @@ class Feature(BaseFeature):
         except IndexError:
             scale = self.reference_feature_collection.scale
             # If this is the first value, extend with the nearest value on our scale
-            self.discretized_values.extend(scale[np.argmin(abs(scale - value))])
+            self.discretized_values.append(scale[np.argmin(abs(scale - value))])
 
         self.values.append(value)
-        self.compute_new_feature_progression()
+        has_changed_progression = self.compute_new_feature_progression()
         self.states.append(decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
+
+        return has_changed_progression
 
 
     def compute_new_feature_progression(self):
@@ -247,7 +261,9 @@ class Feature(BaseFeature):
         else:
             new_feature_progression = self.progression
 
-        self.progression = new_feature_progression
+        has_changed = self.progression == new_feature_progression
+        self.progression == new_feature_progression
+        return has_changed
 
 
 def enqueue_dictionary(previous_dict, enqueued_dict, max_queue_size):
@@ -297,6 +313,7 @@ def remove_jitter_from_trajectory(trajectory, _range):
     Return:
         The trimmed trajectory
     """
+    trajectory = np.array(trajectory)
     done = False
     while not done:
         done = True
@@ -430,9 +447,6 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
     median_trajectory = list()
     median_length = np.int(np.median([len(values) for values in discrete_trajectories_tensor]))
     for i in range(median_length):
-        # rp.logerr(discrete_trajectories_tensor)
-        # rp.logerr(discretization_reference_trajectory_indices_tensor)
-        # rp.logerr(recording_lengths)
         median_resampled_values_reference_trajectory_fraction_from = np.average([discretization_reference_trajectory_indices_tensor[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
         median_resampled_values_reference_trajectory_fraction_to = np.average([discretization_reference_trajectory_indices_tensor[j, (i + 1) % len(discretization_reference_trajectory_indices_tensor[j])]/recording_lengths[j] for j in range(len(recording_lengths))])
         median_feature_value = np.median(all_feature_values_array[:, i])

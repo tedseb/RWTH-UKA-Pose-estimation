@@ -15,11 +15,13 @@ try:
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.GUI import *
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.Features import *
     from src.algorithm.AlgoUtils import *
+    from src.algorithm.GUI import *
 
 
 def custom_metric(hankel_matrix, feature_trajectory, max_weight, min_weight):
@@ -49,86 +51,51 @@ def custom_metric(hankel_matrix, feature_trajectory, max_weight, min_weight):
     return normed_errors
 
 
-def compare_high_level_features(
+def analyze_feature_progressions(
     features: dict,
-    spot_info_dict: dict, 
     bad_repetition: bool) -> Tuple[bool, bool, dict, Any]:
-    """Compare high level features, such as angles, by extracting them from the joints array.
+    """Detect done and bad repetitions by analyzing the feature's progressions.
     
-    This method turn high level features into a progression dictionary and resamples them.
-    By calculating the progression dictionary it also detects repetitions.
-
     Args:
         features: The feature dictionary from the previous comparing step
-        spot_info_dict: Contains the exercise data that we want to compare our user's features to.
-        bad_repetition: Whether the curernt repetition is bad or not
+        bad_repetition: Whether the curernt repetition has already been detected to be bad outside this method
         
     Returns:
         increase_reps (bool): Is true if a repetition was detected
-        new_feature_progressions (dict): Resembles the features of interest specification dictionary but has strings inplace for every feature
-                                            that indicate the progress the user made concerning said feature.
-        new_resampled_features (dict): Resembles the features of interest specification dictionary but has lists inplace for every feature
-                                        that contain the resampled values.
+        bad_repetition (bool): Is true if a repetition is deemed bad by this analysis
     """
-    exercise_data = spot_info_dict['exercise_data']
-    # beginning_states = spot_info_dict['exercise_data']['beginning_state_dict']
-
     increase_reps = True
     in_beginning_state = True
 
-
-    for id, feature in features.items():
-        feature = Feature()
+    for f in features.values():
         # With the current feature value and the last resampled feature value, we can compute new resampled feature values
-        feature_value = feature.value
-        resolution = feature.reference_feature_collection.resolution
-        scale = feature.reference_feature_collection.scale
-        beginning_state = feature.reference_feature_collection.median_beginning_state
+        beginning_state = f.reference_feature_collection.median_beginning_state
+        number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
 
-        # Discritize new feature value and extend resampled values dequeue with it
-        try:
-            last_resampled_feature_value = float(feature.resampled_value)
-            new_resampled_feature_values = discretize_feature_values(feature_value, last_resampled_feature_value, resolution)
-            if new_resampled_feature_values:
-                feature.discretized_values.extend(new_resampled_feature_values)
-        except (KeyError, TypeError):
-            # If we have no resampled feature values yet, set them to the nearest resampled one
-            feature.discretized_values.extend(scale[np.argmin(abs(scale - feature_value))])
-        
-        # With the beginning state of a feature and the current feature state, we can computer the new feature progression value
-        try:
-            last_feature_progression = feature.progression
-        except (KeyError, TypeError):
-            # If we have no last feature progression value, set this feature progression to the starting value
-            last_feature_progression = 0
-        
-        
-
-        if feature.state != beginning_state:
+        if f.state != beginning_state:
             in_beginning_state = False
-        feature.progression = compute_new_feature_progression(beginning_state, feature.state, last_feature_progression)
 
-        if feature.progression < exercise_data['reference_feature_data'][id]['number_of_changes_in_decided_feature_states']:
+        if f.progression < number_of_dicided_state_changes_for_repetition:
             increase_reps = False
-        elif feature.progression > exercise_data['reference_feature_data'][id]['number_of_changes_in_decided_feature_states']:
+        elif f.progression > number_of_dicided_state_changes_for_repetition:
             bad_repetition = True
 
     if in_beginning_state and bad_repetition:
-        for feature in features.values():
-            feature.progression = 0
-        increase_reps, bad_repetition, features = compare_high_level_features(spot_info_dict, features, False)
+        for f in features.values():
+            f.progression = 0
+        increase_reps, bad_repetition, features = analyze_feature_progressions(features, False)
 
     if bad_repetition:
         increase_reps = False
 
     if increase_reps:
-        for feature in features.values():
-            feature.progression = 0
+        for f in features.values():
+            f.progression = 0
 
-    return increase_reps, bad_repetition, features
+    return increase_reps, bad_repetition
 
 
-def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: dict) -> np.ndarray:
+def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: MotionAnaysisGUI = None) -> np.ndarray:
     """Calculate the pose in the reference trajectory that we think our user is most probably in.
 
     This method measures the similarity between the recent feature_trajectory of a user and the vectors
@@ -136,7 +103,7 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
     use is at a certain point in the execution of the exercise of the expert.
 
     Args:
-        feature_trajectories: A dictionary that holds a list of past feature values for every type of feature
+        features: A dictionary that holds a list of past feature values for every type of feature
                                 in every feature category
         exercise data: A dictionary containing metadata around the exercise
 
@@ -155,30 +122,47 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
         else:
             return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
 
-    reference_poses = exercise_data['recording']
+    recordings = exercise_data['recordings']
+
+    if len(recordings.values()) > 1:
+        raise NotImplementedError("We have not gotten this method ready for multiple recordings!")
+
+    recording = list(recordings.values())[0]
 
     predicted_indices = []
     median_resampled_values_reference_trajectory_fractions = []
     progress_vectors = []
 
-    for feature_type, features in exercise_data['reference_feature_data'].items():
-        for k, v in features.items():
-            discretization_reference_trajectory_indices_tensor = v['discretization_reference_trajectory_indices_tensor']
-            hankel_tensor = v['hankel_tensor']
-            feature_trajectory = np.asarray(feature_trajectories[feature_type][k], np.float16)
+    for h, f in features.items():
+        discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
+        hankel_tensor = f.reference_feature_collection.hankel_tensor
+        discrete_feature_trajectory = f.discretized_values
 
-            for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor):
-                errors = custom_metric(reference_trajectory_hankel_matrix, feature_trajectory, 100, 1)
-                prediction = np.argmin(errors)
-                index = discretization_reference_trajectory_indices_tensor[idx][prediction]
-                median_resampled_values_reference_trajectory_fraction_dict = v['median_resampled_values_reference_trajectory_fractions'][prediction]
-                progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-                progress_vectors.append(map_progress_to_vector(progress))
-                median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
+        for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor):
+            errors = custom_metric(reference_trajectory_hankel_matrix, discrete_feature_trajectory, 100, 1)
+            prediction = np.argmin(errors)
+            index = discretization_reference_trajectory_indices_tensor[idx][prediction]
+            median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
+            progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+            progress_vector = map_progress_to_vector(progress)
+            progress_vectors.append(progress_vector)
+            median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
+            predicted_indices.append(index)
 
-                predicted_indices.append(index)
+            if gui:
+                sample_reference_feature = f.reference_feature_collection.reference_features[0]
+                gui.feature_widgets[h].update(f.values, \
+                    sample_reference_feature.values, \
+                        f.discretized_values, \
+                            sample_reference_feature.discretized_values, \
+                                errors, \
+                                    progress_vector, \
+                                        index)
 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
+
+    if gui:
+        gui.
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
@@ -188,7 +172,7 @@ def calculate_reference_pose_mapping(feature_trajectories: dict, exercise_data: 
                 continue
             median_resampled_values_reference_trajectory_fractions_errors.append(my_weird_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
     
-    reference_pose = reference_poses[int(len(reference_poses) * progress)]
+    reference_pose = recording[int(len(recording) * progress)]
 
     mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
         

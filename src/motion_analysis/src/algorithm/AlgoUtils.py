@@ -8,7 +8,6 @@ This file contains a code snippets that have nowhere else to go.
 import numpy as np
 from abc import abstractmethod
 
-
 class PoseDefinitionAdapter():
     @abstractmethod
     def __init__(self):

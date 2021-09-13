@@ -114,6 +114,14 @@ class Worker(Thread):
         """
         return self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data"])
 
+    def publish_pose(self, pose: np.ndarray, publisher):
+        ros_pose = self.pose_definition_adapter.ndarray_to_body_parts(pose)
+        msg = Person()
+        msg.stationID = self.spot_key
+        msg.sensorID = -1
+        msg.bodyParts = ros_pose
+        self.predicted_skelleton_publisher.publish(msg)
+
     def run(self) -> NoReturn:
         _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key)
         # Fetch last feature data
@@ -140,9 +148,6 @@ class Worker(Thread):
                 # Compare joints with expert system data
                 increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
 
-                rp.logerr(increase_reps)
-                rp.logerr(self.bad_repetition)
-
                 # Send info back to REST API
                 if increase_reps:
                     spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
@@ -155,7 +160,6 @@ class Worker(Thread):
                         'repetition_score': 100,
                         'exercise_score': 100,
                     }
-                    rp.logerr(spot_info_dict['repetitions'])
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
@@ -168,26 +172,17 @@ class Worker(Thread):
                     del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
                 if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
                     if not MESSY_INPUTS:
+                        # Use this only if AI produces adequate results
                         self.bad_repetition = True
-
-                        self.last_feature_progressions = {}
-                        self.last_resampled_features = {}
-                        self.last_feature_states = {}
+                        
+                        # TODO: Fill this functionality in with new Feature API!
+                        # self.last_feature_progressions = {}
+                        # self.last_resampled_features = {}
+                        # self.last_feature_states = {}
                         rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
-                    
-                reference_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(reference_pose)
-                reference_person_msg = Person()
-                reference_person_msg.stationID = self.spot_key
-                reference_person_msg.sensorID = -1
-                reference_person_msg.bodyParts = reference_body_parts
-                self.predicted_skelleton_publisher.publish(reference_person_msg)
 
-                user_body_parts = self.pose_definition_adapter.ndarray_to_body_parts(used_joint_ndarray)
-                user_person_msg = Person()
-                user_person_msg.stationID = self.spot_key
-                user_person_msg.sensorID = -1
-                user_person_msg.bodyParts = user_body_parts
-                self.user_skelleton_publisher.publish(user_person_msg)
+                self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
+                self.publish_pose(used_joint_ndarray, self.user_skelleton_publisher)
 
                 # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -200,6 +195,7 @@ class Worker(Thread):
                         'display_text': correction
                     }
                     publish_message(self.user_correction_publisher, ROS_TOPIC_USER_CORRECTIONS, user_correction_message)
+                    
             except QueueEmpty:
                 continue
             except SpotMetaDataException as e:

@@ -153,10 +153,7 @@ class MotionAnaysisGUI(QMainWindow):
 
         spot_data = self.spot_data.get(self.chosen_spot)
 
-        if not spot_data:
-            return
-
-        feature_hashes = spot_data["feature_hashes"]
+        # Overall data
 
         layout = container.layout()
 
@@ -170,16 +167,25 @@ class MotionAnaysisGUI(QMainWindow):
         layout.addWidget(overall_progress_vector, 0, 0, 2, 1)
         layout.addWidget(overall_errors, 2, 0, 4, 1)
 
-        for i, h in enumerate(feature_hashes):
-            feature_widget = FeatureGraphsWidget()
-            self.feature_widgets[h] = feature_widget
-            layout.addWidget(feature_widget, 0, i, 10, 1)
+        # Feature specific data
 
-        layout.addWidget(self.controls, 6, 0, 4, 1)
+        if spot_data:
+            
+            feature_hashes = spot_data["feature_hashes"]
 
-        self.setFixedWidth(300 + feature_hashes * 300)
+            for i, h in enumerate(feature_hashes):
+                feature_widget = FeatureGraphsWidget()
+                self.feature_widgets[h] = feature_widget
+                layout.addWidget(feature_widget, 0, i, 10, 1)
+
+            layout.addWidget(self.controls, 6, 0, 4, 1)
+
+            self.setFixedWidth(300 + feature_hashes * 300)
+        else:
+            self.setFixedWidth(300)
+        
         self.setFixedHeight(1000)
- 
+    
         self.setCentralWidget(container)
         
 

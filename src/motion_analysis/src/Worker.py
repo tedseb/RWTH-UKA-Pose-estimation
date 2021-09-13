@@ -140,6 +140,9 @@ class Worker(Thread):
                 # Compare joints with expert system data
                 increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
 
+                rp.logerr(increase_reps)
+                rp.logerr(self.bad_repetition)
+
                 # Send info back to REST API
                 if increase_reps:
                     spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
@@ -152,6 +155,7 @@ class Worker(Thread):
                         'repetition_score': 100,
                         'exercise_score': 100,
                     }
+                    rp.logerr(spot_info_dict['repetitions'])
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})

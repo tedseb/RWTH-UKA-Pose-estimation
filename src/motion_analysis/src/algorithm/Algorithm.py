@@ -161,8 +161,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
-    if gui:
-        gui.
+    # TODO: update global parameters!!
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant

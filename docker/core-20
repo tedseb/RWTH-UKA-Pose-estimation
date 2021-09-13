@@ -48,7 +48,13 @@ RUN pip3 install msgpack_numpy
 RUN apt-get install libpq-dev
 RUN pip3 install psycopg2
 RUN pip3 install websocket-client
+RUN pip3 install autobahn
+RUN pip3 install twisted
+RUN pip3 install pyqtgraph
+RUN pip3 install websockets
+RUN pip3 install PyQt5==5.15.4
 
+RUN chmod 777 -R /home/trainerai/.config
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
 ENTRYPOINT ["/home/trainerai/start_script.sh"]

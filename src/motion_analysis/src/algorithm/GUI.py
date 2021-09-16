@@ -19,7 +19,7 @@ from pyqtgraph.graphicsItems.PlotItem.PlotItem import PlotItem
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 
-UPDATE_RATE = 30
+# UPDATE_RATE = 30
 
 RED = (217, 83, 25)
 

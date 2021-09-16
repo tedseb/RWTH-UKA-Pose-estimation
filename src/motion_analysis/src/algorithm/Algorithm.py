@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This file contains the Algorithm that for our motion analysis.
+This file contains the Algorithm for our motion analysis.
 It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
@@ -83,7 +83,7 @@ def analyze_feature_progressions(
     if in_beginning_state and bad_repetition:
         for f in features.values():
             f.progression = 0
-        increase_reps, bad_repetition, features = analyze_feature_progressions(features, False)
+        increase_reps, bad_repetition = analyze_feature_progressions(features, False)
 
     if bad_repetition:
         increase_reps = False
@@ -106,11 +106,14 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
         features: A dictionary that holds a list of past feature values for every type of feature
                                 in every feature category
         exercise data: A dictionary containing metadata around the exercise
+        gui: A GUI to update with the data of this analysis
 
     Returns:
         reference_pose: The reference pose that we think the user is in
+        mean_resampled_values_reference_trajectory_fractions_average_difference: The average difference of "where different features think we are"
+
     """
-    def my_weird_metric(a, b):
+    def custom_metric(a, b):
         """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
         a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
         a_to = a["median_resampled_values_reference_trajectory_fraction_to"]
@@ -134,6 +137,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
     progress_vectors = []
 
     for h, f in features.items():
+        # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
         discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
         hankel_tensor = f.reference_feature_collection.hankel_tensor
         discrete_feature_trajectory = f.discretized_values
@@ -169,7 +173,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
         for idx2 in range(len(median_resampled_values_reference_trajectory_fractions)):
             if idx2 == idx1:
                 continue
-            median_resampled_values_reference_trajectory_fractions_errors.append(my_weird_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
+            median_resampled_values_reference_trajectory_fractions_errors.append(custom_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
     
     reference_pose = recording[int(len(recording) * progress)]
 

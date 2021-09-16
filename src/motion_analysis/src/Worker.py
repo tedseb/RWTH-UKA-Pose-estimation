@@ -53,11 +53,14 @@ except ImportError:
 class NoJointsAvailable(Exception):
     pass
 
+
 class NoSpoMetaDataAvailable(Exception):
     pass
 
+
 class NoExerciseDataAvailable(Exception):
     pass
+
 
 class Worker(Thread):
     """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
@@ -139,7 +142,6 @@ class Worker(Thread):
                 past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
 
                 # Extract feature states
-                exercise_data = spot_info_dict['exercise_data']
                 used_joint_ndarray = present_joints_with_timestamp['used_joint_ndarray']
 
                 for f in self.features.values():
@@ -174,12 +176,6 @@ class Worker(Thread):
                     if not MESSY_INPUTS:
                         # Use this only if AI produces adequate results
                         self.bad_repetition = True
-                        
-                        # TODO: Fill this functionality in with new Feature API!
-                        # self.last_feature_progressions = {}
-                        # self.last_resampled_features = {}
-                        # self.last_feature_states = {}
-                        rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
 
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
                 self.publish_pose(used_joint_ndarray, self.user_skelleton_publisher)

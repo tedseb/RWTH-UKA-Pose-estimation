@@ -7,6 +7,7 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 from abc import abstractmethod
+import rospy as rp
 
 
 rospy_not_found = False
@@ -30,3 +31,5 @@ class RospyErrorLogger(Logger):
         rp.logerr(message)
 
 
+class RospyLogger(Logger):
+    pass

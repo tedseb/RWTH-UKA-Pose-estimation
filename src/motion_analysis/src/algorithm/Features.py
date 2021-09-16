@@ -50,7 +50,7 @@ class ContinueToOuterLoop(Exception):
 
 
 class FeatureState(IntEnum):
-    # Alias for features states
+    # Alias for features states, i.e. "low angle, high angle, ...., low distance, high distance."
     FEATURE_LOW: int = -2
     FEATURE_LOW_UNDECIDED = -1
     FEATURE_UNDECIDED: int = 0
@@ -59,6 +59,7 @@ class FeatureState(IntEnum):
 
 
 class FeatureType(IntEnum):
+    # Alias for feature type
     ANGLE = 0
     ANGULAR_SPEED = 1
     ANGULAR_ACCELERATION = 2
@@ -67,6 +68,10 @@ class FeatureType(IntEnum):
 
 
 class BaseFeature(ABC):
+    """Our different feature classes share some methods that we unify in this class.
+    
+    Any type of feature is identified by a hash. This is usually a hashed string representation of an object.
+    In the case of angles, that of an ordered dictionary containing the connected joints."""
     def __init__(self, \
         feature_hash: str, \
             specification_dict: object = {}):
@@ -96,18 +101,23 @@ class BaseFeature(ABC):
 
 
 class ReferenceFeature(BaseFeature):
+    """A reference feature corresponds to one repetition of an exercise.
+    
+    It stores all properties of a repetition that are of meaning to our algorithm.
+    In order to identify the repetition it belongs to among all repetitions that we analyze, we hash the recording itself."""
     def __init__(self, \
         feature_hash: str, \
-            recording_hash: str, \
-                specification_dict: object = {}):
+            recording: str, \
+                pose_definition_adapter: PoseDefinitionAdapter,
+                specification_dict: object = {},):
         super().__init__(feature_hash, specification_dict)
 
         self.values = deque()
         self.progression = 0
-        self.resampled_values = deque()
+        self.discretized_values = deque()
         self.states = deque()
         
-        self.recording_hash = recording_hash
+        self.recording_hash = hash(str(recording))
 
         self.lower_boundary = None
         self.upper_boundary = None
@@ -116,11 +126,28 @@ class ReferenceFeature(BaseFeature):
         self.resolution = None
         self.scale = None
 
-    def add_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
+        self.pose_definition_adapter = pose_definition_adapter
+
+        for pose in recording:
+            # For now, we use the same pose_defninition_adapter for all recordings. This may change
+            self.add_pose(pose, self.pose_definition_adapter)
+        self.update_data()
+        
+    def add_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter = None):
+        """Add a pose to this reference feature's trajectory.
+        
+        Args:
+            pose: The pose that is added
+            pose_definition_adapter: The pose definition adapter for the pose that we want to add. If not provided, use the one of the original recording.
+        """
+        if not pose_definition_adapter:
+            pose_definition_adapter = self.pose_definition_adapter
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
         self.values.append(value)
 
     def update_data(self):
+        """(Re-)Calculate the information that we find in this reference feature's trajectory."""
+        # Even though we do the following in a higher dimension than necessary, we preserve the naming that we find in the ReferenceFeatuereCollection to provide a unified API.
         self.highest_value = np.amax(self.values)
         self.lowest_value = np.amin(self.values)
         self.recording_length = len(self.values)
@@ -132,6 +159,23 @@ class ReferenceFeature(BaseFeature):
         
         first_reference_feature_value = self.values[0]
         self.beginning_state = decide_feature_state(first_reference_feature_value, FeatureState.FEATURE_UNDECIDED, self.lower_boundary, self.upper_boundary)
+
+        discrete_trajectories_tensor, \
+            self.discretization_reference_trajectory_indices_tensor, \
+                self.hankel_tensor, \
+                    self.feature_states_matrix, \
+                        self.scale, \
+                            self.resolution = compute_discrete_trajectoreis_hankel_matrices_and_feature_states(self.discretized_values, self.range_of_motion, self.lower_boundary, self.upper_boundary)
+
+        # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
+        median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
+
+        self.number_of_dicided_state_changes = compute_number_of_decided_state_changes(median_feature_states_array)
+
+        self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, self.discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, recording_lengths)
+        # TODO: Check wether median_reference_trajectory_feature_states match the median state trajectory
+
+        self.median_beginning_state = np.median(self.beginning_state)
     
 
 class ReferenceFeatureCollection(BaseFeature):
@@ -149,15 +193,16 @@ class ReferenceFeatureCollection(BaseFeature):
         self.update_data()
         
     def add_recording(self, recording: np.ndarray, pose_definition_adapter):
-        recording_hash = hash(str(recording))
-        reference_feature = ReferenceFeature(self.feature_hash, recording_hash, self.specification_dict)
-        for pose in recording:
-            # For now, we use the same pose_defninition_adapter for all recordings. This may change
-            reference_feature.add_pose(pose, pose_definition_adapter)
-        reference_feature.update_data()
+        """Add a recording and thus a reference feature to this collection.
+        
+        Args:
+            recording: A recording, corresponding to a repetition of an exercise that we want to add
+            pose_definition_adapter: A pose definition adapter that fits the recording"""
+        reference_feature = ReferenceFeature(self.feature_hash, recording, pose_definition_adapter, self.specification_dict)
         self.reference_features.append(reference_feature)
 
     def update_data(self):
+        """Re-)Calculate the information that we find in this reference feature collection's trajectories."""
         lowest_values = []
         highest_values = []
         recording_lengths = []
@@ -187,7 +232,7 @@ class ReferenceFeatureCollection(BaseFeature):
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
 
-        self.number_of_dicided_state_changes = compute_numer_of_dicided_state_changes(median_feature_states_array)
+        self.number_of_dicided_state_changes = compute_number_of_decided_state_changes(median_feature_states_array)
 
         self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, self.discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, recording_lengths)
         # TODO: Check wether median_reference_trajectory_feature_states match the median state trajectory
@@ -266,27 +311,17 @@ class Feature(BaseFeature):
         return has_changed
 
 
-def enqueue_dictionary(previous_dict, enqueued_dict, max_queue_size):
-    for k, v in enqueued_dict.items():
-        if isinstance(v, collections.MutableMapping):
-            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v, max_queue_size)
-        elif isinstance(v, list):
-            previous_dict[k] = previous_dict.get(k, [])
-            previous_dict[k].extend(v)
-            if (len(previous_dict[k]) >= max_queue_size):
-                previous_dict[k] = previous_dict[k][-max_queue_size:]
-        else:
-            previous_dict[k] = previous_dict.get(k, [])
-            if previous_dict[k] == None:
-                previous_dict[k] = []
-            previous_dict[k].append(v)
-            if (len(previous_dict[k]) >= max_queue_size):
-                previous_dict[k] = previous_dict[k][-max_queue_size:]
-    
-    return previous_dict
-
-
 def discretize_feature_values(value, last_discritized_value, resolution):
+    """Divide the distance between a value and the last discritized value according to a resolution and return the steps between the two.
+    
+    Args:
+        value: The current value of a feature.
+        last_discritized_value: The last value that we discritized. This defines our "fixpoint" for the resolution
+        resolution: The resolution at which we want to discritize.
+        
+    Returns:
+        A list of discritized value between value and last_discritized_value, $resolution apart
+        """
     new_resampled_feature_values = []
     delta = value - last_discritized_value
     remaining_delta = abs(delta)
@@ -483,13 +518,20 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
     return median_trajectory, feature_states, discretization_ranges
 
 
-def compute_numer_of_dicided_state_changes(median_feature_states_array):
-    decided_median_feature_states = median_feature_states_array[abs(median_feature_states_array) > 1]
+def compute_number_of_decided_state_changes(feature_states_array):
+    """Compute how often the state of a feature has changed between HIGH and LOW.
+    
+    Args:
+        median_feature_states_array: An array holding feature states that vary according between HIGH and LOW, but may also be UNDECIDED.
+        
+    Returns:
+        An intiger corresponding to the number of decided state changes"""
+    decided_median_feature_states = feature_states_array[abs(feature_states_array) > 1]
     decided_median_feature_state_change_indices = np.where(decided_median_feature_states[:-1] * decided_median_feature_states[1:] < 0 )[X] + 1
-    number_of_dicided_state_changes = len(decided_median_feature_state_change_indices)
+    number_of_decided_state_changes = len(decided_median_feature_state_change_indices)
     if decided_median_feature_states[X] != decided_median_feature_states[-1]:
-        number_of_dicided_state_changes += 1
-    return number_of_dicided_state_changes
+        number_of_decided_state_changes += 1
+    return number_of_decided_state_changes
 
 
 def decide_feature_state(value, last_feature_state, lower_boundary, upper_boundary):

@@ -31,6 +31,9 @@ REMOVE_JITTER_RANGE = 4
 # We use this to disable marking repetitions as bad if they seem weird if inputs are messy
 MESSY_INPUTS = True
 
+# We use this fading factor for a exponentially dying error
+JOINT_DIFFERENCE_FADING_FACTOR = 0.8
+
 # Indices of values in vectors
 X = 0
 Y = 1

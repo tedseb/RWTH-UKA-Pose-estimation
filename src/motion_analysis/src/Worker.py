@@ -103,6 +103,7 @@ class Worker(Thread):
         self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
 
         self.bad_repetition = False
+        self.moving_average_joint_difference = 0
 
         self.gui = gui
 
@@ -142,10 +143,10 @@ class Worker(Thread):
                 past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
 
                 # Extract feature states
-                used_joint_ndarray = present_joints_with_timestamp['used_joint_ndarray']
+                pose = present_joints_with_timestamp['used_joint_ndarray']
 
                 for f in self.features.values():
-                    f.update(used_joint_ndarray, self.pose_definition_adapter)
+                    f.update(pose, self.pose_definition_adapter)
 
                 # Compare joints with expert system data
                 increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
@@ -178,7 +179,7 @@ class Worker(Thread):
                         self.bad_repetition = True
 
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
-                self.publish_pose(used_joint_ndarray, self.user_skelleton_publisher)
+                self.publish_pose(pose, self.user_skelleton_publisher)
 
                 # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None

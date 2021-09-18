@@ -90,11 +90,11 @@ class WorkerHandler(QThread):
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(exercise_data=exercise_data, pose_definition_adapter=self.pose_definition_adapter)
 
             # For now, we have the same pose definition adapter for all recordings
-            recordings_and_adapters = [(r, self.pose_definition_adapter) for r in recordings]
-            reference_feature_collections = [ReferenceFeatureCollection(feature_hash, feature_specification, recordings_and_adapters) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+            reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
+            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(c) for c in reference_feature_collections}
+            features_dict = {c.feature_hash: Feature(c) for c in reference_recording_feature_collections}
 
             self.features_interface.set(spot_featuers_key, features_dict)
 
@@ -102,9 +102,9 @@ class WorkerHandler(QThread):
             del exercise_data['stages']
             
             # Set all entries that are needed by the handler threads later on
-            exercise_data['recordings'] = {hash(str(r)): r for r in recordings}
+            exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
-            exercise_data['reference_feature_collections'] = reference_feature_collections
+            exercise_data['reference_feature_collections'] = reference_recording_feature_collections
             
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
             
@@ -114,7 +114,7 @@ class WorkerHandler(QThread):
             if not current_worker:
                 self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui)
 
-            feature_hashes = [c.feature_hash for c in reference_feature_collections]
+            feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
         else:
             current_worker = self.workers.get(station_id, None)

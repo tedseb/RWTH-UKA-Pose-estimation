@@ -182,7 +182,7 @@ class MotionAnaysisGUI(QMainWindow):
 
             layout.addWidget(self.controls, 6, 0, 4, 1)
 
-            self.setFixedWidth(300 + feature_hashes * 300)
+            self.setFixedWidth(300 + len(feature_hashes) * 300)
         else:
             self.setFixedWidth(300)
         

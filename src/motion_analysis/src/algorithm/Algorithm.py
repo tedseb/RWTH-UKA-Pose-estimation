@@ -24,7 +24,7 @@ except (ModuleNotFoundError, ImportError):
     from src.algorithm.GUI import *
 
 
-def custom_metric(hankel_matrix, feature_trajectory, max_weight, min_weight):
+def trajectory_distance(hankel_matrix, feature_trajectory, max_weight, min_weight):
     """Compute a custom metric that represents the differences between a trajectory and the reference trajectory or shifted versions thereof.
 
     This function computes the l2 norm of hankel_matrix - feature_trajectory, but influence to the error fades out linearly form the 
@@ -68,7 +68,6 @@ def analyze_feature_progressions(
     in_beginning_state = True
 
     for f in features.values():
-        # With the current feature value and the last resampled feature value, we can compute new resampled feature values
         beginning_state = f.reference_feature_collection.median_beginning_state
         number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
 
@@ -77,15 +76,48 @@ def analyze_feature_progressions(
 
         if f.progression < number_of_dicided_state_changes_for_repetition:
             increase_reps = False
-        elif f.progression > number_of_dicided_state_changes_for_repetition:
+        elif f.progression > number_of_dicided_state_changes_for_repetition and not MESSY_INPUTS:
             bad_repetition = True
+
+    # Look at every reference feature separately
+    # bad_repetition_yes = 0
+    # bad_repetition_no = 0
+    # increase_reps_yes = 0
+    # increase_reps_no = 0
+    # in_beginning_state_yes = 0
+    # in_beginning_state_no = 0
+
+    # for f in features.values():
+    #     for r in f.reference_feature_collection.reference_features:
+            
+    #         beginning_state = r.median_beginning_state
+    #         number_of_dicided_state_changes_for_repetition = r.number_of_dicided_state_changes
+
+    #         if f.state != beginning_state:
+    #             in_beginning_state_no += 1
+    #         else:
+    #             in_beginning_state_yes += 1
+
+    #         if f.progression < number_of_dicided_state_changes_for_repetition:
+    #             increase_reps_no += 1
+    #         elif f.progression > number_of_dicided_state_changes_for_repetition:
+    #             bad_repetition = True
+    #             bad_repetition_yes += 1
+    #             increase_reps_no += 1
+    #         else:
+    #             bad_repetition_no += 1
+    #             increase_reps_yes += 1
+
+    # bad_repetition_ratio = bad_repetition_yes/bad_repetition_no
+    # increase_reps_ratio = increase_reps_yes/increase_reps_no
+    # in_beginning_state_ratio = in_beginning_state_yes/in_beginning_state_no
 
     if in_beginning_state and bad_repetition:
         for f in features.values():
             f.progression = 0
         increase_reps, bad_repetition = analyze_feature_progressions(features, False)
 
-    if bad_repetition:
+    if bad_repetition and not MESSY_INPUTS:
         increase_reps = False
 
     if increase_reps:
@@ -113,18 +145,6 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
         mean_resampled_values_reference_trajectory_fractions_average_difference: The average difference of "where different features think we are"
 
     """
-    def custom_metric(a, b):
-        """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
-        a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
-        a_to = a["median_resampled_values_reference_trajectory_fraction_to"]
-        b_from = b["median_resampled_values_reference_trajectory_fraction_from"]
-        b_to = b["median_resampled_values_reference_trajectory_fraction_to"]
-
-        if b_from <= a_from <= b_to or b_from <= a_to <= b_to:
-            return 0
-        else:
-            return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
-
     recordings = exercise_data['recordings']
 
     if len(recordings.values()) > 1:
@@ -139,11 +159,11 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
     for h, f in features.items():
         # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
         discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
-        hankel_tensor = f.reference_feature_collection.hankel_tensor
+        hankel_tensor_1 = f.reference_feature_collection.hankel_tensor
         discrete_feature_trajectory = f.discretized_values
 
-        for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor):
-            errors = custom_metric(reference_trajectory_hankel_matrix, discrete_feature_trajectory, 100, 1)
+        for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor_1):
+            errors = trajectory_distance(reference_trajectory_hankel_matrix, discrete_feature_trajectory, 100, 1)
             prediction = np.argmin(errors)
             index = discretization_reference_trajectory_indices_tensor[idx][prediction]
             median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
@@ -163,9 +183,15 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
                                     progress_vector, \
                                         index)
 
+        # Look at every reference feature separately
+        # for r in f.reference_feature_collection.reference_features:
+        #     joint_difference = total_joint_difference(pose, reference_pose)
+        #     r.moving_average_joint_difference = r.moving_average_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + r * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
+
+
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
-    # TODO: update global parameters!!
+    # TODO: update global GUI parameters!!
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
@@ -180,4 +206,56 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
     mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
         
     return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
+
+
+def total_joint_difference(pose: np.ndarray, reference_pose: np.ndarray):
+    return np.average(pose - reference_pose)
+
+
+
+class Predictor(ABC):
+    def __init__(self, features: List[Feature]):
+        self.features = features
+
+    @abstractmethod
+    def __call__(self, pose: np.ndarray) -> np.ndarray:
+        """Updates all features with the pose and predicts the best possible reference pose."""
+        raise NotImplementedError
+
+
+class ExercisePredictor(Predictor):
+    """This Predictor lets us predict an exercise out of all exercises."""
+    def __init__(self, features: List[Feature]):
+        super().__init__(features)
+        raise NotImplementedError
+
+
+class RecordingPredictor(Predictor):
+    """This Predictor lets us predict a recording out of several recordings of an exercise."""
+    def __init__(self, features: List[Feature]):
+        super().__init__(features)
+        raise NotImplementedError
+
+
+class PosePredictor(Predictor):
+    """This Predictor lets us predict a pose, given a recording."""
+    def __init__(self, features: List[Feature]):
+        super().__init__(features)
+        
+    # def __call__(self, pose: np.ndarray):
+        # # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
+        # reference_trajectory_hankel_matrix = self.hankel_tensor[0]
+        # errors = trajectory_distance(reference_trajectory_hankel_matrix, feature.discrete_feature_trajectory, 100, 1)
+        # prediction = np.argmin(errors)
+        # # TODO: This should be only one dimension in this tensor. Check if this works!!!
+        # self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
+        # median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
+        # progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+        # self.progress_vector = map_progress_to_vector(progress)
+        # self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
+        # self.reference_pose = self.recording[int(len(self.recording) * progress)]
+
+        # joint_difference = total_joint_difference(pose, self.reference_pose)
+        # self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
+        # self.total_joint_differences_this_rep.append(joint_difference)
 

@@ -5,6 +5,7 @@
 This file contains a code snippets that have nowhere else to go.
 """
 
+from typing import Any
 import numpy as np
 from abc import abstractmethod
 
@@ -99,3 +100,23 @@ def map_vectors_to_progress_and_alignment(vectors: list):
 
     return  progress, alignment, progress_alignment_vector
 
+
+def fast_hash(o: Any) -> str:
+    """Hashes object with their string representation, but numpy arrays as a whole."""
+    if issubclass(type(o), np.ndarray):
+        # TODO: Check if this is efficient
+        return hash(o.tobytes())
+    return hash(str(o))
+
+
+def custom_metric(a, b):
+    """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
+    a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
+    a_to = a["median_resampled_values_reference_trajectory_fraction_to"]
+    b_from = b["median_resampled_values_reference_trajectory_fraction_from"]
+    b_to = b["median_resampled_values_reference_trajectory_fraction_to"]
+
+    if b_from <= a_from <= b_to or b_from <= a_to <= b_to:
+        return 0
+    else:
+        return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])

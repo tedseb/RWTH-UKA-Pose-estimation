@@ -174,7 +174,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
             predicted_indices.append(index)
 
             if gui:
-                sample_reference_feature = f.reference_feature_collection.reference_features[0]
+                sample_reference_feature = f.reference_feature_collection.reference_recording_features[0]
                 gui.feature_widgets[h].update(f.values, \
                     sample_reference_feature.values, \
                         f.discretized_values, \
@@ -184,7 +184,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
                                         index)
 
         # Look at every reference feature separately
-        # for r in f.reference_feature_collection.reference_features:
+        # for r in f.reference_feature_collection.reference_recording_features:
         #     joint_difference = total_joint_difference(pose, reference_pose)
         #     r.moving_average_joint_difference = r.moving_average_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + r * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
 

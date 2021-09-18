@@ -23,6 +23,8 @@ from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 RED = (217, 83, 25)
 
+import rospy as rp
+
 
 class FeatureGraphsWidget(QWidget):
     def __init__(self):
@@ -66,11 +68,11 @@ class FeatureGraphsWidget(QWidget):
         self.reference_trajectory.plot(*reference_trajectory)
 
         discrete_user_trajectory_x = np.array(range(len(discrete_user_trajectory)))
-        discrete_user_trajectory_y = discrete_user_trajectory
+        discrete_user_trajectory_y = np.array(discrete_user_trajectory)
         self.discrete_user_trajectory.plot(discrete_user_trajectory_x, discrete_user_trajectory_y)
         
         discrete_reference_trajectory_x = np.array(range(len(discrete_reference_trajectory)))
-        discrete_reference_trajectory_y = discrete_reference_trajectory
+        discrete_reference_trajectory_y = np.array(discrete_reference_trajectory)
 
         self.discrete_reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
         self.feature_index_pointer.setIndex(index)
@@ -95,6 +97,12 @@ class MotionAnaysisGUI(QMainWindow):
         self.controls.setLayout(QVBoxLayout())
         controls_layout = self.controls.layout()
 
+        self.overall_progress_vector_widget = pg.PlotWidget(title="overall_progress_vector")
+        self.overall_progress_vector_widget.setAspectLocked()
+        self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
+        controls_layout.addWidget(self.overall_progress_vector_widget)
+        controls_layout.addWidget(self.overall_errors_widget)
+
         label1 = QLabel(self.controls)
         label1.setText("Spot to display:")
 
@@ -115,7 +123,6 @@ class MotionAnaysisGUI(QMainWindow):
 
         self.feature_widgets = dict()
 
-        self.chosen_spot = None
         self.spot_data = dict()
 
 
@@ -130,10 +137,13 @@ class MotionAnaysisGUI(QMainWindow):
     def update_available_spots(self, spot_name, active, feature_hashes=[]):
         """When a spot goes active and has an exercise, update the available spots for our drop down menu."""
         if active:
+            # if self.spot_chooser.findData(str(spot_name)): # If spot was already added
+            #     return
             self.spot_chooser.addItem(str(spot_name))
-            self.spot_data[spot_name] = {"feature_hashes": feature_hashes}
+            self.spot_data[str(spot_name)] = {"feature_hashes": feature_hashes}
         else:
-            self.spot_chooser.removeItem(str(spot_name))
+            idx = self.spot_chooser.findData(str(spot_name))
+            self.spot_chooser.removeItem(idx)
             try:
                 del self.spot_data[spot_name]
             except KeyError: # For now, if whe start the GUI at a "bad" time, ignore this step because the spot what never active
@@ -153,42 +163,33 @@ class MotionAnaysisGUI(QMainWindow):
 
         spot_data = self.spot_data.get(self.chosen_spot)
 
-        # Overall data
-
         layout = container.layout()
 
-        label1 = QLabel(self.controls)
-        label1.setText("Aggregated data:")
-        layout.addWidget(label1, 0, 0, 4, 1)
+        # label1 = QLabel(self.controls)
+        # label1.setText("Aggregated data:")
+        # layout.addWidget(label1, 0, 0, 4, 1)
 
-        self.overall_progress_vector_widget = pg.PlotWidget(title="overall_progress_vector")
-        self.overall_progress_vector_widget.setAspectLocked()
-        self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
-        layout.addWidget(self.overall_progress_vector_widget, 0, 0, 2, 1)
-        layout.addWidget(self.overall_errors_widget, 2, 0, 4, 1)
-
-        layout.addWidget(self.controls, 6, 0, 4, 1)
+        layout.addWidget(self.controls, 1, 1, 4, 1)
 
         # Feature specific data
 
         if spot_data:
-            
             feature_hashes = spot_data["feature_hashes"]
-
             for i, h in enumerate(feature_hashes):
                 feature_widget = FeatureGraphsWidget()
                 self.feature_widgets[h] = feature_widget
-                layout.addWidget(feature_widget, 0, i, 10, 1)
+                layout.addWidget(feature_widget, 1, 5 + i, 10, 1)
 
-            layout.addWidget(self.controls, 6, 0, 4, 1)
-
-            self.setFixedWidth(300 + len(feature_hashes) * 300)
-        else:
-            self.setFixedWidth(300)
+        #     self.setFixedWidth(300 + (len(feature_hashes) * 300))
+        # else:
+        #     pass
+        #     self.setFixedWidth(300)
         
-        self.setFixedHeight(600)
+        self.setFixedHeight(900)
     
         self.setCentralWidget(container)
+
+        self.update()
         
 
     def start(self):

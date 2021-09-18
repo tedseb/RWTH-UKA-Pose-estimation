@@ -131,8 +131,6 @@ class Worker(Thread):
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
-        self.gui.update_available_spots(spot_name=self.spot_key, active=True, feature_hashes=self.features.keys())
-
         while(self.running):
             try:
                 # The following lines fetch data that we need to analyse
@@ -169,7 +167,7 @@ class Worker(Thread):
 
                 # Calculate a new reference pose mapping
                 # TODO: make this pretty
-                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, spot_info_dict['exercise_data'])
+                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, spot_info_dict['exercise_data'], self.gui)
                 self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
                 if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
                     del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]

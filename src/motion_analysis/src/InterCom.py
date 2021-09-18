@@ -188,13 +188,14 @@ class RedisFeaturesInterface(RedisInterface, FeaturesInterface):
     def get(self, spot_features_key: str) -> dict:
         # TODO: Optimize this
         features_dict = self.redis_connection.hgetall(spot_features_key)
+        _feature_dict = {}
         for key, feature_string in features_dict.items():
-            features_dict[key] = pickle.loads(feature_string)
-        return features_dict
+            _feature_dict[key] = pickle.loads(feature_string)
+        return _feature_dict
 
     def set(self, spot_features_key: str, features_dict: dict) -> None:
-        _features_dict = deepcopy(features_dict)
-        for key, feature in _features_dict.items():
+        _features_dict = {}
+        for key, feature in features_dict.items():
             _features_dict[key] = pickle.dumps(feature)
                 
         self.redis_connection.hset(spot_features_key, mapping=_features_dict)

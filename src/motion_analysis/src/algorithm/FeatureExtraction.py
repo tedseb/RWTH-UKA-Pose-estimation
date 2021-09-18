@@ -278,7 +278,7 @@ def extract_angles_of_interest(exercise_data: dict, pose_definition_adapter: Pos
         except FeatureExtractorException as e:
             exceptions['FeatureExtractorException'] = e
         # TODO: possibly find prettier solution to this
-        joint_hash = str(hashlib.md5(sorted(joint_names).__repr__().encode()).digest())
+        joint_hash = hashlib.md5(sorted(joint_names).__repr__().encode()).digest()
         features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}
     
     if exceptions and HIGH_VERBOSITY:

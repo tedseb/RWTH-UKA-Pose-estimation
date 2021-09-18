@@ -66,8 +66,6 @@ class WorkerHandler(QThread):
         self.gui = MotionAnaysisGUI()
         self.gui_handler.run(self.gui)
 
-        self.gui.update_available_spots("0", True, [0])
-
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
         station_id = spot_update_data["stationID"]
@@ -88,7 +86,6 @@ class WorkerHandler(QThread):
             # TODO: Tamer must let experts specify the features of interest
             recordings = [recording]
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(exercise_data=exercise_data, pose_definition_adapter=self.pose_definition_adapter)
-
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]

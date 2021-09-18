@@ -177,6 +177,8 @@ class ReferenceRecordingFeature(BaseFeature):
                     self.feature_states_matrix, \
                         self.scale, \
                             self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary)
+        
+        self.discretized_values = discrete_trajectories_tensor[0]
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)

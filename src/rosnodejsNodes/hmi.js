@@ -29,7 +29,7 @@ app.use(bodyParser.urlencoded({
   limit: '50mb',
   extended: true
 }));
-app.use(express.static(process.cwd() + '/dist/'));
+app.use(express.static(process.cwd() + '/src/rosnodejsNodes/dist/'));
 const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
 let coordinateClients = [];
@@ -163,7 +163,7 @@ const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(process.cwd() + './dist/index.html');
+  res.sendFile(process.cwd() + '/src/rosnodejsNodes/dist/index.html');
 });
 
 app.get('/api/coordinates', (req, res) => {

@@ -108,11 +108,12 @@ class WorkerHandler(QThread):
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
             current_worker = self.workers.get(station_id, None)
-            if not current_worker:
-                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui)
 
             feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
+
+            if not current_worker:
+                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui)
         else:
             current_worker = self.workers.get(station_id, None)
             if current_worker:

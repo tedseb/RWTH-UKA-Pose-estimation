@@ -173,20 +173,12 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
             predicted_indices.append(index)
 
             if gui:
-                try:
-                    sample_reference_feature = f.reference_feature_collection.reference_recording_features[0]
-                    gui.feature_widgets[h].update.emit(np.array(f.values), \
-                        np.array(sample_reference_feature.values), \
-                            np.array(f.discretized_values), \
-                                np.array(sample_reference_feature.discretized_values), \
-                                    np.array(errors), \
-                                        np.array([0, progress_vector.real, 0, progress_vector.imag]), \
-                                            np.array(prediction))
-                except Exception as e:
-                    pass
-                    # rp.logerr(e)
-                    # rp.logerr(gui.feature_widgets)
-                    # rp.logerr(h)
+                if h in gui.feature_widgets.keys():
+                    gui.feature_widgets[h].update_user_data.emit(np.array(f.values), \
+                        np.array(f.discretized_values), \
+                                np.array(errors), \
+                                    np.array([progress_vector.real, progress_vector.imag]), \
+                                        np.array(prediction))
 
         # Look at every reference feature separately
         # for r in f.reference_feature_collection.reference_recording_features:

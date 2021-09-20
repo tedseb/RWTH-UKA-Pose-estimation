@@ -23,15 +23,18 @@ FEATURE_DIFFERENCE_ELASTICITY = 0.3
 
 FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH = 5
 
-DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE = 20
+DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE = 30
 FEATURE_TRAJECTORY_MAX_MEMORY_SIZE = 90
-STATES_TRAJECTORY_MAX_MEMORY_SIZE = 20
+STATES_TRAJECTORY_MAX_MEMORY_SIZE = 30
 
 # We have a resolution of ten steps between minimum and maximum of a trajectory. We remove 4 such steps of jittering, if found.
 REMOVE_JITTER_RANGE = 3
 
 # We use this to disable marking repetitions as bad if they seem weird if inputs are messy
 MESSY_INPUTS = True
+
+# FPS for the GUI
+GUI_FPS = 10
 
 # We use this fading factor for a exponentially dying error
 JOINT_DIFFERENCE_FADING_FACTOR = 0.8

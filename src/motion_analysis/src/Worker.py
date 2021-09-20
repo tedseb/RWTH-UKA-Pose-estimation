@@ -131,8 +131,28 @@ class Worker(Thread):
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
+        self.reference_features_set = False
+
         while(self.running):
             try:
+
+                if not self.reference_features_set:
+                    try:
+                        self.reference_features_set = True
+                        for h, f in self.features.items():
+                            if h in self.gui.feature_widgets.keys():
+                                # TODO: Fit this to use many featuers
+                                sample_reference_feature = f.reference_feature_collection.reference_recording_features[0]
+                                self.gui.feature_widgets[h].update_reference_plots.emit(
+                                                np.array(sample_reference_feature.values), \
+                                                        np.array(sample_reference_feature.discretized_values))
+                            else:
+                                self.reference_features_set = False
+                        
+                    except KeyError:
+                        pass
+
+
                 # The following lines fetch data that we need to analyse
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))

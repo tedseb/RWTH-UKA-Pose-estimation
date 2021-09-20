@@ -18,22 +18,32 @@ from pyqtgraph.graphicsItems.PlotCurveItem import PlotCurveItem
 from pyqtgraph.graphicsItems.PlotItem.PlotItem import PlotItem
 from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
-
-# UPDATE_RATE = 30
+try:
+    from motion_analysis.src.algorithm.AlgoConfig import GUI_FPS
+except ImportError:
+    from src.algorithm.AlgoConfig import GUI_FPS
 
 RED = (217, 83, 25)
 
-import rospy as rp
-
-
 class FeatureGraphsWidget(QWidget):
-    update = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+    update_user_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+    update_reference_plots = pyqtSignal(np.ndarray, np.ndarray)
     def __init__(self):
         super().__init__()
-        self.update.connect(self._update)
+        self.update_user_data.connect(self._update_user_data)
+        self.update_reference_plots.connect(self._update_reference_plots)
 
         self.setLayout(QGridLayout())
         layout = self.layout()
+
+        self._user_trajectory_x = np.array([0])
+        self._user_trajectory_y = np.array([0])
+        self._discrete_user_trajectory_x = np.array([0])
+        self._discrete_user_trajectory_y = np.array([0])
+        self._errors_x = np.array([0])
+        self._errors_y = np.array([0])
+        self._progress_vector = np.array([0, 1])
+        self._prediction = 0
 
         self.user_trajectory = pg.PlotWidget(title="user_trajectory")
         self.reference_trajectory = pg.PlotWidget(title="reference_trajectory")
@@ -41,17 +51,17 @@ class FeatureGraphsWidget(QWidget):
         self.discrete_reference_trajectory = pg.PlotWidget(title="discrete_reference_trajectory")
         self.errors = pg.PlotWidget(title="errors")
         self.progress_vector = pg.PlotWidget(title="progress_vector")
-        self.progress_vector.setAspectLocked()
         self.progress_vector.setXRange(-1, 1)
         self.progress_vector.setYRange(-1, 1)
+        self.progress_vector.setAspectLocked()
         self.feature_progression = pg.PlotWidget(title="feature_progression")
 
-        self.user_trajectory_curve = pg.PlotCurveItem()
-        self.reference_trajectory_curve = pg.PlotCurveItem()
-        self.discrete_user_trajectory_curve = pg.PlotCurveItem()
-        self.discrete_reference_trajectory_curve = pg.PlotCurveItem()
-        self.errors_curve = pg.PlotCurveItem()
-        self.progress_vector_curve = pg.PlotCurveItem()
+        self.user_trajectory_curve = pg.PlotCurveItem([0, 0])
+        self.reference_trajectory_curve = pg.PlotCurveItem([0, 0])
+        self.discrete_user_trajectory_curve = pg.PlotCurveItem([0, 0])
+        self.discrete_reference_trajectory_curve = pg.PlotCurveItem([0, 0])
+        self.errors_curve = pg.PlotCurveItem([0, 0])
+        self.progress_vector_curve = pg.PlotCurveItem([0, 0])
 
  
         self.user_trajectory.addItem(self.user_trajectory_curve)
@@ -73,42 +83,60 @@ class FeatureGraphsWidget(QWidget):
 
         self.frozen = False
 
+        self.thread = QThread()
+
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.update_plots)
+        self.timer.start(1000 / GUI_FPS) # 10 FPS
+
     def hasHeightForWidth(self):
         return True
 
     def heightForWidth(self, w):
         return w * 3
-    
-    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
-    def _update(self, user_trajectory, reference_trajectory, discrete_user_trajectory, discrete_reference_trajectory, errors, progress_vector, prediction):
+
+    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+    def _update_user_data(self, user_trajectory, discrete_user_trajectory, errors, progress_vector, prediction):
         if self.frozen:
             return
+        self._user_trajectory_x = np.array(range(len(user_trajectory)))
+        self._user_trajectory_y = user_trajectory
         
-        user_trajectory_x = np.array(range(len(user_trajectory)))
-        user_trajectory_y = user_trajectory
-        self.user_trajectory_curve.setData(user_trajectory_x, user_trajectory_y)
+        self._discrete_user_trajectory_x = np.array(range(len(discrete_user_trajectory)))
+        self._discrete_user_trajectory_y = discrete_user_trajectory
         
-        discrete_reference_trajectory_x = np.array(range(len(reference_trajectory)))
-        discrete_reference_trajectory_y = reference_trajectory 
-        self.reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
+        self._errors_x = np.array(range(len(errors)))
+        self._errors_y = errors
         
-        discrete_user_trajectory_x = np.array(range(len(discrete_user_trajectory)))
-        discrete_user_trajectory_y = discrete_user_trajectory
-        self.discrete_user_trajectory_curve.setData(discrete_user_trajectory_x, discrete_user_trajectory_y)
-        
+        # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
+        self._progress_vector = progress_vector
+        # self._prediction = prediction
+    
+    def update_plots(self):
+        if self.frozen:
+            return
+        try:
+            self.user_trajectory_curve.setData(self._user_trajectory_x, self._user_trajectory_y)
+            self.discrete_user_trajectory_curve.setData(self._discrete_user_trajectory_x, self._discrete_user_trajectory_y)
+            self.feature_index_pointer.setIndex(self._prediction)
+            self.errors_curve.setData(self._errors_x, self._errors_y)
+            # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
+            self.progress_vector_curve.setData(self._progress_vector, pen = RED)
+        except IndexError:
+            pass
+
+    @QtCore.pyqtSlot(np.ndarray, np.ndarray)
+    def _update_reference_plots(self, reference_trajectory, discrete_reference_trajectory):
+        if self.frozen:
+            return
+
+        reference_trajectory_x = np.array(range(len(reference_trajectory)))
+        reference_trajectory_y = reference_trajectory 
+        self.reference_trajectory_curve.setData(reference_trajectory_x, reference_trajectory_y)
+
         discrete_reference_trajectory_x = np.array(range(len(discrete_reference_trajectory)))
         discrete_reference_trajectory_y = discrete_reference_trajectory
-        
         self.discrete_reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
-        self.feature_index_pointer.setIndex(prediction)
-        
-        errors_x = np.array(range(len(errors)))
-        errors_y = errors
-        
-        self.errors_curve.setData(errors_x, errors_y)
-
-        # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
-        self.progress_vector_curve.setData(progress_vector, pen = RED)
 
 
 class MotionAnaysisGUI(QMainWindow):
@@ -232,8 +260,6 @@ class MotionAnaysisGUI(QMainWindow):
 
 
 class GUIHandler(QThread):
-    
-
     def __init__(self):
         super().__init__()
 

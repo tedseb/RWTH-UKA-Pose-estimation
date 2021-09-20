@@ -46,12 +46,12 @@ class FeatureGraphsWidget(QWidget):
         self.progress_vector.setYRange(-1, 1)
         self.feature_progression = pg.PlotWidget(title="feature_progression")
 
-        self.user_trajectory_curve = pg.PlotCurveItem([0], [0])
-        self.reference_trajectory_curve = pg.PlotCurveItem([0], [0])
-        self.discrete_user_trajectory_curve = pg.PlotCurveItem([0], [0])
-        self.discrete_reference_trajectory_curve = pg.PlotCurveItem([0], [0])
-        self.errors_curve = pg.PlotCurveItem([0], [0])
-        self.progress_vector_curve = pg.PlotCurveItem([0], [0])
+        self.user_trajectory_curve = pg.PlotCurveItem()
+        self.reference_trajectory_curve = pg.PlotCurveItem()
+        self.discrete_user_trajectory_curve = pg.PlotCurveItem()
+        self.discrete_reference_trajectory_curve = pg.PlotCurveItem()
+        self.errors_curve = pg.PlotCurveItem()
+        self.progress_vector_curve = pg.PlotCurveItem()
 
  
         self.user_trajectory.addItem(self.user_trajectory_curve)
@@ -83,10 +83,10 @@ class FeatureGraphsWidget(QWidget):
     def _update(self, user_trajectory, reference_trajectory, discrete_user_trajectory, discrete_reference_trajectory, errors, progress_vector, prediction):
         if self.frozen:
             return
-
-        discrete_user_trajectory_x = np.array(range(len(user_trajectory)))
-        discrete_user_trajectory_y = user_trajectory
-        self.user_trajectory_curve.setData(discrete_user_trajectory_x, discrete_user_trajectory_y)
+        
+        user_trajectory_x = np.array(range(len(user_trajectory)))
+        user_trajectory_y = user_trajectory
+        self.user_trajectory_curve.setData(user_trajectory_x, user_trajectory_y)
         
         discrete_reference_trajectory_x = np.array(range(len(reference_trajectory)))
         discrete_reference_trajectory_y = reference_trajectory 

@@ -75,7 +75,15 @@ class BaseFeature(ABC):
     In the case of angles, that of an ordered dictionary containing the connected joints."""
     def __init__(self, \
         feature_hash: str, \
-            specification_dict: object = {}):
+            specification_dict: object = {},
+                max_digitized_trajectory_length: int = DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
+
+        self.max_digitized_traj_len = np.int(np.min([DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE, max_digitized_trajectory_length]))
+
+        self.progression = 0
+        self._values = np.ndarray([])
+        self._discretized_values = np.ndarray([])
+        self._states = np.ndarray([])
             
         self.feature_hash = feature_hash
         self.type = specification_dict["type"]
@@ -87,18 +95,42 @@ class BaseFeature(ABC):
 
     @property
     def value(self):
-        return self.values[-1]
+        return self._values[-1]
 
     @property
     def resampled_value(self):
-        return self.resampled_values[-1]
+        return self._digitized_values[-1]
 
     @property
     def state(self):
         try:
-            return self.states[-1]
+            return self._states[-1]
         except IndexError:
             return FeatureState.FEATURE_UNDECIDED
+
+    @property
+    def values(self):
+        return self._values
+
+    @values.setter
+    def values(self, v):
+        self._values = v[-FEATURE_TRAJECTORY_MAX_MEMORY_SIZE:]
+
+    @property
+    def discretized_values(self):
+        return self._discretized_values
+
+    @discretized_values.setter
+    def discretized_values(self, dv):
+        self._discretized_values = dv[-self.max_digitized_traj_len:]
+
+    @property
+    def states(self):
+        return self._states
+
+    @states.setter
+    def states(self, s):
+        self._states = s[-STATES_TRAJECTORY_MAX_MEMORY_SIZE:]
 
     @abstractmethod
     def asdict(self):
@@ -115,13 +147,8 @@ class ReferenceRecordingFeature(BaseFeature):
             exercise_id: str, \
                 recording: str, \
                     pose_definition_adapter: PoseDefinitionAdapter,
-                        specification_dict: object = {},):
-        super().__init__(feature_hash, specification_dict)
-
-        self.values = deque()
-        self.progression = 0
-        self.discretized_values = deque()
-        self.states = deque()
+                        specification_dict: object = {}):
+        super().__init__(feature_hash, specification_dict, max_digitized_trajectory_length=np.inf)
         
         self.recording_hash = fast_hash(recording)
         self.recording = recording
@@ -155,7 +182,7 @@ class ReferenceRecordingFeature(BaseFeature):
         if not pose_definition_adapter:
             pose_definition_adapter = self.pose_definition_adapter
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
-        self.values.append(value)
+        self.values = np.append(self.values, value)
 
     def update_data(self):
         """(Re-)Calculate the information that we find in this reference feature's trajectory."""
@@ -194,7 +221,7 @@ class ReferenceRecordingFeature(BaseFeature):
     def predict(self, feature: BaseFeature, pose: np.ndarray):
         # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
         reference_trajectory_hankel_matrix = self.hankel_tensor[0]
-        errors = custom_metric(reference_trajectory_hankel_matrix, feature.discrete_feature_trajectory, 100, 1)
+        errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
         prediction = np.argmin(errors)
         # TODO: This should be only one dimension in this tensor. Check if this works!!!
         self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
@@ -251,7 +278,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
             feature_specification: dict = {}, \
                 reference_data: List[tuple] = []):
 
-        super().__init__(feature_hash, feature_specification)
+        super().__init__(feature_hash, feature_specification, max_digitized_trajectory_length=np.inf)
         self.reference_recording_features = list()
 
         for (exercise_id, recording, adapter) in reference_data:
@@ -346,18 +373,15 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
 
 
 class Feature(BaseFeature):
-    def __init__(self, reference_feature_collection: ReferenceRecordingFeatureCollection, max_trajectory_length=FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
+    def __init__(self, \
+        reference_feature_collection: ReferenceRecordingFeatureCollection, \
+                max_trajectory_length=FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
 
-        super().__init__(reference_feature_collection.feature_hash, reference_feature_collection.specification_dict)
+        super().__init__(reference_feature_collection.feature_hash, reference_feature_collection.specification_dict, max_digitized_trajectory_length=max_trajectory_length)
         self.reference_feature_collection = reference_feature_collection
         self.lower_boundary = reference_feature_collection.lower_boundary
         self.upper_boundary = reference_feature_collection.upper_boundary
         self.resolution = reference_feature_collection.resolution
-
-        self.values = deque(maxlen=max_trajectory_length)
-        self.progression = 0
-        self.discretized_values = deque(maxlen=max_trajectory_length)
-        self.states = deque(maxlen=max_trajectory_length)
 
     def update(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
@@ -365,17 +389,17 @@ class Feature(BaseFeature):
         try:
             discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
             if discretized_values:
-                self.discretized_values.extend(discretized_values)
+                self.discretized_values = np.append(self.discretized_values, discretized_values)
         except IndexError:
             scale = self.reference_feature_collection.scale
             # If this is the first value, extend with the nearest value on our scale
-            self.discretized_values.append(scale[np.argmin(abs(scale - value))])
+            self.discretized_values = np.append(self.discretized_values, scale[np.argmin(abs(scale - value))])
 
-        self.discretized_values = deque(remove_jitter_from_last_samples(self.discretized_values, REMOVE_JITTER_RANGE))
+        self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, REMOVE_JITTER_RANGE)
 
-        self.values.append(value)
+        self.values = np.append(self.values, value)
         has_changed_progression = self.compute_new_feature_progression()
-        self.states.append(decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
+        self.states = np.append(self.states, decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
 
         return has_changed_progression
 
@@ -532,13 +556,14 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
     for trajectory in feature_trajectories:
         last_values = [trajectory[0]]
         last_feature_state = decide_feature_state(last_values[-1], None, lower_boundary, upper_boundary)
-        discrete_values = last_values
+        discrete_values = np.array(last_values)
         feature_trajectory_indices = [0]
         feature_states = list()
         for index, value in enumerate(trajectory):
             already_discritized_values = discretize_feature_values(value, last_values[-1], resolution)
-            discrete_values.extend(already_discritized_values)
             if already_discritized_values:
+                already_discritized_values = np.array(already_discritized_values)
+                discrete_values = np.append(discrete_values, already_discritized_values)
                 feature_state = decide_feature_state(already_discritized_values[-1], last_feature_state, lower_boundary, upper_boundary)
                 last_values = already_discritized_values
                 feature_trajectory_indices.extend([index] * len(last_values))

@@ -24,7 +24,7 @@ except (ModuleNotFoundError, ImportError):
     from src.algorithm.GUI import *
 
 
-def trajectory_distance(hankel_matrix, feature_trajectory, max_weight, min_weight):
+def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarray, max_weight: float, min_weight: float):
     """Compute a custom metric that represents the differences between a trajectory and the reference trajectory or shifted versions thereof.
 
     This function computes the l2 norm of hankel_matrix - feature_trajectory, but influence to the error fades out linearly form the 
@@ -39,7 +39,6 @@ def trajectory_distance(hankel_matrix, feature_trajectory, max_weight, min_weigh
     Returns:
         An error for every step in the feature_trajectory
     """
-    feature_trajectory = remove_jitter_from_trajectory(feature_trajectory, REMOVE_JITTER_RANGE)
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
     feature_trajectory_shortened = feature_trajectory[-comparing_length:]
@@ -160,7 +159,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
         # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
         discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
         hankel_tensor_1 = f.reference_feature_collection.hankel_tensor
-        discrete_feature_trajectory = f.discretized_values
+        discrete_feature_trajectory = np.array(f.discretized_values)
 
         for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor_1):
             errors = trajectory_distance(reference_trajectory_hankel_matrix, discrete_feature_trajectory, 100, 1)
@@ -174,14 +173,17 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
             predicted_indices.append(index)
 
             if gui:
+                # rp.logerr("errors:" + str(errors))
+                # rp.logerr("hankel_matrix:" + str(reference_trajectory_hankel_matrix))
+                # rp.logerr("discrete_feature_trajectory:" + str(discrete_feature_trajectory))
                 sample_reference_feature = f.reference_feature_collection.reference_recording_features[0]
-                gui.feature_widgets[h].update(f.values, \
-                    sample_reference_feature.values, \
-                        f.discretized_values, \
-                            sample_reference_feature.discretized_values, \
-                                errors, \
-                                    progress_vector, \
-                                        index)
+                gui.feature_widgets[h].update.emit(np.array(f.values), \
+                    np.array(sample_reference_feature.values), \
+                        np.array(f.discretized_values), \
+                            np.array(sample_reference_feature.discretized_values), \
+                                np.array(errors), \
+                                    np.array([progress_vector.real, progress_vector.imag]), \
+                                        np.array(prediction))
 
         # Look at every reference feature separately
         # for r in f.reference_feature_collection.reference_recording_features:

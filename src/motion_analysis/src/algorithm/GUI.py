@@ -10,7 +10,7 @@ from os import error
 from PyQt5.QtWidgets import QComboBox, QGridLayout, QLabel, QMainWindow, QPushButton, QSizePolicy, QWidget, QVBoxLayout
 from pyqtgraph.Qt import QtGui, QtCore
 import sys
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
@@ -27,8 +27,11 @@ import rospy as rp
 
 
 class FeatureGraphsWidget(QWidget):
+    update = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
     def __init__(self):
         super().__init__()
+        self.update.connect(self._update)
+
         self.setLayout(QGridLayout())
         layout = self.layout()
 
@@ -43,10 +46,21 @@ class FeatureGraphsWidget(QWidget):
         self.progress_vector.setYRange(-1, 1)
         self.feature_progression = pg.PlotWidget(title="feature_progression")
 
+        self.user_trajectory_curve = pg.PlotCurveItem([0], [0])
+        self.reference_trajectory_curve = pg.PlotCurveItem([0], [0])
+        self.discrete_user_trajectory_curve = pg.PlotCurveItem([0], [0])
         self.discrete_reference_trajectory_curve = pg.PlotCurveItem([0], [0])
+        self.errors_curve = pg.PlotCurveItem([0], [0])
+        self.progress_vector_curve = pg.PlotCurveItem([0], [0])
 
+ 
+        self.user_trajectory.addItem(self.user_trajectory_curve)
+        self.reference_trajectory.addItem(self.reference_trajectory_curve)
+        self.discrete_user_trajectory.addItem(self.discrete_user_trajectory_curve)
         self.discrete_reference_trajectory.addItem(self.discrete_reference_trajectory_curve)
-        
+        self.errors.addItem(self.errors_curve)
+        self.progress_vector.addItem(self.progress_vector_curve)
+
         self.feature_index_pointer = CurveArrow(self.discrete_reference_trajectory_curve, 0)
         self.feature_index_pointer.setStyle(angle=90, headWidth=5, pen=RED, brush= RED)
 
@@ -57,38 +71,53 @@ class FeatureGraphsWidget(QWidget):
         layout.addWidget(self.discrete_reference_trajectory, 13, 0, 4, 1)
         layout.addWidget(self.errors, 17, 0, 4, 1)
 
+        self.frozen = False
+
     def hasHeightForWidth(self):
         return True
 
     def heightForWidth(self, w):
         return w * 3
     
-    def update(self, user_trajectory, reference_trajectory, discrete_user_trajectory, discrete_reference_trajectory, errors, progress_vector, index):
-        self.user_trajectory.plot(*user_trajectory)
-        self.reference_trajectory.plot(*reference_trajectory)
+    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+    def _update(self, user_trajectory, reference_trajectory, discrete_user_trajectory, discrete_reference_trajectory, errors, progress_vector, prediction):
+        if self.frozen:
+            return
 
+        discrete_user_trajectory_x = np.array(range(len(user_trajectory)))
+        discrete_user_trajectory_y = user_trajectory
+        self.user_trajectory_curve.setData(discrete_user_trajectory_x, discrete_user_trajectory_y)
+        
+        discrete_reference_trajectory_x = np.array(range(len(reference_trajectory)))
+        discrete_reference_trajectory_y = reference_trajectory 
+        self.reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
+        
         discrete_user_trajectory_x = np.array(range(len(discrete_user_trajectory)))
-        discrete_user_trajectory_y = np.array(discrete_user_trajectory)
-        self.discrete_user_trajectory.plot(discrete_user_trajectory_x, discrete_user_trajectory_y)
+        discrete_user_trajectory_y = discrete_user_trajectory
+        self.discrete_user_trajectory_curve.setData(discrete_user_trajectory_x, discrete_user_trajectory_y)
         
         discrete_reference_trajectory_x = np.array(range(len(discrete_reference_trajectory)))
-        discrete_reference_trajectory_y = np.array(discrete_reference_trajectory)
-
+        discrete_reference_trajectory_y = discrete_reference_trajectory
+        
         self.discrete_reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
-        self.feature_index_pointer.setIndex(index)
-
-        errors_x = range(len(errors))
+        self.feature_index_pointer.setIndex(prediction)
+        
+        errors_x = np.array(range(len(errors)))
         errors_y = errors
-        self.errors.plot(errors_x, errors_y)
+        
+        self.errors_curve.setData(errors_x, errors_y)
 
         # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
-        self.progress_vector.plot(progress_vector, pen = RED)
+        self.progress_vector_curve.setData(progress_vector, pen = RED)
 
 
 class MotionAnaysisGUI(QMainWindow):
+    update_signal = pyqtSignal()
     def __init__(self):
         self.app = QtGui.QApplication([])
         super().__init__()
+        self.update_signal.connect(self.update)
+
         sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         sizePolicy.setHeightForWidth(True)
         self.setSizePolicy(sizePolicy)
@@ -114,6 +143,7 @@ class MotionAnaysisGUI(QMainWindow):
         controls_layout.addWidget(label1)
         controls_layout.addWidget(self.spot_chooser, 1)
         btn1 = QPushButton("freeze graphs")
+        btn1.clicked.connect(self.trigger_freeze_graphs)
         controls_layout.addWidget(btn1, 1)
         
         # Enable antialiasing for prettier plots
@@ -124,7 +154,6 @@ class MotionAnaysisGUI(QMainWindow):
         self.feature_widgets = dict()
 
         self.spot_data = dict()
-
 
         self.chosen_spot = None
         self.create_graphs()
@@ -155,6 +184,11 @@ class MotionAnaysisGUI(QMainWindow):
     def choose_spot(self, spot):
         self.chosen_spot = spot
         self.create_graphs()
+
+    @QtCore.pyqtSlot()
+    def trigger_freeze_graphs(self):
+        for fw in self.feature_widgets.values():
+            fw.frozen = not fw.frozen
 
     def create_graphs(self):
         """Our main window has a container with all the graphs for all features of an exercise. """
@@ -198,5 +232,10 @@ class MotionAnaysisGUI(QMainWindow):
 
 
 class GUIHandler(QThread):
+    
+
+    def __init__(self):
+        super().__init__()
+
     def run(self, gui):
         gui.start()

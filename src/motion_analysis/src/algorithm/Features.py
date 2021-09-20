@@ -30,6 +30,7 @@ We define our numpy arrays representing skelletons as follows:
 import collections
 from enum import IntEnum
 from collections import deque
+from os import remove
 import numpy as np
 import math
 from abc import ABC
@@ -362,13 +363,15 @@ class Feature(BaseFeature):
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
 
         try:
-            discretized_values =  discretize_feature_values(value, self.value, self.resolution)
+            discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
             if discretized_values:
                 self.discretized_values.extend(discretized_values)
         except IndexError:
             scale = self.reference_feature_collection.scale
             # If this is the first value, extend with the nearest value on our scale
             self.discretized_values.append(scale[np.argmin(abs(scale - value))])
+
+        self.discretized_values = deque(remove_jitter_from_last_samples(self.discretized_values, REMOVE_JITTER_RANGE))
 
         self.values.append(value)
         has_changed_progression = self.compute_new_feature_progression()
@@ -449,8 +452,28 @@ def discretize_feature_values(value, last_discritized_value, resolution):
     return new_resampled_feature_values
 
 
+def remove_jitter_from_last_samples(trajectory, _range):
+    """Remove repeated ups and downs only from the last samples of a (discretized) trajectory.
+
+    A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
+    For example measurements of an angle can jitter if the adjecent joints jitter.
+    With this method we remove such measurements from a trajectory.
+    
+   Args:
+        trajectory: A list of values that are free from jitter, except their frist _range values
+        _range: The range of values that can be part of the jitter. i.e. 3 ups and 3 downs is a range of 3.
+        
+    Return:
+        The trimmed trajectory
+    """
+    trajectory = np.array(trajectory)
+    last_samples = trajectory[-_range:]
+    rest = trajectory[:-_range]
+    return np.append(rest, remove_jitter_from_trajectory(last_samples, _range))
+
+
 def remove_jitter_from_trajectory(trajectory, _range):
-    """Remove repeated ups and downs in a trajectory.
+    """Remove repeated ups and downs in a (discretized) trajectory.
     
     A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
     For example measurements of an angle can jitter if the adjecent joints jitter.
@@ -469,14 +492,14 @@ def remove_jitter_from_trajectory(trajectory, _range):
         done = True
         try:
             for i in range(1, _range):
-                for j in range(i, len(trajectory) - 3 * i):
-                    window = trajectory[j: j + 3 * i]
+                for j in range(0, len(trajectory) - 3 * i):
+                    window = trajectory[j: j + 2 * i]
                     if np.array_equal(window[:i], window[2 * i:]):
                         done = False
                         try:
-                            del(trajectory[j: j + 3 * i])
+                            del(trajectory[j: j + 2 * i])
                         except ValueError:
-                            trajectory = np.delete(trajectory, range(j, j + 3 * i - 1))
+                            trajectory = np.delete(trajectory, range(j, j + 2 * i))
                             raise ContinueToOuterLoop
         except ContinueToOuterLoop:
             pass
@@ -523,7 +546,8 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
                     feature_states.append(feature_state)
                     last_feature_state = feature_state
 
-        discrete_values = trajectory = remove_jitter_from_trajectory(discrete_values, REMOVE_JITTER_RANGE)
+        discrete_values = remove_jitter_from_trajectory(discrete_values, REMOVE_JITTER_RANGE)
+
         discrete_trajectories_tensor.append(discrete_values)
         hankel_matrix = hankel(discrete_trajectories_tensor, np.roll(discrete_trajectories_tensor, -1))
         hankel_matrix = np.roll(hankel_matrix, -1, axis=0) # The first column of the hankel matrix represents the last frame of the recording

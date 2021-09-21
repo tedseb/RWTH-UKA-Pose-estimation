@@ -16,6 +16,7 @@ try:
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
+    from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -26,6 +27,7 @@ except ImportError:
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
+    from src.algorithm.logging import log
 
 import time
 from PyQt5.QtCore import QThread
@@ -74,8 +76,7 @@ class WorkerHandler(QThread):
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
 
-        if HIGH_VERBOSITY:
-                rp.logerr("Updating info for spot with key: " + spot_info_key)
+        log("Updating info for spot with key: " + spot_info_key)
 
         if spot_update_data["isActive"]:
             exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))

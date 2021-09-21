@@ -214,12 +214,10 @@ class Worker(Thread):
             except QueueEmpty:
                 continue
             except SpotMetaDataException as e:
-                if HIGH_VERBOSITY:
-                    rp.logerr(e)    
+                log(e)    
             except Exception as e:
-                if HIGH_VERBOSITY:
-                    print_exc() 
-                    rp.logerr("Encountered an Error while Comparing: " + str(e))
+                log("Encountered an Error while Comparing: " + str(e))
+                log(e)
             
         # Enqueue data for feature progressions and resampled feature lists
         self.features_interface.set(self.spot_key, self.features)

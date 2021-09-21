@@ -24,7 +24,9 @@ import pickle
 
 try:
     from motion_analysis.src.DataConfig import *
+    from motion_analysis.src.algorithm.logging import log, log_throttle
 except ImportError:
+    from src.algorithm.logging import log, log_throttle
     from src.DataConfig import *
 
 # Patch msgpack to understand numpy arrays
@@ -292,9 +294,8 @@ class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
         except QueueEmpty:
             raise QueueEmpty
         except Exception as e:
-            if HIGH_VERBOSITY:
-                rp.logerr("Issue getting message from Queue: " + str(key))
-                print_exc()
+            log("Issue getting message from Queue: " + str(key))
+            log(str(e))
         
         return message
 
@@ -339,13 +340,10 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
 
         if (queue_size >= REDIS_QUEUE_SIZE_PANIC_BOUNDARY):
             if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
-                if HIGH_VERBOSITY:
-                    rp.logerr("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
+                log_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
                 self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
             else:
-                if HIGH_VERBOSITY:
-                    return 1
-                    rp.logerr("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
+                log_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
         return 1
 
     def size(self, spot_key: str):

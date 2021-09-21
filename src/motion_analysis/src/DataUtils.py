@@ -10,6 +10,7 @@ import rospy as rp
 
 try:
     from motion_analysis.src.DataConfig import *
+    from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.DataConfig import *
 
@@ -18,8 +19,6 @@ def publish_message(publisher, topic, data):
         # This is currently how our REST API wants messages to be formed
         message = json.dumps({'topic': topic, 'data': data})
         publisher.publish(message)
-        if HIGH_VERBOSITY:
-            rp.logerr("ComparingSystem_Sender.py sent message: " + str(message))
+        log("ComparingSystem_Sender.py sent message: " + str(message))
     except Exception as e:
-        if HIGH_VERBOSITY:
-            rp.logerr("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
+        log("Issue sending message" + str(message) + " to REST API. Error: " + str(e))

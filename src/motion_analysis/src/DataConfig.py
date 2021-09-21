@@ -39,5 +39,4 @@ REDIS_SPOT_EXERCISE_POSTFIX = "exercise"
 SEND_CORRETIONS = False
 JOINT_DIFFERENCE_FADING_FACTOR = 0.8
 
-# Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = True
+FEATURE_EXTRACTION_SERVER_PORT = 3002

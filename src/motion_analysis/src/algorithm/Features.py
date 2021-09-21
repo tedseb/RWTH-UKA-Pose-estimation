@@ -30,6 +30,7 @@ We define our numpy arrays representing skelletons as follows:
 import collections
 from enum import IntEnum
 from collections import deque
+from os import remove
 import numpy as np
 import math
 from abc import ABC
@@ -50,7 +51,7 @@ class ContinueToOuterLoop(Exception):
 
 
 class FeatureState(IntEnum):
-    # Alias for features states
+    # Alias for features states, i.e. "low angle, high angle, ...., low distance, high distance."
     FEATURE_LOW: int = -2
     FEATURE_LOW_UNDECIDED = -1
     FEATURE_UNDECIDED: int = 0
@@ -59,6 +60,7 @@ class FeatureState(IntEnum):
 
 
 class FeatureType(IntEnum):
+    # Alias for feature type
     ANGLE = 0
     ANGULAR_SPEED = 1
     ANGULAR_ACCELERATION = 2
@@ -67,9 +69,21 @@ class FeatureType(IntEnum):
 
 
 class BaseFeature(ABC):
+    """Our different feature classes share some methods that we unify in this class.
+    
+    Any type of feature is identified by a hash. This is usually a hashed string representation of an object.
+    In the case of angles, that of an ordered dictionary containing the connected joints."""
     def __init__(self, \
         feature_hash: str, \
-            specification_dict: object = {}):
+            specification_dict: object = {},
+                max_digitized_trajectory_length: int = DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
+
+        self.max_digitized_traj_len = np.int(np.min([DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE, max_digitized_trajectory_length]))
+
+        self.progression = 0
+        self._values = np.array([])
+        self._discretized_values = np.array([])
+        self._states = np.array([])
             
         self.feature_hash = feature_hash
         self.type = specification_dict["type"]
@@ -81,33 +95,64 @@ class BaseFeature(ABC):
 
     @property
     def value(self):
-        return self.values[-1]
+        return self._values[-1]
 
     @property
     def resampled_value(self):
-        return self.resampled_values[-1]
+        return self._digitized_values[-1]
 
     @property
     def state(self):
         try:
-            return self.states[-1]
+            return self._states[-1]
         except IndexError:
             return FeatureState.FEATURE_UNDECIDED
 
+    @property
+    def values(self):
+        return self._values
 
-class ReferenceFeature(BaseFeature):
+    @values.setter
+    def values(self, v):
+        self._values = v[-FEATURE_TRAJECTORY_MAX_MEMORY_SIZE:]
+
+    @property
+    def discretized_values(self):
+        return self._discretized_values
+
+    @discretized_values.setter
+    def discretized_values(self, dv):
+        self._discretized_values = dv[-self.max_digitized_traj_len:]
+
+    @property
+    def states(self):
+        return self._states
+
+    @states.setter
+    def states(self, s):
+        self._states = s[-STATES_TRAJECTORY_MAX_MEMORY_SIZE:]
+
+    @abstractmethod
+    def asdict(self):
+        pass
+
+
+class ReferenceRecordingFeature(BaseFeature):
+    """A reference feature corresponds to one repetition of an exercise.
+    
+    It stores all properties of a repetition that are of meaning to our algorithm.
+    In order to identify the repetition it belongs to among all repetitions that we analyze, we hash the recording itself."""
     def __init__(self, \
         feature_hash: str, \
-            recording_hash: str, \
-                specification_dict: object = {}):
-        super().__init__(feature_hash, specification_dict)
-
-        self.values = deque()
-        self.progression = 0
-        self.resampled_values = deque()
-        self.states = deque()
+            exercise_id: str, \
+                recording: str, \
+                    pose_definition_adapter: PoseDefinitionAdapter,
+                        specification_dict: object = {}):
+        super().__init__(feature_hash, specification_dict, max_digitized_trajectory_length=np.inf)
         
-        self.recording_hash = recording_hash
+        self.recording_hash = fast_hash(recording)
+        self.recording = recording
+        self.exercise_id = exercise_id
 
         self.lower_boundary = None
         self.upper_boundary = None
@@ -116,11 +161,32 @@ class ReferenceFeature(BaseFeature):
         self.resolution = None
         self.scale = None
 
-    def add_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
+        self.pose_definition_adapter = pose_definition_adapter
+
+        self.total_joint_differences_this_rep = []
+        self.moving_average_total_joint_difference = 0
+
+        for pose in recording:
+            # For now, we use the same pose_defninition_adapter for all recordings. This may change
+            self.add_pose(pose, self.pose_definition_adapter)
+            
+        self.update_data()
+        
+    def add_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter = None):
+        """Add a pose to this reference feature's trajectory.
+        
+        Args:
+            pose: The pose that is added
+            pose_definition_adapter: The pose definition adapter for the pose that we want to add. If not provided, use the one of the original recording.
+        """
+        if not pose_definition_adapter:
+            pose_definition_adapter = self.pose_definition_adapter
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
-        self.values.append(value)
+        self.values = np.append(self.values, value)
 
     def update_data(self):
+        """(Re-)Calculate the information that we find in this reference feature's trajectory."""
+        # Even though we do the following in a higher dimension than necessary, we preserve the naming that we find in the ReferenceFeatuereCollection to provide a unified API.
         self.highest_value = np.amax(self.values)
         self.lowest_value = np.amin(self.values)
         self.recording_length = len(self.values)
@@ -132,37 +198,110 @@ class ReferenceFeature(BaseFeature):
         
         first_reference_feature_value = self.values[0]
         self.beginning_state = decide_feature_state(first_reference_feature_value, FeatureState.FEATURE_UNDECIDED, self.lower_boundary, self.upper_boundary)
-    
 
-class ReferenceFeatureCollection(BaseFeature):
+        discrete_trajectories_tensor, \
+            self.discretization_reference_trajectory_indices_tensor, \
+                self.hankel_tensor, \
+                    self.feature_states_matrix, \
+                        self.scale, \
+                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary)
+        
+        self.discretized_values = discrete_trajectories_tensor[0]
+
+        # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
+        median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
+
+        self.number_of_dicided_state_changes = compute_number_of_decided_state_changes(median_feature_states_array)
+
+        self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, self.discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, [self.recording_length])
+        # TODO: Check wether median_reference_trajectory_feature_states match the median state trajectory
+
+        self.median_beginning_state = np.median(self.beginning_state)
+
+    def predict(self, feature: BaseFeature, pose: np.ndarray):
+        # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
+        reference_trajectory_hankel_matrix = self.hankel_tensor[0]
+        errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
+        prediction = np.argmin(errors)
+        # TODO: This should be only one dimension in this tensor. Check if this works!!!
+        self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
+        median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
+        progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+        self.progress_vector = map_progress_to_vector(progress)
+        self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
+        self.reference_pose = self.recording[int(len(self.recording) * progress)]
+
+        joint_difference = total_joint_difference(pose, self.reference_pose)
+        self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
+        self.total_joint_differences_this_rep.append(joint_difference)
+
+    @property
+    def average_total_joint_difference_last_rep(self):
+        return np.average(self.total_joint_differences_this_rep)
+
+    def new_repetition(self):
+        self.progression = 0
+        self.total_joint_differences_this_rep = []
+
+    def asdict(self):
+        return {
+            "feature_hash": self.feature_hash,
+            "values": self.values,
+            "progression": self.progression,
+            "discretized_values": self.discretized_values,
+            "states": self.states,
+            "recording_hash": self.recording_hash,
+            "lower_boundary": self.lower_boundary,
+            "upper_boundary": self.upper_boundary,
+            "range_of_motion": self.range_of_motion,
+            
+            "highest_value": self.highest_value,
+            "lowest_value": self.lowest_value,
+            "resolution": self.resolution,
+            "recording_length": self.recording_length,
+            "scale": self.scale,
+            "beginning_state": self.beginning_state,
+            "discretization_reference_trajectory_indices_tensor": self.discretization_reference_trajectory_indices_tensor, 
+            "hankel_tensor": self.hankel_tensor, 
+            "feature_state_matrix" : self.feature_states_matrix,
+            "number_of_dicided_state_changes": self.number_of_dicided_state_changes,
+            "median_trajectory": self.median_trajectory, 
+            "median_trajectory_feature_states": self.median_trajectory_feature_states, 
+            "median_trajectory_discretization_ranges": self.median_trajectory_discretization_ranges,
+            "median_beginning_state": self.median_beginning_state
+        }
+
+
+class ReferenceRecordingFeatureCollection(BaseFeature):
     def __init__(self, \
         feature_hash: str, \
-            specification_dict: object = {}, \
-                recordings_and_adapters: List[np.ndarray] = []):
+            feature_specification: dict = {}, \
+                reference_data: List[tuple] = []):
 
-        super().__init__(feature_hash, specification_dict)
-        self.reference_features = list()
+        super().__init__(feature_hash, feature_specification, max_digitized_trajectory_length=np.inf)
+        self.reference_recording_features = list()
 
-        for (recording, adapter) in recordings_and_adapters:
-            self.add_recording(recording, adapter)
+        for (exercise_id, recording, adapter) in reference_data:
+            self.add_recording(exercise_id, recording, adapter)
 
-        self.update_data()
+        self.update_static_data()
         
-    def add_recording(self, recording: np.ndarray, pose_definition_adapter):
-        recording_hash = hash(str(recording))
-        reference_feature = ReferenceFeature(self.feature_hash, recording_hash, self.specification_dict)
-        for pose in recording:
-            # For now, we use the same pose_defninition_adapter for all recordings. This may change
-            reference_feature.add_pose(pose, pose_definition_adapter)
-        reference_feature.update_data()
-        self.reference_features.append(reference_feature)
+    def add_recording(self, exercise_id, recording: np.ndarray, pose_definition_adapter):
+        """Add a recording and thus a reference feature to this collection.
+        
+        Args:
+            recording: A recording, corresponding to a repetition of an exercise that we want to add
+            pose_definition_adapter: A pose definition adapter that fits the recording"""
+        reference_feature = ReferenceRecordingFeature(self.feature_hash, exercise_id, recording, pose_definition_adapter, self.specification_dict)
+        self.reference_recording_features.append(reference_feature)
 
-    def update_data(self):
+    def update_static_data(self):
+        """Re-)Calculate the information that we find in this reference feature collection's trajectories."""
         lowest_values = []
         highest_values = []
         recording_lengths = []
         # The values here are each lists of feature values of pose trajectories
-        trajectories = [rf.values for rf in self.reference_features]
+        trajectories = [rf.values for rf in self.reference_recording_features]
         for trajectory in trajectories:
             lowest_values.append(np.amin(trajectory))
             highest_values.append(np.amax(trajectory))
@@ -182,49 +321,85 @@ class ReferenceFeatureCollection(BaseFeature):
                 self.hankel_tensor, \
                     self.feature_states_matrix, \
                         self.scale, \
-                            self.resolution = compute_discrete_trajectoreis_hankel_matrices_and_feature_states(trajectories, self.range_of_motion, self.lower_boundary, self.upper_boundary)
+                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states(trajectories, self.range_of_motion, self.lower_boundary, self.upper_boundary)
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
 
-        self.number_of_dicided_state_changes = compute_numer_of_dicided_state_changes(median_feature_states_array)
+        self.number_of_dicided_state_changes = compute_number_of_decided_state_changes(median_feature_states_array)
 
         self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, self.discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, recording_lengths)
         # TODO: Check wether median_reference_trajectory_feature_states match the median state trajectory
 
-        beginning_states = [r.beginning_state for r in self.reference_features]
+        beginning_states = [r.beginning_state for r in self.reference_recording_features]
         self.median_beginning_state = np.median(beginning_states)
+        
+    def predict(self, feature: BaseFeature, pose: np.ndarray):
+        recording_moving_average_total_joint_differences = dict()
+        lowest_moving_average_total_joint_difference = np.inf
+        for r in self.reference_recording_features:
+            r.predict(feature, pose)
+            recording_moving_average_total_joint_differences[r.recording_hash] = lowest_moving_average_total_joint_difference
+
+    @property
+    def average_total_joint_difference_last_rep(self):
+        return np.average(self.total_joint_differences_this_rep)
+
+    def new_repetition(self):
+        self.progression = 0
+        self.total_joint_differences_this_rep = []
+
+    def asdict(self):
+        return {
+            "feature_hash": self.feature_hash,
+            "lower_boundary": self.lower_boundary,
+            "upper_boundary": self.upper_boundary,
+            "range_of_motion": self.range_of_motion,
+            
+            "highest_value": self.highest_value,
+            "lowest_value": self.lowest_value,
+            "resolution": self.resolution,
+            "scale": self.scale,
+            "discretization_reference_trajectory_indices_tensor": self.discretization_reference_trajectory_indices_tensor, 
+            "hankel_tensor": self.hankel_tensor, 
+            "feature_state_matrix" : self.feature_states_matrix,
+            "number_of_dicided_state_changes": self.number_of_dicided_state_changes,
+            "median_trajectory": self.median_trajectory, 
+            "median_trajectory_feature_states": self.median_trajectory_feature_states, 
+            "median_trajectory_discretization_ranges": self.median_trajectory_discretization_ranges,
+            "median_beginning_state": self.median_beginning_state,
+            "reference_features": {r.recording_hash: r.asdict() for r in self.reference_recording_features}
+        }
 
 
 class Feature(BaseFeature):
-    def __init__(self, reference_feature_collection: ReferenceFeatureCollection, max_trajectory_length=FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
+    def __init__(self, \
+        reference_feature_collection: ReferenceRecordingFeatureCollection, \
+                max_trajectory_length=FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
 
-        super().__init__(reference_feature_collection.feature_hash, reference_feature_collection.specification_dict)
+        super().__init__(reference_feature_collection.feature_hash, reference_feature_collection.specification_dict, max_digitized_trajectory_length=max_trajectory_length)
         self.reference_feature_collection = reference_feature_collection
         self.lower_boundary = reference_feature_collection.lower_boundary
         self.upper_boundary = reference_feature_collection.upper_boundary
         self.resolution = reference_feature_collection.resolution
 
-        self.values = deque(maxlen=max_trajectory_length)
-        self.progression = 0
-        self.discretized_values = deque(maxlen=max_trajectory_length)
-        self.states = deque(maxlen=max_trajectory_length)
-
     def update(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
 
         try:
-            discretized_values =  discretize_feature_values(value, self.value, self.resolution)
+            discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
             if discretized_values:
-                self.discretized_values.extend(discretized_values)
+                self.discretized_values = np.append(self.discretized_values, discretized_values)
         except IndexError:
             scale = self.reference_feature_collection.scale
             # If this is the first value, extend with the nearest value on our scale
-            self.discretized_values.append(scale[np.argmin(abs(scale - value))])
+            self.discretized_values = np.append(self.discretized_values, scale[np.argmin(abs(scale - value))])
+        
+        self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, REMOVE_JITTER_RANGE)
 
-        self.values.append(value)
+        self.values = np.append(self.values, value)
         has_changed_progression = self.compute_new_feature_progression()
-        self.states.append(decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
+        self.states = np.append(self.states, decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
 
         return has_changed_progression
 
@@ -265,28 +440,30 @@ class Feature(BaseFeature):
         self.progression == new_feature_progression
         return has_changed
 
-
-def enqueue_dictionary(previous_dict, enqueued_dict, max_queue_size):
-    for k, v in enqueued_dict.items():
-        if isinstance(v, collections.MutableMapping):
-            previous_dict[k] = enqueue_dictionary(previous_dict.get(k, {}), v, max_queue_size)
-        elif isinstance(v, list):
-            previous_dict[k] = previous_dict.get(k, [])
-            previous_dict[k].extend(v)
-            if (len(previous_dict[k]) >= max_queue_size):
-                previous_dict[k] = previous_dict[k][-max_queue_size:]
-        else:
-            previous_dict[k] = previous_dict.get(k, [])
-            if previous_dict[k] == None:
-                previous_dict[k] = []
-            previous_dict[k].append(v)
-            if (len(previous_dict[k]) >= max_queue_size):
-                previous_dict[k] = previous_dict[k][-max_queue_size:]
-    
-    return previous_dict
+    def asdict(self):
+        return {
+            "feature_hash": self.feature_hash,
+            "lower_boundary": self.lower_boundary,
+            "upper_boundary": self.upper_boundary,
+            "resolution": self.resolution,
+            "values": self.values,
+            "discritized_values": self.discretized_values,
+            "progression": self.progression,
+            "states": self.states
+        }
 
 
 def discretize_feature_values(value, last_discritized_value, resolution):
+    """Divide the distance between a value and the last discritized value according to a resolution and return the steps between the two.
+    
+    Args:
+        value: The current value of a feature.
+        last_discritized_value: The last value that we discritized. This defines our "fixpoint" for the resolution
+        resolution: The resolution at which we want to discritize.
+        
+    Returns:
+        A list of discritized value between value and last_discritized_value, $resolution apart
+        """
     new_resampled_feature_values = []
     delta = value - last_discritized_value
     remaining_delta = abs(delta)
@@ -299,8 +476,28 @@ def discretize_feature_values(value, last_discritized_value, resolution):
     return new_resampled_feature_values
 
 
+def remove_jitter_from_last_samples(trajectory, _range):
+    """Remove repeated ups and downs only from the last samples of a (discretized) trajectory.
+
+    A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
+    For example measurements of an angle can jitter if the adjecent joints jitter.
+    With this method we remove such measurements from a trajectory.
+    
+   Args:
+        trajectory: A list of values that are free from jitter, except their frist _range values
+        _range: The range of values that can be part of the jitter. i.e. 3 ups and 3 downs is a range of 3.
+        
+    Return:
+        The trimmed trajectory
+    """
+    trajectory = np.array(trajectory)
+    last_samples = trajectory[-_range:]
+    rest = trajectory[:-_range]
+    return np.append(rest, remove_jitter_from_trajectory(last_samples, _range))
+
+
 def remove_jitter_from_trajectory(trajectory, _range):
-    """Remove repeated ups and downs in a trajectory.
+    """Remove repeated ups and downs in a (discretized) trajectory.
     
     A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
     For example measurements of an angle can jitter if the adjecent joints jitter.
@@ -319,14 +516,14 @@ def remove_jitter_from_trajectory(trajectory, _range):
         done = True
         try:
             for i in range(1, _range):
-                for j in range(i, len(trajectory) - 3 * i):
-                    window = trajectory[j: j + 3 * i]
+                for j in range(0, len(trajectory) - 3 * i):
+                    window = trajectory[j: j + 2 * i]
                     if np.array_equal(window[:i], window[2 * i:]):
                         done = False
                         try:
-                            del(trajectory[j: j + 3 * i])
+                            del(trajectory[j: j + 2 * i])
                         except ValueError:
-                            trajectory = np.delete(trajectory, range(j, j + 3 * i - 1))
+                            trajectory = np.delete(trajectory, range(j, j + 2 * i))
                             raise ContinueToOuterLoop
         except ContinueToOuterLoop:
             pass
@@ -334,7 +531,7 @@ def remove_jitter_from_trajectory(trajectory, _range):
     return trajectory
 
 
-def compute_discrete_trajectoreis_hankel_matrices_and_feature_states(feature_trajectories, range_of_motion, lower_boundary, upper_boundary):
+def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, range_of_motion, lower_boundary, upper_boundary):
     """Discritize a list of trajectories and compute their hankel tensor and features states.
 
     Args:
@@ -357,15 +554,16 @@ def compute_discrete_trajectoreis_hankel_matrices_and_feature_states(feature_tra
     hankel_tensor = [] # In the comparing algorithm, we need a hankel matrix of every resampled reference trajectory
     feature_states_matrix = list()
     for trajectory in feature_trajectories:
-        last_values = [trajectory[X]]
+        last_values = [trajectory[0]]
         last_feature_state = decide_feature_state(last_values[-1], None, lower_boundary, upper_boundary)
-        discrete_values = last_values
-        feature_trajectory_indices = [X]
+        discrete_values = np.array(last_values)
+        feature_trajectory_indices = [0]
         feature_states = list()
         for index, value in enumerate(trajectory):
             already_discritized_values = discretize_feature_values(value, last_values[-1], resolution)
-            discrete_values.extend(already_discritized_values)
             if already_discritized_values:
+                already_discritized_values = np.array(already_discritized_values)
+                discrete_values = np.append(discrete_values, already_discritized_values)
                 feature_state = decide_feature_state(already_discritized_values[-1], last_feature_state, lower_boundary, upper_boundary)
                 last_values = already_discritized_values
                 feature_trajectory_indices.extend([index] * len(last_values))
@@ -373,7 +571,8 @@ def compute_discrete_trajectoreis_hankel_matrices_and_feature_states(feature_tra
                     feature_states.append(feature_state)
                     last_feature_state = feature_state
 
-        discrete_values = trajectory = remove_jitter_from_trajectory(discrete_values, REMOVE_JITTER_RANGE)
+        discrete_values = remove_jitter_from_trajectory(discrete_values, REMOVE_JITTER_RANGE)
+
         discrete_trajectories_tensor.append(discrete_values)
         hankel_matrix = hankel(discrete_trajectories_tensor, np.roll(discrete_trajectories_tensor, -1))
         hankel_matrix = np.roll(hankel_matrix, -1, axis=0) # The first column of the hankel matrix represents the last frame of the recording
@@ -483,13 +682,20 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
     return median_trajectory, feature_states, discretization_ranges
 
 
-def compute_numer_of_dicided_state_changes(median_feature_states_array):
-    decided_median_feature_states = median_feature_states_array[abs(median_feature_states_array) > 1]
+def compute_number_of_decided_state_changes(feature_states_array):
+    """Compute how often the state of a feature has changed between HIGH and LOW.
+    
+    Args:
+        median_feature_states_array: An array holding feature states that vary according between HIGH and LOW, but may also be UNDECIDED.
+        
+    Returns:
+        An intiger corresponding to the number of decided state changes"""
+    decided_median_feature_states = feature_states_array[abs(feature_states_array) > 1]
     decided_median_feature_state_change_indices = np.where(decided_median_feature_states[:-1] * decided_median_feature_states[1:] < 0 )[X] + 1
-    number_of_dicided_state_changes = len(decided_median_feature_state_change_indices)
+    number_of_decided_state_changes = len(decided_median_feature_state_change_indices)
     if decided_median_feature_states[X] != decided_median_feature_states[-1]:
-        number_of_dicided_state_changes += 1
-    return number_of_dicided_state_changes
+        number_of_decided_state_changes += 1
+    return number_of_decided_state_changes
 
 
 def decide_feature_state(value, last_feature_state, lower_boundary, upper_boundary):

@@ -16,6 +16,7 @@ try:
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
+    from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -26,6 +27,7 @@ except ImportError:
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
+    from src.algorithm.logging import log
 
 import time
 from PyQt5.QtCore import QThread
@@ -66,8 +68,6 @@ class WorkerHandler(QThread):
         self.gui = MotionAnaysisGUI()
         self.gui_handler.run(self.gui)
 
-        self.gui.update_available_spots("0", True, [0])
-
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
         spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
         station_id = spot_update_data["stationID"]
@@ -76,8 +76,7 @@ class WorkerHandler(QThread):
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
 
-        if HIGH_VERBOSITY:
-                rp.logerr("Updating info for spot with key: " + spot_info_key)
+        log("Updating info for spot with key: " + spot_info_key)
 
         if spot_update_data["isActive"]:
             exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
@@ -88,13 +87,12 @@ class WorkerHandler(QThread):
             # TODO: Tamer must let experts specify the features of interest
             recordings = [recording]
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(exercise_data=exercise_data, pose_definition_adapter=self.pose_definition_adapter)
-
             # For now, we have the same pose definition adapter for all recordings
-            recordings_and_adapters = [(r, self.pose_definition_adapter) for r in recordings]
-            reference_feature_collections = [ReferenceFeatureCollection(feature_hash, feature_specification, recordings_and_adapters) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+            reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
+            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(c) for c in reference_feature_collections}
+            features_dict = {c.feature_hash: Feature(c) for c in reference_recording_feature_collections}
 
             self.features_interface.set(spot_featuers_key, features_dict)
 
@@ -102,20 +100,21 @@ class WorkerHandler(QThread):
             del exercise_data['stages']
             
             # Set all entries that are needed by the handler threads later on
-            exercise_data['recordings'] = {hash(str(r)): r for r in recordings}
+            exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
-            exercise_data['reference_feature_collections'] = reference_feature_collections
+            exercise_data['reference_feature_collections'] = reference_recording_feature_collections
             
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
             
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
             current_worker = self.workers.get(station_id, None)
+
+            feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
+            self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
+
             if not current_worker:
                 self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui)
-
-            feature_hashes = [c.feature_hash for c in reference_feature_collections]
-            self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
         else:
             current_worker = self.workers.get(station_id, None)
             if current_worker:

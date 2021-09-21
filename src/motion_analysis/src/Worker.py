@@ -53,11 +53,14 @@ except ImportError:
 class NoJointsAvailable(Exception):
     pass
 
+
 class NoSpoMetaDataAvailable(Exception):
     pass
 
+
 class NoExerciseDataAvailable(Exception):
     pass
+
 
 class Worker(Thread):
     """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
@@ -100,6 +103,7 @@ class Worker(Thread):
         self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
 
         self.bad_repetition = False
+        self.moving_average_joint_difference = 0
 
         self.gui = gui
 
@@ -127,10 +131,28 @@ class Worker(Thread):
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
-        self.gui.update_available_spots(spot_name=self.spot_key, active=True, feature_hashes=self.features.keys())
+        self.reference_features_set = False
 
         while(self.running):
             try:
+
+                if not self.reference_features_set:
+                    try:
+                        self.reference_features_set = True
+                        for h, f in self.features.items():
+                            if h in self.gui.feature_widgets.keys():
+                                # TODO: Fit this to use many featuers
+                                sample_reference_feature = f.reference_feature_collection.reference_recording_features[0]
+                                self.gui.feature_widgets[h].update_reference_plots.emit(
+                                                np.array(sample_reference_feature.values), \
+                                                        np.array(sample_reference_feature.discretized_values))
+                            else:
+                                self.reference_features_set = False
+                        
+                    except KeyError:
+                        pass
+
+
                 # The following lines fetch data that we need to analyse
                 spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
                 spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
@@ -139,11 +161,10 @@ class Worker(Thread):
                 past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
 
                 # Extract feature states
-                exercise_data = spot_info_dict['exercise_data']
-                used_joint_ndarray = present_joints_with_timestamp['used_joint_ndarray']
+                pose = present_joints_with_timestamp['used_joint_ndarray']
 
                 for f in self.features.values():
-                    f.update(used_joint_ndarray, self.pose_definition_adapter)
+                    f.update(pose, self.pose_definition_adapter)
 
                 # Compare joints with expert system data
                 increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
@@ -166,7 +187,7 @@ class Worker(Thread):
 
                 # Calculate a new reference pose mapping
                 # TODO: make this pretty
-                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, spot_info_dict['exercise_data'])
+                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, spot_info_dict['exercise_data'], self.gui)
                 self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
                 if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
                     del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
@@ -174,15 +195,9 @@ class Worker(Thread):
                     if not MESSY_INPUTS:
                         # Use this only if AI produces adequate results
                         self.bad_repetition = True
-                        
-                        # TODO: Fill this functionality in with new Feature API!
-                        # self.last_feature_progressions = {}
-                        # self.last_resampled_features = {}
-                        # self.last_feature_states = {}
-                        rp.logerr("bad_repetition detected : FEATURE_DIFFERENCE_ELASTICITY")
 
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
-                self.publish_pose(used_joint_ndarray, self.user_skelleton_publisher)
+                self.publish_pose(pose, self.user_skelleton_publisher)
 
                 # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
@@ -199,12 +214,10 @@ class Worker(Thread):
             except QueueEmpty:
                 continue
             except SpotMetaDataException as e:
-                if HIGH_VERBOSITY:
-                    rp.logerr(e)    
+                log(e)    
             except Exception as e:
-                if HIGH_VERBOSITY:
-                    print_exc() 
-                    rp.logerr("Encountered an Error while Comparing: " + str(e))
+                log("Encountered an Error while Comparing: " + str(e))
+                log(e)
             
         # Enqueue data for feature progressions and resampled feature lists
         self.features_interface.set(self.spot_key, self.features)

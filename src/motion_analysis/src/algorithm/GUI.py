@@ -110,7 +110,7 @@ class FeatureGraphsWidget(QWidget):
         
         # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
         self._progress_vector = progress_vector
-        # self._prediction = prediction
+        self._prediction = prediction
     
     def update_plots(self):
         if self.frozen:

@@ -81,9 +81,9 @@ class BaseFeature(ABC):
         self.max_digitized_traj_len = np.int(np.min([DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE, max_digitized_trajectory_length]))
 
         self.progression = 0
-        self._values = np.ndarray([])
-        self._discretized_values = np.ndarray([])
-        self._states = np.ndarray([])
+        self._values = np.array([])
+        self._discretized_values = np.array([])
+        self._states = np.array([])
             
         self.feature_hash = feature_hash
         self.type = specification_dict["type"]
@@ -394,7 +394,7 @@ class Feature(BaseFeature):
             scale = self.reference_feature_collection.scale
             # If this is the first value, extend with the nearest value on our scale
             self.discretized_values = np.append(self.discretized_values, scale[np.argmin(abs(scale - value))])
-
+        
         self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, REMOVE_JITTER_RANGE)
 
         self.values = np.append(self.values, value)

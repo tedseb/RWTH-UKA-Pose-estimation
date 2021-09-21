@@ -13,6 +13,7 @@ const config = require('./config');
 const YAML = require('yaml');
 var MongoClient = require('mongodb').MongoClient;
 const { stringify } = require('querystring');
+const { features } = require('process');
 
 
 // Parameters and Constants:
@@ -29,7 +30,7 @@ app.use(bodyParser.urlencoded({
   limit: '50mb',
   extended: true
 }));
-app.use(express.static(process.cwd() + '/dist/'));
+app.use(express.static(process.cwd() + '/src/rosnodejsNodes/dist/'));
 const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
 let coordinateClients = [];
@@ -50,6 +51,8 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const recordings = db.collection("recordings");
   const hmiExercises = db.collection("hmiExercises");
 
+
+  //get me this amend
   nh.subscribe('/station_usage', StationUsage, async (msg) => {
     console.log(msg);
     exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
@@ -68,7 +71,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
         console.error(`No such exercise  ${msg['exerciseName']}`)
       }
     });
-    hmiExercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
+    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
       if (err) throw err;
       if (result) {
         const stringified = YAML.stringify(result);
@@ -112,12 +115,23 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
 
   //req.body == recording raw
   app.post('/api/expert/recording/save', (req, res) => {
+    console.log("recording requested new");
+    if(req.body['features']){
+      console.log('hi');
+      let arr = [];
+      for (feature of req.body['features']){
+        const obj = {
+          'type': feature[0],
+          'value': feature[1]
+        }
+        arr.push(obj);
+      }
+      req.body['features'] = arr;
+    } else {
+      console.log('helooo');
+    }
     if (req) {
-      const recording = req.body;
-      const recObj = {
-        recording: recording
-      };
-      recordings.insertOne(recObj);
+      exercises.insertOne(req.body);
       res.status(200).send();
     } else {
       res.status(500).send('Malformed Recording');
@@ -163,7 +177,7 @@ const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(process.cwd() + './dist/index.html');
+  res.sendFile(process.cwd() + '/src/rosnodejsNodes/dist/index.html');
 });
 
 app.get('/api/coordinates', (req, res) => {

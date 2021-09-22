@@ -64,7 +64,7 @@ class ObjectDetectionPipeline:
         imgs = [img_original_bgr_0, img_original_bgr_1]
         img = self.obj_detectYolo(imgs)
 
-        fps = int(1/(time.time()-tmpTime))
+        # fps = int(1/(time.time()-tmpTime))
         # print("FPS : ",fps)
         if self.renderer==True:
             msg_renderImage = Image()

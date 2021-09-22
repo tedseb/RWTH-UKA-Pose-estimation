@@ -56,7 +56,7 @@ async def analyze(websocket, path):
             exercise_data = yaml.safe_load(data["exercise_data"])
             recording = adapter.recording_to_ndarray(data["recording"])
             recordings_and_adapters = [(recording, adapter)]
-            feature_of_interest_specification = FeatureExtractionModule.extract_feature_of_interest_specification_dictionary(exercise_data=exercise_data, pose_definition_adapter=adapter)
+            feature_of_interest_specification = FeatureExtractionModule.extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data, pose_definition_adapter=adapter)
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, recordings_and_adapters) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             reference_features_dict = {c.feature_hash: c.asdict() for c in reference_recording_feature_collections}
@@ -68,7 +68,7 @@ async def analyze(websocket, path):
             reference_recording = adapter.recording_to_ndarray(data["reference_recording"])
             recording = adapter.recording_to_ndarray(data["recording"])
             recordings_and_adapters = [(reference_recording, adapter)]
-            feature_of_interest_specification = FeatureExtractionModule.extract_feature_of_interest_specification_dictionary(exercise_data=exercise_data, pose_definition_adapter=adapter)
+            feature_of_interest_specification = FeatureExtractionModule.extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data, pose_definition_adapter=adapter)
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, recordings_and_adapters) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features

@@ -436,8 +436,8 @@ class Feature(BaseFeature):
         else:
             new_feature_progression = self.progression
 
-        has_changed = self.progression == new_feature_progression
-        self.progression == new_feature_progression
+        has_changed = self.progression != new_feature_progression
+        self.progression = new_feature_progression
         return has_changed
 
     def asdict(self):

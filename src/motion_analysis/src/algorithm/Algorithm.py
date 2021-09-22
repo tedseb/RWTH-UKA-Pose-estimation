@@ -69,10 +69,8 @@ def analyze_feature_progressions(
     for f in features.values():
         beginning_state = f.reference_feature_collection.median_beginning_state
         number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
-
         if f.state != beginning_state:
             in_beginning_state = False
-
         if f.progression < number_of_dicided_state_changes_for_repetition:
             increase_reps = False
         elif f.progression > number_of_dicided_state_changes_for_repetition and not MESSY_INPUTS:

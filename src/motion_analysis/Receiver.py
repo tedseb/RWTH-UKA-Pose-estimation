@@ -6,23 +6,29 @@ This file contains the Receiver Node.
 It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
+import rospy as rp
 from typing import Any
-
-import rospy as rp    
-from backend.msg import Persons
-
+ 
 try:
-    from comparing_system.src.Comparator import Comparator
-    from comparing_system.src.config import *
-    from comparing_system.src.FeatureExtraction import *
-    from comparing_system.src.InterCom import *
-    from comparing_system.src.Util import *
+    from motion_analysis.src.Worker import *
+    from motion_analysis.src.DataConfig import *
+    from motion_analysis.src.InterCom import *
+    from motion_analysis.src.DataUtils import *
+    from motion_analysis.src.ROSAdapters import *
+    from motion_analysis.src.algorithm.AlgoConfig import *
+    from motion_analysis.src.algorithm.FeatureExtraction import *
+    from motion_analysis.src.algorithm.AlgoUtils import *
+    from backend.msg import Persons
 except ImportError:
-    from src.Comparator import Comparator
-    from src.config import *
-    from src.FeatureExtraction import *
+    from src.Worker import *
+    from src.DataConfig import *
     from src.InterCom import *
-    from src.Util import *
+    from src.DataUtils import *
+    from src.ROSAdapters import *
+    from src.algorithm.AlgoConfig import *
+    from src.algorithm.FeatureExtraction import *
+    from src.algorithm.AlgoUtils import *
+    from backend.msg import Persons
 
 
 class Receiver():
@@ -34,7 +40,7 @@ class Receiver():
     def __init__(self, 
     spot_queue_load_balancer_class: QueueLoadBalancerInterface = RedisQueueLoadBalancerInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
-    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor):
+    feature_extractor_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter):
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
         self.spot_queue_interface = spot_queue_interface_class()
@@ -56,7 +62,7 @@ class Receiver():
 
 if __name__ == '__main__':
     # initialize ros node
-    rp.init_node('ComparingSystem_Receiver', anonymous=False)
+    rp.init_node('Motion_Analysis_Receiver', anonymous=False)
 
     receiver = Receiver()
 

@@ -1,20 +1,35 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+
 import rospy as rp
+
+try:
+    from motion_analysis.src.Worker import *
+    from motion_analysis.src.DataConfig import *
+    from motion_analysis.src.InterCom import *
+    from motion_analysis.src.DataUtils import *
+    from motion_analysis.src.algorithm.AlgoConfig import *
+    from motion_analysis.src.algorithm.FeatureExtraction import *
+    from motion_analysis.src.algorithm.AlgoUtils import *
+except ImportError:
+    from src.Worker import *
+    from src.DataConfig import *
+    from src.InterCom import *
+    from src.DataUtils import *
+    from src.algorithm.AlgoConfig import *
+    from src.algorithm.FeatureExtraction import *
+    from src.algorithm.AlgoUtils import *
+
+
 from backend.msg import Person
 from std_msgs.msg import ColorRGBA, Header
 from geometry_msgs.msg import Vector3
-from visualization_msgs.msg import Marker, MarkerArray
 
-try:
-    from comparing_system.src.FeatureExtraction import *
-except (ImportError, ModuleNotFoundError):
-    from src.FeatureExtraction import *
 
 class Visualizer():
     def __init__(self,
-    feature_extractor_class: FeatureExtractor = SpinFeatureExtractor):
+    feature_extractor_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter):
         # define a publisher to publish the 3D skeleton of multiple people
         self.input_pub = rp.Publisher('comparing_input_marker', MarkerArray, queue_size=100)
         self.reference_pub = rp.Publisher('comparing_reference_prediction_marker', MarkerArray, queue_size=100)
@@ -54,7 +69,7 @@ class Visualizer():
 
         for pair in self.feature_extractor.joint_connections:
             m = Marker()
-            m.header = Header(self.markerid, rp.Time.now(), "dev0")
+            m.header = Header(self.markerid, rp.Time.now(), "map")
             self.markerid += 1
             m.id = idx
             idx+=1
@@ -71,6 +86,6 @@ class Visualizer():
 
 
 if __name__ == '__main__':
-    rp.init_node('ComparingSystem_Visualizer', anonymous=False)
-    visualization = Visualizer(SpinFeatureExtractor)
+    rp.init_node('Motion_Analysis_Visualizer', anonymous=False)
+    visualization = Visualizer(SpinPoseDefinitionAdapter)
     rp.spin()

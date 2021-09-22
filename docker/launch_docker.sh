@@ -56,7 +56,7 @@ esac
 done
 
 # Stop any running container named 'trainerAI'
-echo "Gracefully stopping docker container. Killing after 10s..."
+echo "Trying to stop the docker container. Killing after 10s..."
 docker stop trainerAI > /dev/null || true
 echo "done"
 echo "Running new docker container..."
@@ -65,6 +65,8 @@ docker run -it -d --rm \
         --name trainerAI \
         -e DISPLAY=$display \
 	    -p 3000:3000 \
+        -p 3001:3001 \
+        -p 3002:3002 \
         --privileged \
         --net=host \
         -v /tmp/.X11-unix:/tmp/.X11-unix \

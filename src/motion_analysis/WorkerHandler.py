@@ -69,7 +69,8 @@ class WorkerHandler(QThread):
         self.gui_handler.run(self.gui)
 
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
-        spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)  # TODO: Fit this to API with tamer
+        spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)
+
         station_id = spot_update_data["stationID"]
         spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(spot_key=station_id)
 
@@ -80,13 +81,14 @@ class WorkerHandler(QThread):
 
         if spot_update_data["isActive"]:
             exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
-            
+
+
             # TODO: In the future: Possibly use multiple recordings
             recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
 
             # TODO: Tamer must let experts specify the features of interest
             recordings = [recording]
-            feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(exercise_data=exercise_data, pose_definition_adapter=self.pose_definition_adapter)
+            feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
@@ -96,11 +98,11 @@ class WorkerHandler(QThread):
 
             self.features_interface.set(spot_featuers_key, features_dict)
 
-            # The 'stages' entry is an artifact of an older interface to tamer
-            del exercise_data['stages']
+            
             
             # Set all entries that are needed by the handler threads later on
             exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
+            del exercise_data['features'] # We replace features with their specification dictionary
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
             

@@ -196,7 +196,7 @@ def extract_acceleration(poses_array: np.ndarray, joint: int) -> float:
     raise NotImplementedError("Currently not part of the features of interest.")
 
 
-def extract_feature_of_interest_specification_dictionary(exercise_data: dict, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
+def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
     """This method turns an exercise data dictionary into a dictionary of features.
 
     Features are specified according to the following structure:
@@ -207,14 +207,16 @@ def extract_feature_of_interest_specification_dictionary(exercise_data: dict, po
     """
 
     features_of_interest = dict()
-    for extraction_method in [extract_angles_of_interest]:
-        # Every feature extraction method has to return a dictionary '{<feature_hash>: <feature>}' here
-        features_of_interest.update(extraction_method(exercise_data, pose_definition_adapter))
+    for f in hmi_features:
+        if f['type'] == "angle":
+            features_of_interest.update(extract_angles_of_interest(f['value'], pose_definition_adapter))
+        else:
+            log("Unhandled feature type:" + str(f['type']))
 
     return features_of_interest
 
 
-def extract_angles_of_interest(exercise_data: dict, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
+def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
     """A triplet of three joints has three angles. This method finds the inner and outer joints for an angle.
 
     The inner and outer joints dictionary returned by this method has the following form:
@@ -260,28 +262,22 @@ def extract_angles_of_interest(exercise_data: dict, pose_definition_adapter: Pos
             raise UnknownAngleException("Specified angle between joints that are not connected")
 
     
-    # Before the beta, Tamer defines exercise data in stages. This method will be here only for a couple of weeks.
-    joints_of_interest = set()
-    # TODO: This needs to be changed as soon as Tamer stops sending stages but sends angles of interest
-    for stage in exercise_data['stages']:
-        for rule_joints in stage['angles']:
-            joints_of_interest.update({frozenset(rule_joints)})
-
+    frozen_joint_names = frozenset(joint_names)
+    
     exceptions = dict()
     features_of_interest = {}
-    for joint_names in joints_of_interest:
-        try:
-            inner_joint, outer_joints = find_inner_and_outer_joints(joint_names)
-        except UnknownAngleException as e:
-            exceptions['UnknownAngleException'] = e
-            continue
-        except FeatureExtractorException as e:
-            exceptions['FeatureExtractorException'] = e
-        # TODO: possibly find prettier solution to this
-        joint_hash = hashlib.md5(sorted(joint_names).__repr__().encode()).digest()
-        features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}
+    try:
+        inner_joint, outer_joints = find_inner_and_outer_joints(frozen_joint_names)
+    except UnknownAngleException as e:
+        exceptions['UnknownAngleException'] = e
+    except FeatureExtractorException as e:
+        exceptions['FeatureExtractorException'] = e
+    # TODO: possibly find prettier solution to this
+    joint_hash = hashlib.md5(sorted(frozen_joint_names).__repr__().encode()).digest()
+    features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}
     
-    if exceptions:("Errors occured while parsing the provided exercise:" + str(exceptions))
+    if exceptions:
+        log("Errors occured while parsing the provided exercise:" + str(exceptions))
 
     return features_of_interest
 

@@ -28,8 +28,8 @@ def run_objectdetector(img_msg):
 
     img = obj_detect(img_original_bgr)[:,:,::-1]
    
-    fps = int(1/(time.time()-tmpTime))
-    print("FPS : ",fps)
+    # fps = int(1/(time.time()-tmpTime))
+    # print("FPS : ",fps)
 
     msg_cropImage = Image()
     msg_cropImage.header.stamp = rospy.Time.now()

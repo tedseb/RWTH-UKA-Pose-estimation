@@ -82,9 +82,9 @@ class run_spin():
         # Body Pose Regression
         pred_output_list = self.body_mocap.regress(self.img_original_bgr, body_bbox_list_station_reshaped)
         #x= pred_output_list
-        fps = int(1/(time.time()-tmpTime))
+        # fps = int(1/(time.time()-tmpTime))
         #print("result: ", np.shape(pred_output_list.extend(x)))
-        print("FPS : ",fps)
+        # print("FPS : ",fps)
         self.publish_results(pred_output_list, self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
 
 

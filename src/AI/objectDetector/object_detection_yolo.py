@@ -60,14 +60,14 @@ class ObjectDetectionPipeline:
 
         img = self.obj_detectYolo(img_original_bgr)
 
-        fps = int(1/(time.time()-tmpTime))
-        print("FPS : ",fps)
+        # fps = int(1/(time.time()-tmpTime))
+        # print("FPS : ",fps)
         if self.renderer==True:
             msg_renderImage = Image()
             msg_renderImage.header.stamp = rospy.Time.now()
             msg_renderImage.header.frame_id = img_msg.header.frame_id
             msg_renderImage.encoding = "bgr8"
-            msg_renderImage.data = np.array(img, dtype=np.uint8).tostring()
+            msg_renderImage.data = np.array(img, dtype=np.uint8).tobytes()
             msg_renderImage.height, msg_renderImage.width = img.shape[:-1]
             msg_renderImage.step = img.shape[-1]*img.shape[0]
             self.publisher_img.publish(msg_renderImage)

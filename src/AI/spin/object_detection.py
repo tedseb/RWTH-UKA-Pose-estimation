@@ -96,8 +96,8 @@ def run_objectdetector(img_msg):
     #ToDo: separate opject detection module node
     #ToDo: differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
 
-    fps = int(1/(time.time()-tmpTime))
-    print("FPS : ",fps)
+    # fps = int(1/(time.time()-tmpTime))
+    # print("FPS : ",fps)
 
 
 def myhook():

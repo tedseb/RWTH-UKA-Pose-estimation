@@ -182,7 +182,6 @@ class Worker(Thread):
                         'exercise_score': 100,
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
-
                     self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
 
                 # Calculate a new reference pose mapping

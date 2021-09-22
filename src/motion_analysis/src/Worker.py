@@ -36,6 +36,7 @@ try:
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Algorithm import *
+    from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -48,6 +49,7 @@ except ImportError:
     from src.algorithm.Features import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Algorithm import *
+    from src.algorithm.logging import log
 
 
 class NoJointsAvailable(Exception):
@@ -107,6 +109,8 @@ class Worker(Thread):
 
         self.gui = gui
 
+        self.spot_info_dict = None
+
         self.start()
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
@@ -133,6 +137,9 @@ class Worker(Thread):
 
         self.reference_features_set = False
 
+        # The following lines fetch data that we need to analyse
+        self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
+
         while(self.running):
             try:
 
@@ -152,10 +159,7 @@ class Worker(Thread):
                     except KeyError:
                         pass
 
-
-                # The following lines fetch data that we need to analyse
-                spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
-                spot_info_dict.update(self.get_exercise_data(spot_info_key, spot_info_dict["exercise_data_hash"]))
+                self.spot_info_dict.update(self.get_exercise_data(spot_info_key, self.spot_info_dict["exercise_data_hash"]))
 
                 # As long as there are skelletons available for this spot, continue
                 past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
@@ -171,22 +175,21 @@ class Worker(Thread):
 
                 # Send info back to REST API
                 if increase_reps:
-                    spot_info_dict['repetitions'] = int(spot_info_dict['repetitions']) + 1
+                    self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
                     user_state_data = {
                         'user_id': 0,
-                        'current_exercise_name': spot_info_dict.get('exercise_data').get('name'),
-                        'repetitions': spot_info_dict['repetitions'],
-                        'seconds_since_last_exercise_start': (time.time_ns() - int(spot_info_dict.get('start_time'))) / 1e+9,
+                        'current_exercise_name': self.spot_info_dict.get('exercise_data').get('name'),
+                        'repetitions': self.spot_info_dict['repetitions'],
+                        'seconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time'))) / 1e+9,
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
                         'exercise_score': 100,
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
-                    self.spot_metadata_interface.set_spot_info_dict(spot_info_key, {"repetitions": spot_info_dict['repetitions']})
 
                 # Calculate a new reference pose mapping
                 # TODO: make this pretty
-                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, spot_info_dict['exercise_data'], self.gui)
+                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = calculate_reference_pose_mapping(self.features, self.spot_info_dict['exercise_data'], self.gui)
                 self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
                 if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
                     del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
@@ -204,7 +207,7 @@ class Worker(Thread):
                 if correction != None and SEND_CORRETIONS:
                     user_correction_message = {
                         'user_id': 0,
-                        'repetition': spot_info_dict['repetitions'],
+                        'repetition': self.spot_info_dict['repetitions'],
                         'positive_correction': False,
                         'display_text': correction
                     }
@@ -220,3 +223,10 @@ class Worker(Thread):
             
         # Enqueue data for feature progressions and resampled feature lists
         self.features_interface.set(self.spot_key, self.features)
+        self.spot_metadata_interface.set_spot_info_dict(spot_info_key, self.spot_info_dict)
+        
+        self.spot_info_dict = None
+        self.features = {}
+        self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
+        self.bad_repetition = False
+        self.moving_average_joint_difference = 0

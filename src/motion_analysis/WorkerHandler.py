@@ -121,6 +121,7 @@ class WorkerHandler(QThread):
 
             if not current_worker:
                 self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui)
+
         else:
             current_worker = self.workers.get(station_id, None)
             if current_worker:

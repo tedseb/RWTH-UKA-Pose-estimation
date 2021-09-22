@@ -63,9 +63,13 @@ class WorkerHandler(QThread):
         self.pose_definition_adapter = pose_definition_adapter_class()
         self.features_interface = features_interface_class()
         self.workers = {} # A dictionary, with spot IDs as keys
+
         
         self.gui_handler = GUIHandler()
         self.gui = MotionAnaysisGUI()
+        def kill_gui_hook():
+            self.gui_handler.stop()
+        rp.on_shutdown(kill_gui_hook)
         self.gui_handler.run(self.gui)
 
     def callback(self, name_parameter_containing_exercises: str) -> NoReturn:

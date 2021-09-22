@@ -42,7 +42,8 @@ class FeatureGraphsWidget(QWidget):
         self._discrete_user_trajectory_y = np.array([0])
         self._errors_x = np.array([0])
         self._errors_y = np.array([0])
-        self._progress_vector = np.array([0, 1])
+        self._progress_vector_x = np.array([0, 0])
+        self._progress_vector_y = np.array([0, 1])
         self._prediction = 0
 
         self.user_trajectory = pg.PlotWidget(title="user_trajectory")
@@ -109,7 +110,9 @@ class FeatureGraphsWidget(QWidget):
         self._errors_y = errors
         
         # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
-        self._progress_vector = progress_vector
+        self._progress_vector_x = np.array([0, progress_vector[0]])
+        self._progress_vector_y = np.array([0, progress_vector[1]])
+
         self._prediction = prediction
     
     def update_plots(self):
@@ -121,7 +124,7 @@ class FeatureGraphsWidget(QWidget):
             self.feature_index_pointer.setIndex(self._prediction)
             self.errors_curve.setData(self._errors_x, self._errors_y)
             # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
-            self.progress_vector_curve.setData(self._progress_vector, pen = RED)
+            self.progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = RED)
         except IndexError:
             pass
 
@@ -256,7 +259,10 @@ class MotionAnaysisGUI(QMainWindow):
 
     def start(self):
         if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-            QtGui.QApplication.instance().exec_()
+            QtGui.QApplication.instance().exec_()\
+
+    def stop(self):
+        signal.signal(signal.SIGINT, interrupt)
 
 
 class GUIHandler(QThread):
@@ -264,4 +270,11 @@ class GUIHandler(QThread):
         super().__init__()
 
     def run(self, gui):
+        self.gui = gui
         gui.start()
+
+    def stop(self):
+        try:
+            self.gui.close()
+        except Exception:
+            pass

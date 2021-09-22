@@ -31,12 +31,13 @@ class ComputerWorkload:
 class StationManager():
     def __init__(self, debug_mode=False, verbose=False):
         rospy.init_node('param_updater', anonymous=True)
+        self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
         #rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
-        # try:
-        #     rospy.wait_for_service('ai/weight_detection', 0.5)
-        # except ROSException:
-        #     LOG_ERROR("Time out on channel  'ai/weight_detection'")
-        # self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
+        try:
+            rospy.wait_for_service('ai/weight_detection', 0.5)
+        except ROSException:
+            LOG_ERROR("Time out on channel  'ai/weight_detection'")
+        self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
 
         self._data_manager = DataManager()
         #Todo: verbose in args
@@ -53,7 +54,7 @@ class StationManager():
         print(self._path_transform_node)
 
         self._station_selection_process = subprocess.Popen([self._path_station_selection])
-
+        
         if self._debug_mode:
             self.video_selection_gui = VideoSelection(self._data_manager)
             self.video_selection_gui.set_callback(station_manager.debug_callback)
@@ -73,12 +74,14 @@ class StationManager():
         #self.station_selection_gui = StationSelection(self._data_manager)
         #self.station_selection_gui.show()
 
-        server_controller = ServerController("ws://127.0.0.1:9000")
+        server_controller = ServerController("ws://127.0.0.1:3030")
         server_controller.register_callback(1, self.login_station)
         server_controller.register_callback(2, self.logout_station)
+        server_controller.register_callback(3, self.start_exercise)
+        server_controller.register_callback(4, self.stop_exercise)
         server_controller.register_callback(7, self.get_weight_detection)
         server_controller.protocol = ServerSocket
-        reactor.listenTCP(9000, server_controller)
+        reactor.listenTCP(3030, server_controller)
         reactor.run()
 
     def __del__(self):
@@ -154,13 +157,14 @@ class StationManager():
 
     def login_station(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Login {user_id} payload: {payload}", self._verbose)
-        if "station" not in payload or "exercise" not in payload:
+        if "station" not in payload:
             return self.return_error("Payload must have a station and an exercise field", 8)
 
         with self._param_updater_mutex:
             self._param_updater.set_station(payload["station"], True)
             cameras = self._param_updater.get_involved_cameras()
 
+        print("CAMERAS", cameras)
         with self._camera_process_mutex:
             turn_on = cameras - self._camera_process.keys()
 
@@ -171,13 +175,14 @@ class StationManager():
 
     def logout_station(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
-        if "station" not in payload or "exercise" not in payload:
+        if "station" not in payload:
             return self.return_error("Payload must have a station and an exercise field", 8)
 
         with self._param_updater_mutex:
             self._param_updater.set_station(int(payload["station"]), False)
             cameras = self._param_updater.get_involved_cameras()
 
+        
         with self._camera_process_mutex:
             turn_off = self._camera_process.keys() - cameras
 
@@ -185,6 +190,18 @@ class StationManager():
             self.stop_camera(cam_index)
 
         return ResponseAnswer(502, 1, {})
+
+    def start_exercise(self, user_id : str, payload : Dict):
+        if "station" not in payload or "exercise" not in payload:
+            return self.return_error("Payload must have a station and an exercise field", 8)
+        self._publisher_station_usage.publish(StationUsage(payload["station"], True ,(payload["station"])))
+        return ResponseAnswer(503, 1, {})
+
+    def stop_exercise(self, user_id : str, payload : Dict):
+        if "station" not in payload or "exercise" not in payload:
+            return self.return_error("Payload must have a station and an exercise field", 8)
+        self._publisher_station_usage.publish(StationUsage(payload["station"], False ,(payload["station"])))
+        return ResponseAnswer(504, 1, {})
 
     def get_weight_detection(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"weight detection {user_id}, payload : {payload}", self._verbose)
@@ -203,10 +220,10 @@ class StationManager():
                 color_msg_list.append(WeightColor(id=color_id, name=color_data[0], weight=color_data[1],
                     hsv_low=color_data[2], hsv_high=color_data[3], camera_station_id=color_data[4]))
 
-            #result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
+            result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
             #LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
-            #return ResponseAnswer(507, 0, {"weight" : result.weight, "probability" : 1})
-            return ResponseAnswer(507, 0, {"weight" : 30, "probability" : 1})
+            return ResponseAnswer(507, 0, {"weight" : result.weight, "probability" : 1})
+            #return ResponseAnswer(507, 0, {"weight" : 30, "probability" : 1})
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)

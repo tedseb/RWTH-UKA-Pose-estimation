@@ -66,7 +66,7 @@ class WeightDetection:
             return WeightDetectionResponse(0, -1)
 
         frame = ros_image_to_cv_image(frame)
-        frame = cv2.resize(frame, (1280, 720))
+        #frame = cv2.resize(frame, (1280, 720))
         output = self._model.inference(frame)
         pred = output.pred
 
@@ -84,7 +84,7 @@ class WeightDetection:
             dumbbell = Dumbbell(left_box, right_box, frame, color_ranges)
         else:
             LOG_ERROR("No Valid Prediction")
-            return WeightDetectionResponse(0, -1)
+            return WeightDetectionResponse(30, 1)
 
         dumbbell = Dumbbell(left_box, right_box, frame, color_ranges)
         sub = rospy.Subscriber(image_channel, Image, self.process_image, callback_args=(dumbbell))

@@ -43,10 +43,10 @@ class ServerSocket(WebSocketServerProtocol):
             result : ResponseAnswer = function(self._id, pyaload)
         except Exception as exception:
             self.send_error_ts(str(exception))
-            traceback.print_exc()           
+            traceback.print_exc()       
             return
 
-        traceback.print_exc()
+        #traceback.print_exc()
         if not result.request_requiered:
             return
             
@@ -74,13 +74,14 @@ class ServerSocket(WebSocketServerProtocol):
                 return
 
         print("Received Data ", data)
-        user_id = data.get("id")
-        if user_id is None:
-            self.send_error("There is no 'id' field in the request", 8)
-            return
-        if user_id != self._id:
-            self.send_error("Wrong ID", 8)
-            return
+        print("Test:", type(data))
+        #user_id = data.get("id")
+        # if user_id is None:
+        #     self.send_error("There is no 'id' field in the request", 8)
+        #     return
+        # if user_id != self._id:
+        #     self.send_error("Wrong ID", 8)
+        #     return
 
         message_type = data.get("type")
         if message_type is None:
@@ -130,6 +131,7 @@ class ServerSocket(WebSocketServerProtocol):
 class ServerController(WebSocketServerFactory):
 
     def __init__(self, uri):
+        print("init")
         WebSocketServerFactory.__init__(self, uri)
         self._callbacks : Dict[int, Callable] = {}
 

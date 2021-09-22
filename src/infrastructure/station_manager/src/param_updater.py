@@ -38,7 +38,7 @@ class CameraStationController():
             #rospy.loginfo(f"Weight Frame Parameters: {self._weight_frame_parameters}", logger_name="ParamUpdater")
 
         rospy.set_param('station_frames', self._station_frame_parameters)
-        #rospy.set_param('weight_frames', self._weight_frame_parameters)
+        rospy.set_param('weight_frames', {"empty" : 0})
 
         self._publisher_pull_param.publish("True")
 

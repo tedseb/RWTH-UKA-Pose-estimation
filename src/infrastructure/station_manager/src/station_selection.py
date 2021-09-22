@@ -19,7 +19,7 @@ if __name__=="__main__":
 from src.layouts import StationSelectionUi
 from src.data_manager import DataManager
 
-MOBILE_SERVER = "ws://localhost:9000/"
+MOBILE_SERVER = "ws://localhost:3030/"
 
 REQUEST_DICT = {
     "id" : "",

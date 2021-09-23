@@ -7,6 +7,7 @@ import argparse
 import sys
 import signal
 import psutil
+import time 
 
 from src import DataManager, CameraStationController, VideoSelection, StationSelection
 from src.server import ServerController, ServerSocket, ResponseAnswer
@@ -74,20 +75,27 @@ class StationManager():
         #self.station_selection_gui = StationSelection(self._data_manager)
         #self.station_selection_gui.show()
 
-        server_controller = ServerController("ws://127.0.0.1:3030")
-        server_controller.register_callback(1, self.login_station)
-        server_controller.register_callback(2, self.logout_station)
-        server_controller.register_callback(3, self.start_exercise)
-        server_controller.register_callback(4, self.stop_exercise)
-        server_controller.register_callback(7, self.get_weight_detection)
-        server_controller.protocol = ServerSocket
-        reactor.listenTCP(3030, server_controller)
+        self._exercise_count = 0
+        self._client_callbacks = {}
+
+        self._server_controller = ServerController("ws://127.0.0.1:3030", self.client_callback)
+        self._server_controller.register_callback(1, self.login_station)
+        self._server_controller.register_callback(2, self.logout_station)
+        self._server_controller.register_callback(3, self.start_exercise)
+        self._server_controller.register_callback(4, self.stop_exercise)
+        self._server_controller.register_callback(7, self.get_weight_detection)
+        self._server_controller.protocol = ServerSocket
+        reactor.listenTCP(3030, self._server_controller)
         reactor.run()
 
     def __del__(self):
         with self._camera_process_mutex:
             for cam_index in self._camera_process.keys():
                 self.stop_camera(cam_index)
+
+    def client_callback(self, client_id, callback):
+        LOG_DEBUG("Register Message Callback", self._verbose)
+        self._client_callbacks[client_id] = callback
 
     def start(self):
         LOG_DEBUG("Started StationManager", self._verbose)
@@ -153,6 +161,14 @@ class StationManager():
     def return_error(self, error_string, code):
         return ResponseAnswer(508, code, {"error" : error_string})
 
+    def send_repitition(self, user_id : str, repetition : int, exercise : str, set_id : int):
+        payload = {
+            "repetitions": repetition,
+            "exercise": exercise,
+            "set_id": set_id
+        }
+        self._client_callbacks[user_id](response_code=509, satus_code=1, payload=payload)
+
     ### Server Callback functions ###
 
     def login_station(self, user_id : str, payload : Dict):
@@ -192,9 +208,15 @@ class StationManager():
         return ResponseAnswer(502, 1, {})
 
     def start_exercise(self, user_id : str, payload : Dict):
-        if "station" not in payload or "exercise" not in payload:
+        self._exercise_count = 0
+        if "station" not in payload or "exercise" not in payload or "set_id" not in payload:
             return self.return_error("Payload must have a station and an exercise field", 8)
-        self._publisher_station_usage.publish(StationUsage(payload["station"], True ,(payload["station"])))
+        self._publisher_station_usage.publish(StationUsage(payload["station"], True ,(payload["exercise"])))
+
+        for i in range(10): 
+            time.sleep(2)
+            self.send_repitition(user_id, i, payload["exercise"], payload["set_id"])
+
         return ResponseAnswer(503, 1, {})
 
     def stop_exercise(self, user_id : str, payload : Dict):
@@ -222,7 +244,7 @@ class StationManager():
 
             result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
             #LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
-            return ResponseAnswer(507, 0, {"weight" : result.weight, "probability" : 1})
+            return ResponseAnswer(507, 1, {"weight" : result.weight, "probability" : 1})
             #return ResponseAnswer(507, 0, {"weight" : 30, "probability" : 1})
 
 if __name__ == '__main__':

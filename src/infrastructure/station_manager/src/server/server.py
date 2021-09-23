@@ -27,6 +27,8 @@ class ServerSocket(WebSocketServerProtocol):
     def onConnect(self, request):
         print("Client connecting: {0}".format(request.peer))
         self._id = "id123"
+        if self.factory._register_client_callback is not None:
+            self.factory._register_client_callback(self._id, self.send_msg_ts)
 
     def onOpen(self):
         print("WebSocket connection open.")
@@ -128,12 +130,23 @@ class ServerSocket(WebSocketServerProtocol):
         print(response)
         self.sendMessage(response.encode('utf8'), isBinary=False)
 
+    def send_msg_ts(self, response_code=508, satus_code=2, payload=dict({})):
+        response = copy.deepcopy(RESPONSE_DICT)
+        response["id"] = self._id
+        response["response"] = response_code
+        response["status_code"] = satus_code
+        response["payload"] = payload
+        response = str(json.dumps(response))
+        response = response.encode('utf8')
+        reactor.callFromThread(self.sendMessage, response, False)
+
 class ServerController(WebSocketServerFactory):
 
-    def __init__(self, uri):
+    def __init__(self, uri, register_client_callback = None):
         print("init")
         WebSocketServerFactory.__init__(self, uri)
         self._callbacks : Dict[int, Callable] = {}
+        self._register_client_callback = register_client_callback
 
     def register_callback(self, message_code : int, callback : Callable):
         self._callbacks[message_code] = callback

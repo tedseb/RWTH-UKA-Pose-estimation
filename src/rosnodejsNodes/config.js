@@ -7,7 +7,7 @@ config.MOBILE_SERVER_PORT = 3030;
 config.PORT = 3000;
 
 // db constans
-config.db_uri = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin";
+config.db_uri = "mongodb://mongoadmin:secret@host.docker.internal:27888/?authSource=admin";
 config.PORT_exp = 3001;
 config.exp_api_options = {
   secure: false,

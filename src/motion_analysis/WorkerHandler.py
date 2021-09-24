@@ -84,7 +84,9 @@ class WorkerHandler(QThread):
         log("Updating info for spot with key: " + spot_info_key)
 
         if spot_update_data["isActive"]:
-            exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
+            redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=True)
+            rp.logerr(spot_update_data['parameterServerKey'])
+            exercise_data = yaml.safe_load(redis_connection.get(spot_update_data['parameterServerKey']))
 
 
             # TODO: In the future: Possibly use multiple recordings

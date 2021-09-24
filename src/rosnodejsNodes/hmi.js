@@ -11,6 +11,8 @@ const motion_analysis_messages = rosnodejs.require("motion_analysis");
 const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
+const redis = require('redis')
+const createClient = require('redis').createClient
 var MongoClient = require('mongodb').MongoClient;
 const { stringify } = require('querystring');
 const { features } = require('process');
@@ -21,6 +23,11 @@ const PORT = config.PORT;
 const ownpose_labels = config.ownpose_labels;
 const ownpose_used = config.ownpose_used;
 const ownpose = config.ownpose;
+
+// Redis connection
+const redis_client = createClient({url: 'redis://localhost:5678'});
+redis_client.on('error', (err) => console.log('Redis Client Error', err));
+redis_client.connect();
 
 // Web App Code:
 const app = express();
@@ -51,20 +58,20 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const recordings = db.collection("recordings");
   const hmiExercises = db.collection("hmiExercises");
 
-
   //get me this amend
   nh.subscribe('/station_usage', StationUsage, async (msg) => {
     console.log(msg);
     exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
       if (err) throw err;
       if (result) {
+        const key_string = 'exercise' + msg['stationID']
         const stringified = YAML.stringify(result);
-        nh.setParam('exercise' + msg['stationID'], stringified);
+        redis_client.set(key_string, stringified);
         const obj = {
           stationID: msg['stationID'],
           isActive: msg['isActive'],
           exerciseName: msg['exerciseName'],
-          parameterServerKey: 'exercise' + msg['stationID']
+          parameterServerKey: key_string
         }
         pubex.publish({'data': YAML.stringify(obj)});
       } else {
@@ -74,14 +81,15 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
     exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
       if (err) throw err;
       if (result) {
+        const key_string = 'hmiExercise' + msg['stationID']
         const stringified = YAML.stringify(result);
-        nh.setParam('hmiExercise' + msg['stationID'], stringified);
-        console.log(result);
+        const client = createClient({url: 'redis://localhost:5678'});
+        redis_client.set(key_string, stringified);
         const obj = {
           stationID: msg['stationID'],
           isActive: msg['isActive'],
           exerciseName: msg['exerciseName'],
-          parameterServerKey:'hmiExercise' + msg['stationID']
+          parameterServerKey: key_string
         }
         pubex.publish({'data': YAML.stringify(obj)});
       } else {

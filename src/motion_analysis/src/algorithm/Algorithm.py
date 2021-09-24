@@ -170,25 +170,12 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
             median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
             predicted_indices.append(index)
 
-            if gui:
-                if h in gui.feature_widgets.keys():
-                    widget = gui.feature_widgets[h]
-                    if not widget.reference_plot_data_set:
-                        try:
-                            sample_reference_feature = f.reference_feature_collection.reference_recording_features[0]
-                            widget.update_reference_plots.emit(
-                                np.array(sample_reference_feature.values), \
-                                np.array(sample_reference_feature.discretized_values))
-                        except KeyError:
-                            pass
-                        
-                    widget.update_user_data.emit(np.array(f.values), \
-                        np.array(f.discretized_values), \
-                                np.array(errors), \
-                                    np.array([progress_vector.real, progress_vector.imag]), \
-                                        np.array(prediction))
-                    
+            f.errors = errors
+            f.progress_vector = progress_vector
+            f.prediction = prediction
 
+            update_gui_feature_widget(gui, f)
+                
         # Look at every reference feature separately
         # for r in f.reference_feature_collection.reference_recording_features:
         #     joint_difference = total_joint_difference(pose, reference_pose)
@@ -197,7 +184,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
-    # TODO: update global GUI parameters!!
+    update_gui_overall(gui, progress, alignment, progress_alignment_vector)
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant

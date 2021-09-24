@@ -76,8 +76,6 @@ def map_progress_to_vector(progress: float):
 
 
 def map_vectors_to_progress_and_alignment(vectors: list):
-
-
     """ Sum a list of 2D vectors up to a single vector, representing the overall, averaged progress.
 
     The avaraged progress has a direction and therefore an angle.
@@ -96,8 +94,8 @@ def map_vectors_to_progress_and_alignment(vectors: list):
     progress = progress % (2 * np.pi) # Bring progress back our notation of a value in range (0...1)
     progress = progress / (2 * np.pi)
     if vectors:
-        alignment = np.abs(progress_vector_sum) / len(vectors)
-        progress_alignment_vector = progress_vector_sum / len(vectors)
+        alignment = np.abs(progress_vector_sum) / max(1, len(vectors))
+        progress_alignment_vector = progress_vector_sum / max(1, len(vectors))
     else:
         alignment = 0
         progress_alignment_vector = progress_vector_sum
@@ -106,7 +104,7 @@ def map_vectors_to_progress_and_alignment(vectors: list):
 
 
 def fast_hash(o: Any) -> str:
-    """Hashes object with their string representation, but numpy arrays as a whole."""
+    """ Hashes object with their string representation, but numpy arrays as a whole."""
     if issubclass(type(o), np.ndarray):
         # TODO: Check if this is efficient
         return hash(o.tobytes())
@@ -114,7 +112,7 @@ def fast_hash(o: Any) -> str:
 
 
 def custom_metric(a, b):
-    """Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
+    """ Calculate the absolute difference between two ranges on a "ring" scale between 0 and 1."""
     a_from = a["median_resampled_values_reference_trajectory_fraction_from"]
     a_to = a["median_resampled_values_reference_trajectory_fraction_to"]
     b_from = b["median_resampled_values_reference_trajectory_fraction_from"]
@@ -124,3 +122,34 @@ def custom_metric(a, b):
         return 0
     else:
         return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
+
+
+def update_gui_feature_widget(gui, feature):
+    """ Update a gui regarding a feature if applicable. """
+    if not gui:
+        return
+    feature_hash = feature.feature_hash
+    if feature_hash in gui.feature_widgets.keys():
+        widget = gui.feature_widgets[feature_hash]
+        if not widget.reference_plot_data_set:
+            try:
+                sample_reference_feature = feature.reference_feature_collection.reference_recording_features[0]
+                widget.update_reference_plots.emit(
+                    np.array(sample_reference_feature.values), \
+                    np.array(sample_reference_feature.discretized_values))
+            except KeyError:
+                pass
+            
+        widget.update_user_data.emit(np.array(feature.values), \
+            np.array(feature.discretized_values), \
+                    np.array(feature.errors), \
+                        np.array([feature.progress_vector.real, feature.progress_vector.imag]), \
+                            np.array(feature.prediction))
+
+
+def update_gui_overall(gui, progress, alignment, progress_alignment_vector):
+    """ Update a gui regarding overall parameters. """
+    if not gui:
+        return
+    gui.update_overall_data_signal.emit(int(progress), int(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
+    

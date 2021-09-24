@@ -161,10 +161,12 @@ class FeatureGraphsWidget(QWidget):
 
 class MotionAnaysisGUI(QMainWindow):
     update_signal = pyqtSignal()
+    update_overall_data_signal = pyqtSignal(int, int, np.ndarray)
     def __init__(self):
         self.app = QtGui.QApplication([])
         super().__init__()
         self.update_signal.connect(self.update)
+        self.update_overall_data_signal.connect(self._update_overall_data)
 
         sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         sizePolicy.setHeightForWidth(True)
@@ -179,6 +181,16 @@ class MotionAnaysisGUI(QMainWindow):
         self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
         controls_layout.addWidget(self.overall_progress_vector_widget)
         controls_layout.addWidget(self.overall_errors_widget)
+
+        self.overall_progress_vector_widget.setXRange(-1, 1)
+        self.overall_progress_vector_widget.setYRange(-1, 1)
+        self.overall_progress_vector_widget.setAspectLocked()
+
+        self.overall_progress_vector_curve = pg.PlotCurveItem([0, 0])
+        self.overall_errors_curve = pg.PlotCurveItem([0, 0])
+
+        self.overall_progress_vector_widget.addItem(self.overall_progress_vector_curve)
+        self.overall_errors_widget.addItem(self.overall_errors_curve)
 
         label1 = QLabel(self.controls)
         label1.setText("Spot to display:")
@@ -207,6 +219,13 @@ class MotionAnaysisGUI(QMainWindow):
         self.create_feature_widgets()
 
         self.show()
+
+    @QtCore.pyqtSlot(int, int, np.ndarray)
+    def _update_overall_data(self, progress, alignment, progress_alignment_vector):
+        self._progress_vector_x = np.array([0, progress_alignment_vector[0]])
+        self._progress_vector_y = np.array([0, progress_alignment_vector[1]])
+        self.overall_progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = RED)
+
     
     def heightForWidth(self, width):
         return width * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0)))

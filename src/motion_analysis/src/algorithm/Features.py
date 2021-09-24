@@ -189,7 +189,7 @@ class ReferenceRecordingFeature(BaseFeature):
         # Even though we do the following in a higher dimension than necessary, we preserve the naming that we find in the ReferenceFeatuereCollection to provide a unified API.
         self.highest_value = np.amax(self.values)
         self.lowest_value = np.amin(self.values)
-        self.recording_length = len(self.values)
+        self.recording_length = max(1, len(self.values))
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
@@ -305,7 +305,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         for trajectory in trajectories:
             lowest_values.append(np.amin(trajectory))
             highest_values.append(np.amax(trajectory))
-            recording_lengths.append(len(trajectory))
+            recording_lengths.append(max(1, len(trajectory)))
 
         # We take the average of highest and lowest values to compute the boundaries
         self.highest_value = np.average(highest_values)

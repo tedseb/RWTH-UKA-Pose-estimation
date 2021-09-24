@@ -90,6 +90,8 @@ class FeatureGraphsWidget(QWidget):
         self.timer.timeout.connect(self.update_plots)
         self.timer.start(1000 / GUI_FPS) # 10 FPS
 
+        self.reference_plot_data_set = False
+
     def hasHeightForWidth(self):
         return True
 
@@ -140,6 +142,8 @@ class FeatureGraphsWidget(QWidget):
         discrete_reference_trajectory_x = np.array(range(len(discrete_reference_trajectory)))
         discrete_reference_trajectory_y = discrete_reference_trajectory
         self.discrete_reference_trajectory_curve.setData(discrete_reference_trajectory_x, discrete_reference_trajectory_y)
+
+        self.reference_plot_data_set = True
 
 
 class MotionAnaysisGUI(QMainWindow):
@@ -196,25 +200,31 @@ class MotionAnaysisGUI(QMainWindow):
 
     def update_available_spots(self, spot_name, active, feature_hashes=[]):
         """When a spot goes active and has an exercise, update the available spots for our drop down menu."""
+        spot_name = str(spot_name)
         if active:
-            # if self.spot_chooser.findData(str(spot_name)): # If spot was already added
-            #     return
-            self.spot_chooser.addItem(str(spot_name))
-            self.spot_data[str(spot_name)] = {"feature_hashes": feature_hashes}
+            self.spot_chooser.addItem(spot_name)
+            self.spot_data[spot_name] = {"feature_hashes": feature_hashes}
         else:
-            idx = self.spot_chooser.findData(str(spot_name))
-            self.spot_chooser.removeItem(idx)
             try:
                 del self.spot_data[spot_name]
-            except KeyError: # For now, if whe start the GUI at a "bad" time, ignore this step because the spot what never active
+            except KeyError: # For now, if we start the GUI at a "bad" time, ignore this step because the spot what never active
                 pass
+            self.spot_chooser.clear()
+            for s in self.spot_data.keys():
+                self.spot_chooser.addItem(s)
 
         self.update()
 
     @QtCore.pyqtSlot(str)
     def choose_spot(self, spot):
-        self.chosen_spot = spot
-        self.create_graphs()
+        if hasattr(self, "container"):
+            layout = self.container.layout()
+            for w in self.feature_widgets.values():
+                layout.removeWidget(w)
+                w.deleteLater()
+            self.feature_widgets = dict()
+            self.chosen_spot = spot
+            self.create_graphs()
 
     @QtCore.pyqtSlot()
     def trigger_freeze_graphs(self):
@@ -223,21 +233,16 @@ class MotionAnaysisGUI(QMainWindow):
 
     def create_graphs(self):
         """Our main window has a container with all the graphs for all features of an exercise. """
-        container = QWidget()
-        container.setLayout(QGridLayout())
+        self.container = QWidget()
+        self.container.setLayout(QGridLayout())
 
         spot_data = self.spot_data.get(self.chosen_spot)
 
-        layout = container.layout()
-
-        # label1 = QLabel(self.controls)
-        # label1.setText("Aggregated data:")
-        # layout.addWidget(label1, 0, 0, 4, 1)
+        layout = self.container.layout()
 
         layout.addWidget(self.controls, 1, 1, 4, 1)
 
         # Feature specific data
-
         if spot_data:
             feature_hashes = spot_data["feature_hashes"]
             for i, h in enumerate(feature_hashes):
@@ -252,7 +257,7 @@ class MotionAnaysisGUI(QMainWindow):
         
         self.setFixedHeight(900)
     
-        self.setCentralWidget(container)
+        self.setCentralWidget(self.container)
 
         self.update()
         

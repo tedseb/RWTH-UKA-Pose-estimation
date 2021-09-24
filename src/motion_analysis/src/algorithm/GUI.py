@@ -20,12 +20,15 @@ from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 try:
     from motion_analysis.src.algorithm.AlgoConfig import GUI_FPS
+    from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.algorithm.AlgoConfig import GUI_FPS
+    from src.algorithm.logging import log
 
 RED = (217, 83, 25)
 
 class FeatureGraphsWidget(QWidget):
+    """ Implements a set a graphs that are displayed vertically on top of each other in our GUI to show us feature data."""
     update_user_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
     update_reference_plots = pyqtSignal(np.ndarray, np.ndarray)
     def __init__(self):
@@ -36,6 +39,7 @@ class FeatureGraphsWidget(QWidget):
         self.setLayout(QGridLayout())
         layout = self.layout()
 
+        # Initialize trajectories so that we can plot "something"
         self._user_trajectory_x = np.array([0])
         self._user_trajectory_y = np.array([0])
         self._discrete_user_trajectory_x = np.array([0])
@@ -46,6 +50,7 @@ class FeatureGraphsWidget(QWidget):
         self._progress_vector_y = np.array([0, 1])
         self._prediction = 0
 
+        # We use one plot widget per trajectory
         self.user_trajectory = pg.PlotWidget(title="user_trajectory")
         self.reference_trajectory = pg.PlotWidget(title="reference_trajectory")
         self.discrete_user_trajectory = pg.PlotWidget(title="discrete_user_trajectory")
@@ -57,6 +62,7 @@ class FeatureGraphsWidget(QWidget):
         self.progress_vector.setAspectLocked()
         self.feature_progression = pg.PlotWidget(title="feature_progression")
 
+        # For each plot widget, we initialize a curve
         self.user_trajectory_curve = pg.PlotCurveItem([0, 0])
         self.reference_trajectory_curve = pg.PlotCurveItem([0, 0])
         self.discrete_user_trajectory_curve = pg.PlotCurveItem([0, 0])
@@ -64,7 +70,6 @@ class FeatureGraphsWidget(QWidget):
         self.errors_curve = pg.PlotCurveItem([0, 0])
         self.progress_vector_curve = pg.PlotCurveItem([0, 0])
 
- 
         self.user_trajectory.addItem(self.user_trajectory_curve)
         self.reference_trajectory.addItem(self.reference_trajectory_curve)
         self.discrete_user_trajectory.addItem(self.discrete_user_trajectory_curve)
@@ -82,14 +87,17 @@ class FeatureGraphsWidget(QWidget):
         layout.addWidget(self.discrete_reference_trajectory, 13, 0, 4, 1)
         layout.addWidget(self.errors, 17, 0, 4, 1)
 
+        # Blocks all updates of plots
         self.frozen = False
 
         self.thread = QThread()
 
+        # This timer saves us resources, because we do not update plots lots, but rather with GUI_FPS fps
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_plots)
         self.timer.start(1000 / GUI_FPS) # 10 FPS
 
+        # Since we do not always re-plot reference plot data, we need to keep track of wether it has already been set
         self.reference_plot_data_set = False
 
     def hasHeightForWidth(self):
@@ -100,8 +108,10 @@ class FeatureGraphsWidget(QWidget):
 
     @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
     def _update_user_data(self, user_trajectory, discrete_user_trajectory, errors, progress_vector, prediction):
+        """ Set for our user trajectory, progress and errors arrays, but do not call setData already."""
         if self.frozen:
             return
+
         self._user_trajectory_x = np.array(range(len(user_trajectory)))
         self._user_trajectory_y = user_trajectory
         
@@ -118,8 +128,10 @@ class FeatureGraphsWidget(QWidget):
         self._prediction = prediction
     
     def update_plots(self):
+        """ Call setData for all our user data, progress and error plots."""
         if self.frozen:
             return
+
         try:
             self.user_trajectory_curve.setData(self._user_trajectory_x, self._user_trajectory_y)
             self.discrete_user_trajectory_curve.setData(self._discrete_user_trajectory_x, self._discrete_user_trajectory_y)
@@ -127,11 +139,12 @@ class FeatureGraphsWidget(QWidget):
             self.errors_curve.setData(self._errors_x, self._errors_y)
             # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
             self.progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = RED)
-        except IndexError:
-            pass
+        except IndexError as e: # This occurs if our progress points to an index higher than our trajectory length
+            log(e)
 
     @QtCore.pyqtSlot(np.ndarray, np.ndarray)
     def _update_reference_plots(self, reference_trajectory, discrete_reference_trajectory):
+        """ Call setData for our reference trajectory plots."""
         if self.frozen:
             return
 
@@ -191,7 +204,7 @@ class MotionAnaysisGUI(QMainWindow):
         self.spot_data = dict()
 
         self.chosen_spot = None
-        self.create_graphs()
+        self.create_feature_widgets()
 
         self.show()
     
@@ -217,6 +230,7 @@ class MotionAnaysisGUI(QMainWindow):
 
     @QtCore.pyqtSlot(str)
     def choose_spot(self, spot):
+        """ Choose a spot to create feature widgets for and display feature data. """
         if hasattr(self, "container"):
             layout = self.container.layout()
             for w in self.feature_widgets.values():
@@ -224,22 +238,26 @@ class MotionAnaysisGUI(QMainWindow):
                 w.deleteLater()
             self.feature_widgets = dict()
             self.chosen_spot = spot
-            self.create_graphs()
+            self.create_feature_widgets()
 
     @QtCore.pyqtSlot()
     def trigger_freeze_graphs(self):
+        """ Set freeze flag for all feature widgets. """
         for fw in self.feature_widgets.values():
             fw.frozen = not fw.frozen
 
-    def create_graphs(self):
-        """Our main window has a container with all the graphs for all features of an exercise. """
+    def create_feature_widgets(self):
+        """ Create all feature widgets inside a central QWidget container.
+        
+        Our main window has a container with all the graphs for all features of an exercise.
+        We choose what spot to watch and build the container and all feature widgets only for that spot.
+        """
         self.container = QWidget()
         self.container.setLayout(QGridLayout())
 
         spot_data = self.spot_data.get(self.chosen_spot)
 
         layout = self.container.layout()
-
         layout.addWidget(self.controls, 1, 1, 4, 1)
 
         # Feature specific data
@@ -250,11 +268,6 @@ class MotionAnaysisGUI(QMainWindow):
                 self.feature_widgets[h] = feature_widget
                 layout.addWidget(feature_widget, 1, 5 + i, 10, 1)
 
-        #     self.setFixedWidth(300 + (len(feature_hashes) * 300))
-        # else:
-        #     pass
-        #     self.setFixedWidth(300)
-        
         self.setFixedHeight(900)
     
         self.setCentralWidget(self.container)
@@ -271,6 +284,7 @@ class MotionAnaysisGUI(QMainWindow):
 
 
 class GUIHandler(QThread):
+    """ Since we need to handle the GUI from another thread that our workerhandler, we create this QThread to start and stop the GUI."""
     def __init__(self):
         super().__init__()
 

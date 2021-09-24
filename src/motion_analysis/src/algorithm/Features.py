@@ -218,22 +218,22 @@ class ReferenceRecordingFeature(BaseFeature):
 
         self.median_beginning_state = np.median(self.beginning_state)
 
-    def predict(self, feature: BaseFeature, pose: np.ndarray):
-        # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
-        reference_trajectory_hankel_matrix = self.hankel_tensor[0]
-        errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
-        prediction = np.argmin(errors)
-        # TODO: This should be only one dimension in this tensor. Check if this works!!!
-        self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
-        median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
-        progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-        self.progress_vector = map_progress_to_vector(progress)
-        self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
-        self.reference_pose = self.recording[int(len(self.recording) * progress)]
+    # def predict(self, feature: BaseFeature, pose: np.ndarray):
+    #     # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
+    #     reference_trajectory_hankel_matrix = self.hankel_tensor[0]
+    #     errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
+    #     prediction = np.argmin(errors)
+    #     # TODO: This should be only one dimension in this tensor. Check if this works!!!
+    #     self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
+    #     median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
+    #     progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+    #     self.progress_vector = map_progress_to_vector(progress)
+    #     self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
+    #     self.reference_pose = self.recording[int(len(self.recording) * progress)]
 
-        joint_difference = total_joint_difference(pose, self.reference_pose)
-        self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
-        self.total_joint_differences_this_rep.append(joint_difference)
+    #     joint_difference = total_joint_difference(pose, self.reference_pose)
+    #     self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
+    #     self.total_joint_differences_this_rep.append(joint_difference)
 
     @property
     def average_total_joint_difference_last_rep(self):
@@ -296,7 +296,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         self.reference_recording_features.append(reference_feature)
 
     def update_static_data(self):
-        """Re-)Calculate the information that we find in this reference feature collection's trajectories."""
+        """(Re-)Calculate the information that we find in this reference feature collection's trajectories."""
         lowest_values = []
         highest_values = []
         recording_lengths = []
@@ -334,12 +334,12 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         beginning_states = [r.beginning_state for r in self.reference_recording_features]
         self.median_beginning_state = np.median(beginning_states)
         
-    def predict(self, feature: BaseFeature, pose: np.ndarray):
-        recording_moving_average_total_joint_differences = dict()
-        lowest_moving_average_total_joint_difference = np.inf
-        for r in self.reference_recording_features:
-            r.predict(feature, pose)
-            recording_moving_average_total_joint_differences[r.recording_hash] = lowest_moving_average_total_joint_difference
+    # def predict(self, feature: BaseFeature, pose: np.ndarray):
+    #     recording_moving_average_total_joint_differences = dict()
+    #     lowest_moving_average_total_joint_difference = np.inf
+    #     for r in self.reference_recording_features:
+    #         r.predict(feature, pose)
+    #         recording_moving_average_total_joint_differences[r.recording_hash] = lowest_moving_average_total_joint_difference
 
     @property
     def average_total_joint_difference_last_rep(self):

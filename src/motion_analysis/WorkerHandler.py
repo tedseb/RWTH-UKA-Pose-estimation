@@ -89,18 +89,17 @@ class WorkerHandler(QThread):
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
 
-        log("Updating info for spot with key: " + spot_info_key)
+        log("Updating info for spot with key: " + str(spot_info_key))
 
         if station_usage_data.isActive:
             exercise_data = exercises.find_one({"name": station_usage_data.exerciseName})
 
-
             # TODO: In the future: Possibly use multiple recordings
             recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
 
-            # TODO: Tamer must let experts specify the features of interest
             recordings = [recording]
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
+
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]

@@ -140,8 +140,6 @@ class Worker(Thread):
 
         while(self.running):
             try:
-                
-
                 self.spot_info_dict.update(self.get_exercise_data(spot_info_key, self.spot_info_dict["exercise_data_hash"]))
 
                 # As long as there are skelletons available for this spot, continue
@@ -198,10 +196,9 @@ class Worker(Thread):
                     
             except QueueEmpty:
                 continue
-            except SpotMetaDataException as e:
-                log(e)    
             except Exception as e:
-                log("Encountered an Error while Comparing: " + str(e))
+                log("Encountered an Error while Comparing")
+                print_exc
                 log(e)
             
         # Enqueue data for feature progressions and resampled feature lists

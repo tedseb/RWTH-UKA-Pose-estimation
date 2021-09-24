@@ -4,13 +4,15 @@ This file contains some parameters to our data plane, such as ROS Topic names an
 
 # GENERAL CONFIGURATION (not algorithmic)
 
+MONGO_DB_URI = "mongodb://mongoadmin:secret@host.docker.internal:27888/?authSource=admin"
+
 DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
 
 ROS_TOPIC_USER_EXERCISE_STATES = 'user_state'
 ROS_TOPIC_USER_CORRECTIONS = 'user_correction'
 
 ROS_JOINTS_TOPIC = 'fused_skelleton' # Shawan's topic choice
-ROS_EXPERT_SYSTEM_UPDATE_TOPIC = 'exercises'
+ROS_STATION_USAGE_UPDATE_TOPIC = 'station_usage'
 ROS_SKELLETON_DEFINITION = 'skelleton_name'
 
 REDIS_MAXIMUM_QUEUE_SIZE = 300

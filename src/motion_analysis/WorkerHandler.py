@@ -17,6 +17,7 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
     from motion_analysis.src.algorithm.logging import log
+    from backend.msg import StationUsage
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -28,13 +29,23 @@ except ImportError:
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
     from src.algorithm.logging import log
+    from backend.msg import StationUsage
 
+import pymongo
 import time
 from PyQt5.QtCore import QThread
 import yaml
 from typing import NoReturn
 import rospy as rp
 from std_msgs.msg import String
+
+mongo_client = pymongo.MongoClient(MONGO_DB_URI)
+
+db = mongo_client.trainerai
+
+exercises = db.exercises
+recordings = db.recordings
+hmiExercises = db.hmiExercises
 
 class WorkerHandler(QThread):
     """Waits for updates on the usage of spots and communicates them through the a SpotMetaDataInterface.
@@ -56,7 +67,7 @@ class WorkerHandler(QThread):
 
         super().__init__()
 
-        self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
+        self.subscriber_expert_system = rp.Subscriber(ROS_STATION_USAGE_UPDATE_TOPIC, StationUsage, self.callback)
         self.spots = dict()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.spot_queue_interface = spot_queue_interface_class()
@@ -72,10 +83,33 @@ class WorkerHandler(QThread):
         rp.on_shutdown(kill_gui_hook)
         self.gui_handler.run(self.gui)
 
-    def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
-        spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)
+    def callback(self, station_usage_data: Any) -> NoReturn:
 
-        station_id = spot_update_data["stationID"]
+
+#   nh.subscribe('/station_usage', StationUsage, async (msg) => {
+#     console.log(msg);
+#     exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
+#       if (err) throw err;
+#       if (result) {
+#         const key_string = 'exercise' + msg['stationID']
+#         const stringified = YAML.stringify(result);
+#         redis_client.set(key_string, stringified);
+#         const obj = {
+#           stationID: msg['stationID'],
+#           isActive: msg['isActive'],
+#           exerciseName: msg['exerciseName'],
+#           parameterServerKey: key_string
+#         }
+#         pubex.publish({'data': YAML.stringify(obj)});
+#       } else {
+#         console.error(`No such exercise  ${msg['exerciseName']}`)
+#       }
+#     });
+
+
+# findOne({ name: msg['exerciseName'] }, (err, result) 
+
+        station_id = station_usage_data.stationID
         spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(spot_key=station_id)
 
         self.features_interface.delete(spot_featuers_key)
@@ -83,10 +117,8 @@ class WorkerHandler(QThread):
 
         log("Updating info for spot with key: " + spot_info_key)
 
-        if spot_update_data["isActive"]:
-            redis_connection = redis.StrictRedis(host='localhost', port=5678, db=0, decode_responses=True)
-            rp.logerr(spot_update_data['parameterServerKey'])
-            exercise_data = yaml.safe_load(redis_connection.get(spot_update_data['parameterServerKey']))
+        if station_usage_data.isActive:
+            exercise_data = exercises.find_one({"name": station_usage_data.exerciseName})
 
 
             # TODO: In the future: Possibly use multiple recordings

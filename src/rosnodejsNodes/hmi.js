@@ -58,48 +58,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const recordings = db.collection("recordings");
   const hmiExercises = db.collection("hmiExercises");
 
-  //get me this amend
-  nh.subscribe('/station_usage', StationUsage, async (msg) => {
-    console.log(msg);
-    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
-      if (err) throw err;
-      if (result) {
-        const key_string = 'exercise' + msg['stationID']
-        const stringified = YAML.stringify(result);
-        redis_client.set(key_string, stringified);
-        const obj = {
-          stationID: msg['stationID'],
-          isActive: msg['isActive'],
-          exerciseName: msg['exerciseName'],
-          parameterServerKey: key_string
-        }
-        pubex.publish({'data': YAML.stringify(obj)});
-      } else {
-        console.error(`No such exercise  ${msg['exerciseName']}`)
-      }
-    });
-    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
-      if (err) throw err;
-      if (result) {
-        const key_string = 'hmiExercise' + msg['stationID']
-        const stringified = YAML.stringify(result);
-        const client = createClient({url: 'redis://localhost:5678'});
-        redis_client.set(key_string, stringified);
-        const obj = {
-          stationID: msg['stationID'],
-          isActive: msg['isActive'],
-          exerciseName: msg['exerciseName'],
-          parameterServerKey: key_string
-        }
-        pubex.publish({'data': YAML.stringify(obj)});
-      } else {
-        console.error(`No such exercise  ${msg['exerciseName']}`)
-      }
-    });
-  });
-
-
-  app.post('/expert/exercise/recordings', (req, res) => {
+    app.post('/expert/exercise/recordings', (req, res) => {
     console.log(req.body);
     res.status(200).send();
   });

@@ -82,7 +82,7 @@ class Ui_MainWindow(object):
         self.active_box.setText(_translate("MainWindow", "Active"))
         self.confirm_button.setText(_translate("MainWindow", "Send"))
         self.label_2.setText(_translate("MainWindow", "exercise name:"))
-        self.exercise_edit.setText(_translate("MainWindow", "squats"))
+        self.exercise_edit.setText(_translate("MainWindow", "111"))
 
 
 if __name__ == "__main__":

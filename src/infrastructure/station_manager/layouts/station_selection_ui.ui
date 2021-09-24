@@ -125,7 +125,7 @@
         <item>
          <widget class="QLineEdit" name="exercise_edit">
           <property name="text">
-           <string>squats</string>
+           <string>111</string>
           </property>
          </widget>
         </item>

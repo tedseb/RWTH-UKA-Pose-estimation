@@ -72,7 +72,7 @@ def map_progress_to_vector(progress: float):
     Return:
         An np.array containing x and y values of the progress.
     """
-    return complex(np.cos(progress*2*np.pi), np.sin(progress*2*np.pi))
+    return complex(np.sin(progress*2*np.pi), np.cos(progress*2*np.pi))
 
 
 def map_vectors_to_progress_and_alignment(vectors: list):

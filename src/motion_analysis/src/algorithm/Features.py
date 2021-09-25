@@ -697,6 +697,9 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
         discretization_ranges.append({"median_resampled_values_reference_trajectory_fraction_from": median_resampled_values_reference_trajectory_fraction_from, \
             "median_resampled_values_reference_trajectory_fraction_to": median_resampled_values_reference_trajectory_fraction_to})
 
+    # Since the last median_resampled_values_reference_trajectory_fraction_to always refers to the first index, set it to 1
+    discretization_ranges[-1]["median_resampled_values_reference_trajectory_fraction_to"] = 1
+
     # Shorten median_reference_trajectory, if values double
     last_value = np.inf
     feature_states = list()

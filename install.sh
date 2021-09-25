@@ -16,6 +16,7 @@ sudo apt install pgadmin4
 sudo /usr/pgadmin4/bin/setup-web.sh
 sudo apt-get -y install nodejs
 sudo apt-get -y install npm
+sudo chmod 777 -R node_modules/
 npm install sequelize
 
 #Jetzt auf www.http://127.0.0.1/pgadmin4 und einen neuen Server erstellen. Name: trainerai_db, Host = localhost, passwort esel1212

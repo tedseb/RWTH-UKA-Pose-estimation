@@ -29,8 +29,8 @@ RED = (217, 83, 25)
 
 class FeatureGraphsWidget(QWidget):
     """ Implements a set a graphs that are displayed vertically on top of each other in our GUI to show us feature data."""
-    update_user_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
-    update_reference_plots = pyqtSignal(np.ndarray, np.ndarray)
+    update_user_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+    update_reference_plots = pyqtSignal(np.ndarray, np.ndarray, np.ndarray)
     def __init__(self):
         super().__init__()
         self.update_user_data.connect(self._update_user_data)
@@ -44,6 +44,10 @@ class FeatureGraphsWidget(QWidget):
         self._user_trajectory_y = np.array([0])
         self._discrete_user_trajectory_x = np.array([0])
         self._discrete_user_trajectory_y = np.array([0])
+        self._filtered_user_trajectory_x = np.array([0])
+        self._filtered_user_trajectory_y = np.array([0])
+        self._filtered_reference_trajectory_x = np.array([0])
+        self._filtered_reference_trajectory_y = np.array([0])
         self._errors_x = np.array([0])
         self._errors_y = np.array([0])
         self._progress_vector_x = np.array([0, 0])
@@ -52,9 +56,11 @@ class FeatureGraphsWidget(QWidget):
 
         # We use one plot widget per trajectory
         self.user_trajectory = pg.PlotWidget(title="user_trajectory")
-        self.reference_trajectory = pg.PlotWidget(title="reference_trajectory")
+        self.filtered_user_trajectory = pg.PlotWidget(title="filtered_user_trajectory")
         self.discrete_user_trajectory = pg.PlotWidget(title="discrete_user_trajectory")
         self.discrete_reference_trajectory = pg.PlotWidget(title="discrete_reference_trajectory")
+        self.filtered_reference_trajectory = pg.PlotWidget(title="filtered_reference_trajectory")
+        self.reference_trajectory = pg.PlotWidget(title="reference_trajectory")
         self.errors = pg.PlotWidget(title="errors")
         self.progress_vector = pg.PlotWidget(title="progress_vector")
         self.progress_vector.setXRange(-1, 1)
@@ -64,15 +70,19 @@ class FeatureGraphsWidget(QWidget):
 
         # For each plot widget, we initialize a curve
         self.user_trajectory_curve = pg.PlotCurveItem([0, 0])
+        self.filtered_user_trajectory_curve = pg.PlotCurveItem([0, 0])
         self.reference_trajectory_curve = pg.PlotCurveItem([0, 0])
         self.discrete_user_trajectory_curve = pg.PlotCurveItem([0, 0])
+        self.filtered_reference_trajectory_curve = pg.PlotCurveItem([0, 0])
         self.discrete_reference_trajectory_curve = pg.PlotCurveItem([0, 0])
         self.errors_curve = pg.PlotCurveItem([0, 0])
         self.progress_vector_curve = pg.PlotCurveItem([0, 0])
 
         self.user_trajectory.addItem(self.user_trajectory_curve)
+        self.filtered_user_trajectory.addItem(self.filtered_user_trajectory_curve)
         self.reference_trajectory.addItem(self.reference_trajectory_curve)
         self.discrete_user_trajectory.addItem(self.discrete_user_trajectory_curve)
+        self.filtered_reference_trajectory.addItem(self.filtered_reference_trajectory_curve)
         self.discrete_reference_trajectory.addItem(self.discrete_reference_trajectory_curve)
         self.errors.addItem(self.errors_curve)
         self.progress_vector.addItem(self.progress_vector_curve)
@@ -82,10 +92,12 @@ class FeatureGraphsWidget(QWidget):
 
         layout.addWidget(self.progress_vector, 0, 0, 1, 1)
         layout.addWidget(self.user_trajectory, 1, 0, 4, 1)
-        layout.addWidget(self.reference_trajectory, 5, 0, 4, 1)
+        layout.addWidget(self.filtered_user_trajectory, 5, 0, 4, 1)
         layout.addWidget(self.discrete_user_trajectory, 9, 0, 4, 1)
         layout.addWidget(self.discrete_reference_trajectory, 13, 0, 4, 1)
-        layout.addWidget(self.errors, 17, 0, 4, 1)
+        layout.addWidget(self.filtered_reference_trajectory, 17, 0, 4, 1)
+        layout.addWidget(self.reference_trajectory, 21, 0, 4, 1)
+        layout.addWidget(self.errors, 25, 0, 4, 1)
 
         # Blocks all updates of plots
         self.frozen = False
@@ -106,14 +118,17 @@ class FeatureGraphsWidget(QWidget):
     def heightForWidth(self, w):
         return w * 3
 
-    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
-    def _update_user_data(self, user_trajectory, discrete_user_trajectory, errors, progress_vector, prediction):
+    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+    def _update_user_data(self, user_trajectory, filtered_user_trajectory, discrete_user_trajectory, errors, progress_vector, prediction):
         """ Set for our user trajectory, progress and errors arrays, but do not call setData already."""
         if self.frozen:
             return
 
         self._user_trajectory_x = np.array(range(len(user_trajectory)))
         self._user_trajectory_y = user_trajectory
+
+        self._filtered_user_trajectory_x = np.array(range(len(filtered_user_trajectory)))
+        self._filtered_user_trajectory_y = filtered_user_trajectory
         
         self._discrete_user_trajectory_x = np.array(range(len(discrete_user_trajectory)))
         self._discrete_user_trajectory_y = discrete_user_trajectory
@@ -135,6 +150,7 @@ class FeatureGraphsWidget(QWidget):
         try:
             self.user_trajectory_curve.setData(self._user_trajectory_x, self._user_trajectory_y)
             self.discrete_user_trajectory_curve.setData(self._discrete_user_trajectory_x, self._discrete_user_trajectory_y)
+            self.filtered_user_trajectory_curve.setData(self._filtered_user_trajectory_x, self._filtered_user_trajectory_y)
             self.feature_index_pointer.setIndex(self._prediction)
             self.errors_curve.setData(self._errors_x, self._errors_y)
             # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
@@ -142,8 +158,8 @@ class FeatureGraphsWidget(QWidget):
         except IndexError as e: # This occurs if our progress points to an index higher than our trajectory length
             log(e)
 
-    @QtCore.pyqtSlot(np.ndarray, np.ndarray)
-    def _update_reference_plots(self, reference_trajectory, discrete_reference_trajectory):
+    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray)
+    def _update_reference_plots(self, reference_trajectory, filtered_reference_trajectory, discrete_reference_trajectory):
         """ Call setData for our reference trajectory plots."""
         if self.frozen:
             return
@@ -151,6 +167,10 @@ class FeatureGraphsWidget(QWidget):
         reference_trajectory_x = np.array(range(len(reference_trajectory)))
         reference_trajectory_y = reference_trajectory 
         self.reference_trajectory_curve.setData(reference_trajectory_x, reference_trajectory_y)
+
+        filtered_reference_trajectory_x = np.array(range(len(filtered_reference_trajectory)))
+        filtered_reference_trajectory_y = np.array(filtered_reference_trajectory)
+        self.filtered_reference_trajectory_curve.setData(filtered_reference_trajectory_x, filtered_reference_trajectory_y)
 
         discrete_reference_trajectory_x = np.array(range(len(discrete_reference_trajectory)))
         discrete_reference_trajectory_y = discrete_reference_trajectory
@@ -287,7 +307,7 @@ class MotionAnaysisGUI(QMainWindow):
                 self.feature_widgets[h] = feature_widget
                 layout.addWidget(feature_widget, 1, 5 + i, 10, 1)
 
-        self.setFixedHeight(900)
+        self.setFixedHeight(1200)
     
         self.setCentralWidget(self.container)
 

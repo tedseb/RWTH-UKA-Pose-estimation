@@ -13,7 +13,7 @@ Whatever information is gained is sent via outgoing message queues.
 import time
 from functools import lru_cache
 from threading import Thread
-from traceback import print_exc
+from traceback import format_exc
 from typing import NoReturn
 
 import redis
@@ -197,9 +197,8 @@ class Worker(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                log("Encountered an Error while Comparing")
-                print_exc
-                log(e)
+                log_throttle("Encountered an Error while Comparing")
+                log(format_exc())
             
         # Enqueue data for feature progressions and resampled feature lists
         self.features_interface.set(self.spot_key, self.features)

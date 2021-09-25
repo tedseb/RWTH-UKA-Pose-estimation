@@ -40,9 +40,11 @@ from typing import List
 try:
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.logging import log
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
+    from src.algorithm.logging import log
 
 
 # We need this to implement some loop logic further down this file
@@ -82,6 +84,7 @@ class BaseFeature(ABC):
 
         self.progression = 0
         self._values = np.array([])
+        self._filtered_values = np.array([])
         self._discretized_values = np.array([])
         self._states = np.array([])
 
@@ -99,12 +102,30 @@ class BaseFeature(ABC):
         from src.algorithm.FeatureExtraction import feature_extraction_methods # Try to remove this
         self.feature_extraction_method = feature_extraction_methods[self.type]
 
+    def add_filter_value(self, value):
+        try:
+            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - self.resolution, min(value, self.filtered_value + self.resolution)))
+        except IndexError as e:
+            self.filtered_values = np.append(self.filtered_values, value)
+
     @property
     def value(self):
         return self._values[-1]
 
     @property
-    def resampled_value(self):
+    def filtered_value(self):
+        return self._filtered_values[-1]
+
+    @property
+    def filtered_values(self):
+        return self._filtered_values
+
+    @filtered_values.setter
+    def filtered_values(self, filtered_values):
+        self._filtered_values = filtered_values[-FEATURE_TRAJECTORY_MAX_MEMORY_SIZE:]
+
+    @property
+    def digitized_value(self):
         return self._digitized_values[-1]
 
     @property
@@ -212,6 +233,9 @@ class ReferenceRecordingFeature(BaseFeature):
                         self.scale, \
                             self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary)
         
+        for value in self.values:
+            self.add_filter_value(value)
+
         self.discretized_values = discrete_trajectories_tensor[0]
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
@@ -391,6 +415,7 @@ class Feature(BaseFeature):
 
     def update(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
+        self.add_filter_value(value)
 
         try:
             discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)

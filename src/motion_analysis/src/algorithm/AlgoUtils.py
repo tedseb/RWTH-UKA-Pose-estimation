@@ -134,17 +134,17 @@ def update_gui_features(gui, feature):
         if not widget.reference_plot_data_set:
             try:
                 sample_reference_feature = feature.reference_feature_collection.reference_recording_features[0]
-                # widget.update_reference_plots.emit(
-                    # np.array(sample_reference_feature.values), \
-                    # np.array(sample_reference_feature.discretized_values))
                 widget.update_reference_plots.emit(
-                    np.array(feature.reference_feature_collection.median_trajectory), \
+                    np.array(sample_reference_feature.values), \
+                    np.array(sample_reference_feature.filtered_values), \
                     np.array(sample_reference_feature.discretized_values))
             except KeyError:
                 pass
+        
             
         widget.update_user_data.emit(np.array(feature.values), \
-            np.array(feature.discretized_values), \
+            np.array(feature.filtered_values), \
+                np.array(feature.discretized_values), \
                     np.array(feature.errors), \
                         np.array([feature.progress_vector.real, feature.progress_vector.imag]), \
                             np.array(feature.prediction))

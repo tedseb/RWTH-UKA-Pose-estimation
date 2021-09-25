@@ -84,6 +84,12 @@ class BaseFeature(ABC):
         self._values = np.array([])
         self._discretized_values = np.array([])
         self._states = np.array([])
+
+        # These are not set by the feature itself, but calculated by the algorithm
+        # The feature object as merely as a container for them
+        self.errors = np.array([])
+        self.progress_vector = np.array([])
+        self.prediction = np.array([]) 
             
         self.feature_hash = feature_hash
         self.type = specification_dict["type"]
@@ -219,7 +225,7 @@ class ReferenceRecordingFeature(BaseFeature):
         self.median_beginning_state = np.median(self.beginning_state)
 
     # def predict(self, feature: BaseFeature, pose: np.ndarray):
-    #     # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
+    #     # TODO: This should be only one dimension in the hankel tensor. Check if this works!!!
     #     reference_trajectory_hankel_matrix = self.hankel_tensor[0]
     #     errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
     #     prediction = np.argmin(errors)

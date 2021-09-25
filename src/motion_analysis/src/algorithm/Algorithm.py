@@ -156,11 +156,11 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
     for h, f in features.items():
         # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
         discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
-        hankel_tensor_1 = f.reference_feature_collection.hankel_tensor
+        hankel_tensor_2 = f.reference_feature_collection.hankel_tensor
         discrete_feature_trajectory = np.array(f.discretized_values)
 
-        for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor_1):
-            errors = trajectory_distance(reference_trajectory_hankel_matrix, discrete_feature_trajectory, 100, 1)
+        for idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
+            errors = trajectory_distance(hankel_tensor_1, discrete_feature_trajectory, 100, 1)
             prediction = np.argmin(errors)
             index = discretization_reference_trajectory_indices_tensor[idx][prediction]
             median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
@@ -174,7 +174,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
             f.progress_vector = progress_vector
             f.prediction = prediction
 
-            update_gui_feature_widget(gui, f)
+            update_gui_features(gui, f)
                 
         # Look at every reference feature separately
         # for r in f.reference_feature_collection.reference_recording_features:
@@ -184,7 +184,7 @@ def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: M
 
     progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
-    update_gui_overall(gui, progress, alignment, progress_alignment_vector)
+    update_gui_progress(gui, progress, alignment, progress_alignment_vector)
 
     median_resampled_values_reference_trajectory_fractions_errors = []
     # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant

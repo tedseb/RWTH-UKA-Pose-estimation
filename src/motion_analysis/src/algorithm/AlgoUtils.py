@@ -124,7 +124,7 @@ def custom_metric(a, b):
         return min([abs(a_from - b_to), abs(b_from - a_to), abs(a_from + 1 - b_to), abs(b_from + 1 - a_to)])
 
 
-def update_gui_feature_widget(gui, feature):
+def update_gui_features(gui, feature):
     """ Update a gui regarding a feature if applicable. """
     if not gui:
         return
@@ -134,8 +134,11 @@ def update_gui_feature_widget(gui, feature):
         if not widget.reference_plot_data_set:
             try:
                 sample_reference_feature = feature.reference_feature_collection.reference_recording_features[0]
+                # widget.update_reference_plots.emit(
+                    # np.array(sample_reference_feature.values), \
+                    # np.array(sample_reference_feature.discretized_values))
                 widget.update_reference_plots.emit(
-                    np.array(sample_reference_feature.values), \
+                    np.array(feature.reference_feature_collection.median_trajectory), \
                     np.array(sample_reference_feature.discretized_values))
             except KeyError:
                 pass
@@ -147,7 +150,7 @@ def update_gui_feature_widget(gui, feature):
                             np.array(feature.prediction))
 
 
-def update_gui_overall(gui, progress, alignment, progress_alignment_vector):
+def update_gui_progress(gui, progress, alignment, progress_alignment_vector):
     """ Update a gui regarding overall parameters. """
     if not gui:
         return

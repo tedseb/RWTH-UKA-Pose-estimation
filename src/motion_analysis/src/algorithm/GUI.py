@@ -7,7 +7,7 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 from os import error
-from PyQt5.QtWidgets import QComboBox, QGridLayout, QLabel, QMainWindow, QProgressBar, QPushButton, QSizePolicy, QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QComboBox, QGridLayout, QLabel, QMainWindow, QProgressBar, QPushButton, QSizePolicy, QTextEdit, QWidget, QVBoxLayout
 from pyqtgraph.Qt import QtGui, QtCore
 import sys
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -31,11 +31,11 @@ GYMY_ORANGE = (247, 167, 11)
 class FeatureGraphsWidget(QWidget):
     """ Implements a set a graphs that are displayed vertically on top of each other in our GUI to show us feature data."""
     update_user_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
-    update_reference_plots = pyqtSignal(np.ndarray, np.ndarray, np.ndarray)
+    update_static_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, str, str)
     def __init__(self):
         super().__init__()
         self.update_user_data.connect(self._update_user_data)
-        self.update_reference_plots.connect(self._update_reference_plots)
+        self.update_static_data.connect(self._update_static_data)
 
         self.setLayout(QGridLayout())
         layout = self.layout()
@@ -51,8 +51,8 @@ class FeatureGraphsWidget(QWidget):
         self._filtered_reference_trajectory_y = np.array([0])
         self._errors_x = np.array([0])
         self._errors_y = np.array([0])
-        self._progress_vector_x = np.array([0, 0])
-        self._progress_vector_y = np.array([0, 1])
+        self._progress_vector_x = np.array([0, 1])
+        self._progress_vector_y = np.array([0, 0])
         self._prediction = 0
 
         # We use one plot widget per trajectory
@@ -89,16 +89,29 @@ class FeatureGraphsWidget(QWidget):
         self.progress_vector.addItem(self.progress_vector_curve)
 
         self.feature_index_pointer = CurveArrow(self.discrete_reference_trajectory_curve, 0)
-        self.feature_index_pointer.setStyle(angle=90, headWidth=5, pen=GYMY_ORANGE, brush= GYMY_ORANGE)
+        self.feature_index_pointer.setStyle(angle=270, headWidth=5, pen=GYMY_ORANGE, brush= GYMY_ORANGE)
 
-        layout.addWidget(self.progress_vector, 0, 0, 1, 1)
-        layout.addWidget(self.user_trajectory, 1, 0, 4, 1)
-        layout.addWidget(self.filtered_user_trajectory, 5, 0, 4, 1)
-        layout.addWidget(self.discrete_user_trajectory, 9, 0, 4, 1)
-        layout.addWidget(self.discrete_reference_trajectory, 13, 0, 4, 1)
-        layout.addWidget(self.filtered_reference_trajectory, 17, 0, 4, 1)
-        layout.addWidget(self.reference_trajectory, 21, 0, 4, 1)
-        layout.addWidget(self.errors, 25, 0, 4, 1)
+        self.name_label = QLabel(self)
+        self.name_label.setText("Feature n")
+
+        self.type_label = QLabel(self)
+        self.type_label.setText("Type: ")
+
+        self.spec_label = QTextEdit(self)
+        self.spec_label.setReadOnly(True)
+        self.spec_label.setText("Spec: ")
+
+        layout.addWidget(self.name_label, 0, 0, 4, 1)
+        layout.addWidget(self.progress_vector, 4, 0, 1, 1)
+        layout.addWidget(self.user_trajectory, 5, 0, 4, 1)
+        layout.addWidget(self.filtered_user_trajectory, 9, 0, 4, 1)
+        layout.addWidget(self.discrete_user_trajectory, 13, 0, 4, 1)
+        layout.addWidget(self.discrete_reference_trajectory, 17, 0, 4, 1)
+        layout.addWidget(self.filtered_reference_trajectory, 21, 0, 4, 1)
+        layout.addWidget(self.reference_trajectory, 25, 0, 4, 1)
+        layout.addWidget(self.errors, 29, 0, 4, 1)
+        layout.addWidget(self.type_label, 33, 0, 4, 1)
+        layout.addWidget(self.spec_label, 37, 0, 4, 1)
 
         # Blocks all updates of plots
         self.frozen = False
@@ -159,11 +172,14 @@ class FeatureGraphsWidget(QWidget):
         except IndexError as e: # This occurs if our progress points to an index higher than our trajectory length
             log(e)
 
-    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray)
-    def _update_reference_plots(self, reference_trajectory, filtered_reference_trajectory, discrete_reference_trajectory):
+    @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, str, str)
+    def _update_static_data(self, reference_trajectory, filtered_reference_trajectory, discrete_reference_trajectory, feature_type, feature_spec):
         """ Call setData for our reference trajectory plots."""
         if self.frozen:
             return
+
+        self.type_label.setText("Type: " + str(feature_type))
+        self.spec_label.setText("Spec: " + str(feature_spec))
 
         reference_trajectory_x = np.array(range(len(reference_trajectory)))
         reference_trajectory_y = reference_trajectory 
@@ -189,10 +205,6 @@ class MotionAnaysisGUI(QMainWindow):
         self.update_signal.connect(self.update)
         self.update_overall_data_signal.connect(self._update_overall_data)
 
-        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        sizePolicy.setHeightForWidth(True)
-        self.setSizePolicy(sizePolicy)
-
         self.controls = QWidget(self)
         self.controls.setLayout(QVBoxLayout())
         controls_layout = self.controls.layout()
@@ -214,6 +226,10 @@ class MotionAnaysisGUI(QMainWindow):
         self.alignment_widget.setMaximum(100)
         self.alignment_widget.setFormat('Features alignment: %p%')
         # self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
+
+        label1 = QLabel(self.controls)
+        label1.setText("Aggregated Data")
+        controls_layout.addWidget(label1)
         
         controls_layout.addWidget(self.overall_progress_vector_widget)
         # controls_layout.addWidget(self.overall_errors_widget)
@@ -228,10 +244,11 @@ class MotionAnaysisGUI(QMainWindow):
         # self.overall_errors_curve = pg.PlotCurveItem([0, 0])
 
         self.overall_progress_vector_widget.addItem(self.overall_progress_vector_curve)
+        self.overall_progress_vector_curve.setData(np.array([0, 1]), np.array([0, 0]), pen = GYMY_GREEN)
         # self.overall_errors_widget.addItem(self.overall_errors_curve)
 
-        label1 = QLabel(self.controls)
-        label1.setText("Spot to display:")
+        label2 = QLabel(self.controls)
+        label2.setText("Choose Spot:")
 
         self.spot_chooser = QComboBox(self)
         self.spot_chooser.setEditable(False)
@@ -241,7 +258,7 @@ class MotionAnaysisGUI(QMainWindow):
         verticalSpacer = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         controls_layout.addItem(verticalSpacer)
 
-        controls_layout.addWidget(label1)
+        controls_layout.addWidget(label2)
         controls_layout.addWidget(self.spot_chooser, 1)
         btn1 = QPushButton("freeze graphs")
         btn1.clicked.connect(self.trigger_freeze_graphs)
@@ -332,6 +349,7 @@ class MotionAnaysisGUI(QMainWindow):
             feature_hashes = spot_data["feature_hashes"]
             for i, h in enumerate(feature_hashes):
                 feature_widget = FeatureGraphsWidget()
+                feature_widget.name_label.setText("Feature " + str(i))
                 self.feature_widgets[h] = feature_widget
                 layout.addWidget(feature_widget, 1, 5 + i, 10, 1)
             self.setFixedWidth(300 * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0))))

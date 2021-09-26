@@ -135,6 +135,8 @@ class Worker(Thread):
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
+        self.alignments_this_rep = []
+
         # The following lines fetch data that we need to analyse
         self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
 
@@ -154,6 +156,17 @@ class Worker(Thread):
                 # Compare joints with expert system data
                 increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
 
+                # If the feature alignment in this repetitions is too high, we do not count the repetition
+                if np.mean(self.alignments_this_rep) < MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT and increase_reps:
+                    log("Feature missalignment during this repetition. Repetition falsified.")
+                    increase_reps = False
+                    self.alignments_this_rep = []
+
+                # Calculate a new reference pose mapping
+                reference_pose = self.calculate_reference_pose_mapping()
+
+                # TODO: Put code here that compares skelletons and tells us how good a repetition was
+
                 # Send info back to REST API
                 if increase_reps:
                     self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
@@ -168,17 +181,7 @@ class Worker(Thread):
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
-                # Calculate a new reference pose mapping
-                # TODO: make this pretty
-                reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference = self.calculate_reference_pose_mapping()
-                self.last_mean_resampled_values_reference_trajectory_fractions_average_differences.append(mean_resampled_values_reference_trajectory_fractions_average_difference)
-                if len(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_MAX_QUEUE_LENGTH:
-                    del self.last_mean_resampled_values_reference_trajectory_fractions_average_differences[0]
-                if np.average(self.last_mean_resampled_values_reference_trajectory_fractions_average_differences) >= FEATURE_DIFFERENCE_ELASTICITY:
-                    if not MESSY_INPUTS:
-                        # Use this only if AI produces adequate results
-                        self.bad_repetition = True
-
+                # Publish poses on ROS
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
                 self.publish_pose(pose, self.user_skelleton_publisher)
 
@@ -264,18 +267,10 @@ class Worker(Thread):
 
         self.progress, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
+        self.alignments_this_rep.append(self.alignment)
+
         update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector)
 
-        median_resampled_values_reference_trajectory_fractions_errors = []
-        # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
-        for idx1, value in enumerate(median_resampled_values_reference_trajectory_fractions):
-            for idx2 in range(len(median_resampled_values_reference_trajectory_fractions)):
-                if idx2 == idx1:
-                    continue
-                median_resampled_values_reference_trajectory_fractions_errors.append(custom_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
-        
         reference_pose = recording[int(len(recording) * self.progress)]
 
-        mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
-            
-        return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
+        return reference_pose

@@ -73,7 +73,7 @@ def analyze_feature_progressions(
             in_beginning_state = False
         if f.progression < number_of_dicided_state_changes_for_repetition:
             increase_reps = False
-        elif f.progression > number_of_dicided_state_changes_for_repetition and not MESSY_INPUTS:
+        elif f.progression > number_of_dicided_state_changes_for_repetition and not ROBUST_COUNTING_MODE:
             bad_repetition = True
 
     # Look at every reference feature separately
@@ -114,7 +114,7 @@ def analyze_feature_progressions(
             f.progression = 0
         increase_reps, bad_repetition = analyze_feature_progressions(features, False)
 
-    if bad_repetition and not MESSY_INPUTS:
+    if bad_repetition and not ROBUST_COUNTING_MODE:
         increase_reps = False
 
     if increase_reps:

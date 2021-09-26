@@ -51,8 +51,8 @@ class FeatureGraphsWidget(QWidget):
         self._filtered_reference_trajectory_y = np.array([0])
         self._errors_x = np.array([0])
         self._errors_y = np.array([0])
-        self._progress_vector_x = np.array([0, 0])
-        self._progress_vector_y = np.array([0, 1])
+        self._progress_vector_x = np.array([0, 1])
+        self._progress_vector_y = np.array([0, 0])
         self._prediction = 0
 
         # We use one plot widget per trajectory
@@ -89,7 +89,7 @@ class FeatureGraphsWidget(QWidget):
         self.progress_vector.addItem(self.progress_vector_curve)
 
         self.feature_index_pointer = CurveArrow(self.discrete_reference_trajectory_curve, 0)
-        self.feature_index_pointer.setStyle(angle=90, headWidth=5, pen=GYMY_ORANGE, brush= GYMY_ORANGE)
+        self.feature_index_pointer.setStyle(angle=270, headWidth=5, pen=GYMY_ORANGE, brush= GYMY_ORANGE)
 
         self.name_label = QLabel(self)
         self.name_label.setText("Feature n")
@@ -244,6 +244,7 @@ class MotionAnaysisGUI(QMainWindow):
         # self.overall_errors_curve = pg.PlotCurveItem([0, 0])
 
         self.overall_progress_vector_widget.addItem(self.overall_progress_vector_curve)
+        self.overall_progress_vector_curve.setData(np.array([0, 1]), np.array([0, 0]), pen = GYMY_GREEN)
         # self.overall_errors_widget.addItem(self.overall_errors_curve)
 
         label2 = QLabel(self.controls)

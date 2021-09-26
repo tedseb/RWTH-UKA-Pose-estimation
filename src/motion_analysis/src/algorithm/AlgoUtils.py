@@ -160,3 +160,63 @@ def update_gui_progress(gui, progress, alignment, progress_alignment_vector):
         return
     gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
     
+    
+# from src/AI/spin/utils/geometry.py
+# def quat_to_rotmat(quat):
+#     """Convert quaternion coefficients to rotation matrix.
+#     Args:
+#         quat: size = [B, 4] 4 <===>(w, x, y, z)
+#     Returns:
+#         Rotation matrix corresponding to the quaternion -- size = [B, 3, 3]
+#     """ 
+#     norm_quat = quat
+#     norm_quat = norm_quat/norm_quat.norm(p=2, dim=1, keepdim=True)
+#     w, x, y, z = norm_quat[:,0], norm_quat[:,1], norm_quat[:,2], norm_quat[:,3]
+
+#     B = quat.size(0)
+
+#     w2, x2, y2, z2 = w.pow(2), x.pow(2), y.pow(2), z.pow(2)
+#     wx, wy, wz = w*x, w*y, w*z
+#     xy, xz, yz = x*y, x*z, y*z
+
+#     rotMat = torch.stack([w2 + x2 - y2 - z2, 2*xy - 2*wz, 2*wy + 2*xz,
+#                           2*wz + 2*xy, w2 - x2 + y2 - z2, 2*yz - 2*wx,
+#                           2*xz - 2*wy, 2*wx + 2*yz, w2 - x2 - y2 + z2], dim=1).view(B, 3, 3)
+#     return rotMat    
+
+
+# from src/AI/spin/utils/imutils.py
+# def get_transform(center, scale, res, rot=0):
+#     """Generate transformation matrix."""
+#     h = 200 * scale
+#     t = np.zeros((3, 3))
+#     t[0, 0] = float(res[1]) / h
+#     t[1, 1] = float(res[0]) / h
+#     t[0, 2] = res[1] * (-float(center[0]) / h + .5)
+#     t[1, 2] = res[0] * (-float(center[1]) / h + .5)
+#     t[2, 2] = 1
+#     if not rot == 0:
+#         rot = -rot # To match direction of rotation from cropping
+#         rot_mat = np.zeros((3,3))
+#         rot_rad = rot * np.pi / 180
+#         sn,cs = np.sin(rot_rad), np.cos(rot_rad)
+#         rot_mat[0,:2] = [cs, -sn]
+#         rot_mat[1,:2] = [sn, cs]
+#         rot_mat[2,2] = 1
+#         # Need to rotate around center
+#         t_mat = np.eye(3)
+#         t_mat[0,2] = -res[1]/2
+#         t_mat[1,2] = -res[0]/2
+#         t_inv = t_mat.copy()
+#         t_inv[:2,2] *= -1
+#         t = np.dot(t_inv,np.dot(rot_mat,np.dot(t_mat,t)))
+#     return t
+
+# def transform(pt, center, scale, res, invert=0, rot=0):
+#     """Transform pixel location to different reference."""
+#     t = get_transform(center, scale, res, rot=rot)
+#     if invert:
+#         t = np.linalg.inv(t)
+#     new_pt = np.array([pt[0]-1, pt[1]-1, 1.]).T
+#     new_pt = np.dot(t, new_pt)
+#     return new_pt[:2].astype(int)+1

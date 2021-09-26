@@ -31,12 +31,13 @@ STATES_TRAJECTORY_MAX_MEMORY_SIZE = 30
 REMOVE_JITTER_RANGE = 5
 
 # We use this to disable marking repetitions as bad if they seem weird if inputs are messy
-MESSY_INPUTS = True
+ROBUST_COUNTING_MODE = True
 
 # FPS for the GUI
 GUI_FPS = 25
 
 TRUST_REGION_FILTER_FACTOR = 2
+MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT = 0.8
 
 # We use this fading factor for a exponentially dying error
 JOINT_DIFFERENCE_FADING_FACTOR = 0.8

@@ -12,9 +12,11 @@ drive = GoogleDrive(gauth)
 # Set the id of the Google Drive folder. You can find it in the URL of the google drive folder.
 parent_folder_id_1 = '1blrQs1DdKdHWyDIK_n26rMyuGTergp75'
 parent_folder_id_2 = '1u9ajkYKKm6tvPrXYNrNn6xdrBsnJ4gql'
+parent_folder_id_3 = '1d05xzieKb3TfqhEj5KA_vdRYXTeb6VqG'
 # Set the parent folder, where you want to store the contents of the google drive folder
 parent_folder_dir_1 = './src/AI/spin/extra_data/'
 parent_folder_dir_2 = './src/AI/weight_detection/models/'
+parent_folder_dir_3 = './src/AI/metrabs/models/'
 
 
 # This is the base wget command that we will use. This might change in the future due to changes in Google drive
@@ -23,8 +25,8 @@ wget_text = '"wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?e
 
 # Get the folder structure
 file_dict = dict()
-folder_queue = [parent_folder_id_1, parent_folder_id_2]
-dir_queue = [parent_folder_dir_1, parent_folder_dir_2]
+folder_queue = [parent_folder_id_1, parent_folder_id_2, parent_folder_id_3]
+dir_queue = [parent_folder_dir_1, parent_folder_dir_2, parent_folder_dir_3]
 dir_queue_copy = dir_queue.copy()
 cnt = 0
 

@@ -247,7 +247,7 @@ class MotionAnaysisGUI(QMainWindow):
         # self.overall_errors_widget.addItem(self.overall_errors_curve)
 
         label2 = QLabel(self.controls)
-        label2.setText("Spot to display:")
+        label2.setText("Choose Spot:")
 
         self.spot_chooser = QComboBox(self)
         self.spot_chooser.setEditable(False)

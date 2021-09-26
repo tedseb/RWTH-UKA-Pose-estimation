@@ -1,6 +1,6 @@
 # This message describes user correction information
 
-# The following structure reflects the REST API between the Comparing System and the Smtartphone App 
+# The following structure reflects the REST API between the Motion Analysis and the Smtartphone App 
 # as specified under https://app.getguru.com/card/iGK7zMAT/Tech-Spec-REST-API-ComparingSystem-Smartphone-App
 # For questions, refer to Artur
 

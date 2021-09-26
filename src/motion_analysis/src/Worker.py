@@ -95,14 +95,12 @@ class Worker(Thread):
         self.user_exercise_state_publisher = rp.Publisher(ROS_TOPIC_USER_EXERCISE_STATES, String, queue_size=1000)  
         self.user_correction_publisher = rp.Publisher(ROS_TOPIC_USER_CORRECTIONS, String, queue_size=1000)  
 
-        self.predicted_skelleton_publisher = rp.Publisher("comparing_reference_prediction", Person, queue_size=1000)
-        self.user_skelleton_publisher = rp.Publisher("comparing_input", Person, queue_size=1000)
+        self.predicted_skelleton_publisher = rp.Publisher("motion_analysis_reference_prediction", Person, queue_size=1000)
+        self.user_skelleton_publisher = rp.Publisher("motion_analysis_input", Person, queue_size=1000)
 
         self.spot_key = spot_key
 
         self.features = {}
-
-        self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
 
         self.bad_repetition = False
         self.moving_average_joint_difference = 0
@@ -135,7 +133,10 @@ class Worker(Thread):
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
-        self.alignments_this_rep = []
+        self.progress = 0
+        self.alignments_this_rep = np.array([])
+        self.progress_differences_this_rep = np.array([])
+        self.beginning_of_next_repetition_detected = False
 
         # The following lines fetch data that we need to analyse
         self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
@@ -154,13 +155,30 @@ class Worker(Thread):
                     f.update(pose, self.pose_definition_adapter)
 
                 # Compare joints with expert system data
-                increase_reps, self.bad_repetition = analyze_feature_progressions(self.features, self.bad_repetition)
+                increase_reps = self.analyze_feature_progressions(self.features)
+
+                # See if progress jumped around too much
+                if increase_reps:
+                    negative_progress_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep < 0)]
+                    positive_progresses_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep > 0)]
+                    if len(negative_progress_differences) > 0:
+                        neg_mean = abs(np.mean(negative_progress_differences))
+                    else:
+                        neg_mean = 0
+                    if len(positive_progresses_differences) > 0: 
+                        pos_median = abs(np.median(positive_progresses_differences))
+                    else:
+                        pos_median = 0
+                    if  neg_mean > pos_median * JUMPY_PROGRESS_ALPHA and JUMPY_PROGRESS_BETA * len(negative_progress_differences) > len(positive_progresses_differences):
+                        log("Progression was too jumpy in this repetition. Marking this repetition as bad...")
+                        self.bad_repetition = True
+                        increase_reps = False
 
                 # If the feature alignment in this repetitions is too high, we do not count the repetition
-                if np.mean(self.alignments_this_rep) < MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT and increase_reps:
+                if increase_reps and np.mean(self.alignments_this_rep) < MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT:
                     log("Feature missalignment during this repetition. Repetition falsified.")
                     increase_reps = False
-                    self.alignments_this_rep = []
+                    self.alignments_this_rep = np.array([])
 
                 # Calculate a new reference pose mapping
                 reference_pose = self.calculate_reference_pose_mapping()
@@ -200,7 +218,7 @@ class Worker(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                log_throttle("Encountered an Error while Comparing")
+                log_throttle("Encountered an Error while analyzing.")
                 log(format_exc())
             
         # Enqueue data for feature progressions and resampled feature lists
@@ -209,7 +227,6 @@ class Worker(Thread):
         
         self.spot_info_dict = None
         self.features = {}
-        self.last_mean_resampled_values_reference_trajectory_fractions_average_differences = []
         self.bad_repetition = False
         self.moving_average_joint_difference = 0
 
@@ -247,8 +264,8 @@ class Worker(Thread):
                 prediction = np.argmin(errors)
                 index = discretization_reference_trajectory_indices_tensor[idx][prediction]
                 median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
-                self.progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-                progress_vector = map_progress_to_vector(self.progress)
+                feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+                progress_vector = map_progress_to_vector(feature_progress)
                 progress_vectors.append(progress_vector)
                 median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
                 predicted_indices.append(index)
@@ -264,13 +281,101 @@ class Worker(Thread):
             #     joint_difference = total_joint_difference(pose, reference_pose)
             #     r.moving_average_joint_difference = r.moving_average_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + r * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
 
+        last_progress = self.progress
 
         self.progress, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
 
-        self.alignments_this_rep.append(self.alignment)
+        self.alignments_this_rep = np.append(self.alignments_this_rep, self.alignment)
+        self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, self.progress - last_progress)
 
         update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector)
 
         reference_pose = recording[int(len(recording) * self.progress)]
 
         return reference_pose
+
+    def analyze_feature_progressions(self,
+        features: dict) -> Tuple[bool, bool, dict, Any]:
+        """Detect done and bad repetitions by analyzing the feature's progressions.
+        
+        Args:
+            features: The feature dictionary from the previous analysis step
+            
+        Returns:
+            increase_reps (bool): Is true if a repetition was detected
+        """
+        increase_reps = True
+        in_beginning_state = True
+
+        for f in features.values():
+            beginning_state = f.reference_feature_collection.median_beginning_state
+            number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
+            if f.state != beginning_state:
+                in_beginning_state = False
+            if f.progression < number_of_dicided_state_changes_for_repetition:
+                increase_reps = False
+            elif f.progression > number_of_dicided_state_changes_for_repetition and not ROBUST_COUNTING_MODE:
+                log("A feature has progressed through too many states. Marking this repetition as bad...")
+                log("Feature specification: " + str(f.specification_dict))
+                self.bad_repetition = True
+
+        # Look at every reference feature separately
+        # bad_repetition_yes = 0
+        # bad_repetition_no = 0
+        # increase_reps_yes = 0
+        # increase_reps_no = 0
+        # in_beginning_state_yes = 0
+        # in_beginning_state_no = 0
+
+        # for f in features.values():
+        #     for r in f.reference_feature_collection.reference_features:
+                
+        #         beginning_state = r.median_beginning_state
+        #         number_of_dicided_state_changes_for_repetition = r.number_of_dicided_state_changes
+
+        #         if f.state != beginning_state:
+        #             in_beginning_state_no += 1
+        #         else:
+        #             in_beginning_state_yes += 1
+
+        #         if f.progression < number_of_dicided_state_changes_for_repetition:
+        #             increase_reps_no += 1
+        #         elif f.progression > number_of_dicided_state_changes_for_repetition:
+        #             bad_repetition = True
+        #             bad_repetition_yes += 1
+        #             increase_reps_no += 1
+        #         else:
+        #             bad_repetition_no += 1
+        #             increase_reps_yes += 1
+
+        # bad_repetition_ratio = bad_repetition_yes/bad_repetition_no
+        # increase_reps_ratio = increase_reps_yes/increase_reps_no
+        # in_beginning_state_ratio = in_beginning_state_yes/in_beginning_state_no
+
+        if in_beginning_state and self.bad_repetition:
+            log("Bad repetition aborted. Resetting feature progressions and repetition data...")
+            for f in features.values():
+                f.progression = 0
+            self.bad_repetition = False
+            self.beginning_of_next_repetition_detected = True
+            
+            increase_reps = self.analyze_feature_progressions(features)
+
+        if self.bad_repetition and not ROBUST_COUNTING_MODE:
+            increase_reps = False
+
+        if increase_reps:
+            log("All features have progressed. Repetition detected. Resetting feature progressions...")
+            for f in features.values():
+                f.progression = 0
+            self.beginning_of_next_repetition_detected = True
+
+        if not in_beginning_state and self.beginning_of_next_repetition_detected:
+            log("Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+            self.beginning_of_next_repetition_detected = False
+            self.alignments_this_rep = np.array([])
+            self.progress_differences_this_rep = np.array([])
+            self.progress = 0
+
+
+        return increase_reps

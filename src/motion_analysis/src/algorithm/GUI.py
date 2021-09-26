@@ -352,7 +352,7 @@ class MotionAnaysisGUI(QMainWindow):
                 feature_widget.name_label.setText("Feature " + str(i))
                 self.feature_widgets[h] = feature_widget
                 layout.addWidget(feature_widget, 1, 5 + i, 10, 1)
-            self.setFixedWidth(300 * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0))))
+            self.setFixedWidth(400 * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0))))
             self.setFixedHeight(1200)
         else:
             self.setFixedWidth(300)

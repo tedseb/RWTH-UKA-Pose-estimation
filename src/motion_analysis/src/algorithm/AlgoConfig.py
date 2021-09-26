@@ -33,6 +33,9 @@ REMOVE_JITTER_RANGE = 5
 # We use this to disable marking repetitions as bad if they seem weird if inputs are messy
 ROBUST_COUNTING_MODE = True
 
+JUMPY_PROGRESS_ALPHA = 3
+JUMPY_PROGRESS_BETA = 4
+
 # FPS for the GUI
 GUI_FPS = 25
 

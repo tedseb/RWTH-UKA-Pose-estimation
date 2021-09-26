@@ -8,8 +8,8 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 
 from abc import abstractmethod
 
-# Comparing system talks lots if this is set to true
-HIGH_VERBOSITY = True
+# Motion Analysis talks lots if this is set to true
+HIGH_VERBOSITY = False
 
 try:
     import rospy as rp

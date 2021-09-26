@@ -134,10 +134,14 @@ def update_gui_features(gui, feature):
         if not widget.reference_plot_data_set:
             try:
                 sample_reference_feature = feature.reference_feature_collection.reference_recording_features[0]
-                widget.update_reference_plots.emit(
+                spec = feature.specification_dict
+                spec.pop("type")
+                widget.update_static_data.emit(
                     np.array(sample_reference_feature.values), \
                     np.array(sample_reference_feature.filtered_values), \
-                    np.array(sample_reference_feature.discretized_values))
+                    np.array(sample_reference_feature.discretized_values), \
+                    str(feature.type), \
+                    str(spec))
             except KeyError:
                 pass
         

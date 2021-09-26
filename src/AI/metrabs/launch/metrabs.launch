@@ -1,0 +1,3 @@
+<launch>
+  <node name="spin3D" pkg="metrabs" type="run_metrabs_estimation.py" />
+</launch> 

@@ -34,7 +34,9 @@ REMOVE_JITTER_RANGE = 5
 MESSY_INPUTS = True
 
 # FPS for the GUI
-GUI_FPS = 10
+GUI_FPS = 25
+
+TRUST_REGION_FILTER_FACTOR = 2
 
 # We use this fading factor for a exponentially dying error
 JOINT_DIFFERENCE_FADING_FACTOR = 0.8

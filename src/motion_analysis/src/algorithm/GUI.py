@@ -7,16 +7,13 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 from os import error
-from PyQt5.QtWidgets import QComboBox, QGridLayout, QLabel, QMainWindow, QPushButton, QSizePolicy, QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QComboBox, QGridLayout, QLabel, QMainWindow, QProgressBar, QPushButton, QSizePolicy, QWidget, QVBoxLayout
 from pyqtgraph.Qt import QtGui, QtCore
 import sys
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
-from pyqtgraph.graphicsItems.PlotCurveItem import PlotCurveItem
-from pyqtgraph.graphicsItems.PlotItem.PlotItem import PlotItem
-from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 try:
     from motion_analysis.src.algorithm.AlgoConfig import GUI_FPS
@@ -25,7 +22,11 @@ except ImportError:
     from src.algorithm.AlgoConfig import GUI_FPS
     from src.algorithm.logging import log
 
-RED = (217, 83, 25)
+def clamp(x): # Used only for formating color strings
+    return max(0, min(x, 255))
+
+GYMY_GREEN = (73, 173, 51)
+GYMY_ORANGE = (247, 167, 11)
 
 class FeatureGraphsWidget(QWidget):
     """ Implements a set a graphs that are displayed vertically on top of each other in our GUI to show us feature data."""
@@ -88,7 +89,7 @@ class FeatureGraphsWidget(QWidget):
         self.progress_vector.addItem(self.progress_vector_curve)
 
         self.feature_index_pointer = CurveArrow(self.discrete_reference_trajectory_curve, 0)
-        self.feature_index_pointer.setStyle(angle=90, headWidth=5, pen=RED, brush= RED)
+        self.feature_index_pointer.setStyle(angle=90, headWidth=5, pen=GYMY_ORANGE, brush= GYMY_ORANGE)
 
         layout.addWidget(self.progress_vector, 0, 0, 1, 1)
         layout.addWidget(self.user_trajectory, 1, 0, 4, 1)
@@ -154,7 +155,7 @@ class FeatureGraphsWidget(QWidget):
             self.feature_index_pointer.setIndex(self._prediction)
             self.errors_curve.setData(self._errors_x, self._errors_y)
             # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
-            self.progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = RED)
+            self.progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = GYMY_GREEN)
         except IndexError as e: # This occurs if our progress points to an index higher than our trajectory length
             log(e)
 
@@ -181,7 +182,7 @@ class FeatureGraphsWidget(QWidget):
 
 class MotionAnaysisGUI(QMainWindow):
     update_signal = pyqtSignal()
-    update_overall_data_signal = pyqtSignal(int, int, np.ndarray)
+    update_overall_data_signal = pyqtSignal(float, float, np.ndarray)
     def __init__(self):
         self.app = QtGui.QApplication([])
         super().__init__()
@@ -198,19 +199,36 @@ class MotionAnaysisGUI(QMainWindow):
 
         self.overall_progress_vector_widget = pg.PlotWidget(title="overall_progress_vector")
         self.overall_progress_vector_widget.setAspectLocked()
-        self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
+
+        self.progress_widget = QProgressBar(self)
+        self.progress_widget.setMaximum(100)
+        self.progress_widget.setFormat('Repetition progress: %p%')
+        
+        hex_color = "#{0:02x}{1:02x}{2:02x}".format(clamp(int(GYMY_GREEN[0])), clamp(int(GYMY_GREEN[1])), clamp(int(GYMY_GREEN[2])))
+        style = "QProgressBar::chunk \
+            {{background-color: {};}} \
+            text-align: center;".format(hex_color)
+        self.progress_widget.setStyleSheet(style)
+        
+        self.alignment_widget = QProgressBar(self)
+        self.alignment_widget.setMaximum(100)
+        self.alignment_widget.setFormat('Features alignment: %p%')
+        # self.overall_errors_widget = pg.PlotWidget(title="overall_errors")
+        
         controls_layout.addWidget(self.overall_progress_vector_widget)
-        controls_layout.addWidget(self.overall_errors_widget)
+        # controls_layout.addWidget(self.overall_errors_widget)
+        controls_layout.addWidget(self.progress_widget)
+        controls_layout.addWidget(self.alignment_widget)
 
         self.overall_progress_vector_widget.setXRange(-1, 1)
         self.overall_progress_vector_widget.setYRange(-1, 1)
         self.overall_progress_vector_widget.setAspectLocked()
 
         self.overall_progress_vector_curve = pg.PlotCurveItem([0, 0])
-        self.overall_errors_curve = pg.PlotCurveItem([0, 0])
+        # self.overall_errors_curve = pg.PlotCurveItem([0, 0])
 
         self.overall_progress_vector_widget.addItem(self.overall_progress_vector_curve)
-        self.overall_errors_widget.addItem(self.overall_errors_curve)
+        # self.overall_errors_widget.addItem(self.overall_errors_curve)
 
         label1 = QLabel(self.controls)
         label1.setText("Spot to display:")
@@ -219,6 +237,9 @@ class MotionAnaysisGUI(QMainWindow):
         self.spot_chooser.setEditable(False)
         self.spot_chooser.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.spot_chooser.currentTextChanged.connect(self.choose_spot)
+
+        verticalSpacer = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        controls_layout.addItem(verticalSpacer)
 
         controls_layout.addWidget(label1)
         controls_layout.addWidget(self.spot_chooser, 1)
@@ -238,17 +259,24 @@ class MotionAnaysisGUI(QMainWindow):
         self.chosen_spot = None
         self.create_feature_widgets()
 
+        self.setFixedWidth(300)
+
         self.show()
 
-    @QtCore.pyqtSlot(int, int, np.ndarray)
+    @QtCore.pyqtSlot(float, float, np.ndarray)
     def _update_overall_data(self, progress, alignment, progress_alignment_vector):
         self._progress_vector_x = np.array([0, progress_alignment_vector[0]])
         self._progress_vector_y = np.array([0, progress_alignment_vector[1]])
-        self.overall_progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = RED)
-
-    
-    def heightForWidth(self, width):
-        return width * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0)))
+        pen_color = tuple(np.array(GYMY_ORANGE) * (1 - alignment) + np.array(GYMY_GREEN) * alignment)
+        self.overall_progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = pen_color)
+        self.progress_widget.setValue(progress * 100)
+        
+        hex_color = "#{0:02x}{1:02x}{2:02x}".format(clamp(int(pen_color[0])), clamp(int(pen_color[1])), clamp(int(pen_color[2])))
+        style = "QProgressBar::chunk \
+            {{background-color: {};}} \
+            text-align: center;".format(hex_color)
+        self.alignment_widget.setStyleSheet(style)
+        self.alignment_widget.setValue(alignment * 100)
 
     def update_available_spots(self, spot_name, active, feature_hashes=[]):
         """When a spot goes active and has an exercise, update the available spots for our drop down menu."""
@@ -306,8 +334,11 @@ class MotionAnaysisGUI(QMainWindow):
                 feature_widget = FeatureGraphsWidget()
                 self.feature_widgets[h] = feature_widget
                 layout.addWidget(feature_widget, 1, 5 + i, 10, 1)
-
-        self.setFixedHeight(1200)
+            self.setFixedWidth(300 * (1 + (len(self.spot_data.get(self.chosen_spot).get("feature_hashes") or 0))))
+            self.setFixedHeight(1200)
+        else:
+            self.setFixedWidth(300)
+            self.setFixedHeight(400)
     
         self.setCentralWidget(self.container)
 

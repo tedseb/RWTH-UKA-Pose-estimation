@@ -72,7 +72,7 @@ def map_progress_to_vector(progress: float):
     Return:
         An np.array containing x and y values of the progress.
     """
-    return complex(np.sin(progress*2*np.pi), np.cos(progress*2*np.pi))
+    return complex(np.cos(progress*2*np.pi), np.sin(progress*2*np.pi))
 
 
 def map_vectors_to_progress_and_alignment(vectors: list):
@@ -154,5 +154,5 @@ def update_gui_progress(gui, progress, alignment, progress_alignment_vector):
     """ Update a gui regarding overall parameters. """
     if not gui:
         return
-    gui.update_overall_data_signal.emit(int(progress), int(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
+    gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
     

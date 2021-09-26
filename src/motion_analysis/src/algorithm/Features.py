@@ -104,7 +104,7 @@ class BaseFeature(ABC):
 
     def add_filter_value(self, value):
         try:
-            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - self.resolution, min(value, self.filtered_value + self.resolution)))
+            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - (TRUST_REGION_FILTER_FACTOR * self.resolution), min(value, self.filtered_value + (TRUST_REGION_FILTER_FACTOR * self.resolution))))
         except IndexError as e:
             self.filtered_values = np.append(self.filtered_values, value)
 

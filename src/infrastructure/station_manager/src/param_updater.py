@@ -7,7 +7,7 @@ from ast import literal_eval as make_tuple
 from .data_manager import DataManager
 from typing import Set, Dict, List
 
-class ParamUpdater():
+class CameraStationController():
     def __init__(self, data_manager : DataManager, verbose = False):
         self._data_manager = data_manager
         self._camera_station_frames : Dict[int, Dict[int, List]] = {}
@@ -18,32 +18,27 @@ class ParamUpdater():
         self._verbose = verbose
 
         self._camera_station_frames = self._data_manager.get_station_frame_lists()
-        self._camera_weight_frames = self._data_manager.get_weight_frame_lists()
+        #self._camera_weight_frames = self._data_manager.get_weight_frame_lists()
         #for camera_id, station_dict in frames.items():
             #self._camera_list[camera_id] = station_dict
 
         if self._verbose:
             rospy.loginfo(f"Camera list: {self._camera_station_frames}", logger_name="ParamUpdater")
 
-    def get_active_cameras(self) -> Set[int]:
+    def get_involved_cameras(self) -> Set[int]:
         active_cameras = {int(cam) for cam in self._station_frame_parameters}
         return active_cameras
 
-    def set_station(self, msg : StationUsage):
-        station_id = msg.stationID
-        station_state = msg.isActive
-
-        self.set_or_delete_frame_param(station_id, station_state, self._camera_station_frames, self._station_frame_parameters)
-        self.set_or_delete_frame_param(station_id, station_state, self._camera_weight_frames, self._weight_frame_parameters)
+    def set_station(self, station_id : int, is_active : bool):
+        self.set_or_delete_frame_param(station_id, is_active, self._camera_station_frames, self._station_frame_parameters)
+        #self.set_or_delete_frame_param(station_id, station_state, self._camera_weight_frames, self._weight_frame_parameters)
 
         if self._verbose:
             rospy.loginfo(f"Station Frame Parameters: {self._station_frame_parameters}", logger_name="ParamUpdater")
-            rospy.loginfo(f"Weight Frame Parameters: {self._weight_frame_parameters}", logger_name="ParamUpdater")
+            #rospy.loginfo(f"Weight Frame Parameters: {self._weight_frame_parameters}", logger_name="ParamUpdater")
 
         rospy.set_param('station_frames', self._station_frame_parameters)
-        rospy.set_param('weight_frames', self._weight_frame_parameters)
-        #result = rospy.get_param('param_server')
-        #results_test = yaml.load(result, Loader=yaml.Loader)
+        rospy.set_param('weight_frames', {"empty" : 0})
 
         self._publisher_pull_param.publish("True")
 

@@ -1,4 +1,4 @@
-# TrainerAI
+# gymy
 
 ## Getting started
 Have a look at our [Getting Started](https://git.rwth-aachen.de/trainerai/trainerai-core/-/wikis/Geting-Started) Wiki entry.

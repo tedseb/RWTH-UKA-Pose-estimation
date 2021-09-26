@@ -17,6 +17,7 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
     from motion_analysis.src.algorithm.logging import log
+    from backend.msg import StationUsage
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -28,7 +29,9 @@ except ImportError:
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
     from src.algorithm.logging import log
+    from backend.msg import StationUsage
 
+import pymongo
 import time
 from PyQt5.QtCore import QThread
 import yaml
@@ -36,12 +39,21 @@ from typing import NoReturn
 import rospy as rp
 from std_msgs.msg import String
 
+mongo_client = pymongo.MongoClient(MONGO_DB_URI)
+
+db = mongo_client.trainerai
+
+exercises = db.exercises
+recordings = db.recordings
+hmiExercises = db.hmiExercises
+
 class WorkerHandler(QThread):
     """Waits for updates on the usage of spots and communicates them through the a SpotMetaDataInterface.
     
-    The WorkerHandler waits for stringified YAMLs from the HMI. This data includes recordings of experts and further
-    data regarding the exercise. It uses a feature extractor to extract information that is found in the recording.
-    These includes expecially, but is not limited to, trajectories of features of interest. For example the trajectory of
+    The WorkerHandler waits for updates of the usage of stations. It queries the HMI database for exercise data. 
+    This data includes recordings of experts and further data regarding the exercise. 
+    It uses a feature extractor to extract information that is found in the recording.
+    These includes especially, but is not limited to, trajectories of features of interest. For example the trajectory of
     the angle of the left and right knee.
 
     The extracted features are set in a SpotMetaDataInterface and become avaiblable to the Comparator threads.
@@ -53,10 +65,9 @@ class WorkerHandler(QThread):
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter,
     features_interface_class: FeaturesInterface = RedisFeaturesInterface):
-
         super().__init__()
 
-        self.subscriber_expert_system = rp.Subscriber(ROS_EXPERT_SYSTEM_UPDATE_TOPIC, String, self.callback)
+        self.subscriber_expert_system = rp.Subscriber(ROS_STATION_USAGE_UPDATE_TOPIC, StationUsage, self.callback)
         self.spots = dict()
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.spot_queue_interface = spot_queue_interface_class()
@@ -64,7 +75,6 @@ class WorkerHandler(QThread):
         self.features_interface = features_interface_class()
         self.workers = {} # A dictionary, with spot IDs as keys
 
-        
         self.gui_handler = GUIHandler()
         self.gui = MotionAnaysisGUI()
         def kill_gui_hook():
@@ -72,38 +82,32 @@ class WorkerHandler(QThread):
         rp.on_shutdown(kill_gui_hook)
         self.gui_handler.run(self.gui)
 
-    def callback(self, name_parameter_containing_exercises: str) -> NoReturn:
-        spot_update_data = yaml.safe_load(name_parameter_containing_exercises.data)
-
-        station_id = spot_update_data["stationID"]
+    def callback(self, station_usage_data: Any) -> NoReturn:
+        station_id = station_usage_data.stationID
         spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(spot_key=station_id)
 
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
 
-        log("Updating info for spot with key: " + spot_info_key)
+        log("Updating info for spot with key: " + str(spot_info_key))
 
-        if spot_update_data["isActive"]:
-            exercise_data = yaml.safe_load(rp.get_param(spot_update_data['parameterServerKey']))
-
+        if station_usage_data.isActive:
+            exercise_data = exercises.find_one({"name": station_usage_data.exerciseName})
 
             # TODO: In the future: Possibly use multiple recordings
             recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
 
-            # TODO: Tamer must let experts specify the features of interest
             recordings = [recording]
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
+
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features
             features_dict = {c.feature_hash: Feature(c) for c in reference_recording_feature_collections}
-
             self.features_interface.set(spot_featuers_key, features_dict)
 
-            
-            
             # Set all entries that are needed by the handler threads later on
             exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
             del exercise_data['features'] # We replace features with their specification dictionary

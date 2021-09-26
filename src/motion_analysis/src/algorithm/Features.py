@@ -40,9 +40,11 @@ from typing import List
 try:
     from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.logging import log
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
+    from src.algorithm.logging import log
 
 
 # We need this to implement some loop logic further down this file
@@ -82,8 +84,15 @@ class BaseFeature(ABC):
 
         self.progression = 0
         self._values = np.array([])
+        self._filtered_values = np.array([])
         self._discretized_values = np.array([])
         self._states = np.array([])
+
+        # These are not set by the feature itself, but calculated by the algorithm
+        # The feature object as merely as a container for them
+        self.errors = np.array([])
+        self.progress_vector = np.array([])
+        self.prediction = np.array([]) 
             
         self.feature_hash = feature_hash
         self.type = specification_dict["type"]
@@ -93,12 +102,30 @@ class BaseFeature(ABC):
         from src.algorithm.FeatureExtraction import feature_extraction_methods # Try to remove this
         self.feature_extraction_method = feature_extraction_methods[self.type]
 
+    def add_filter_value(self, value):
+        try:
+            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - (TRUST_REGION_FILTER_FACTOR * self.resolution), min(value, self.filtered_value + (TRUST_REGION_FILTER_FACTOR * self.resolution))))
+        except IndexError as e:
+            self.filtered_values = np.append(self.filtered_values, value)
+
     @property
     def value(self):
         return self._values[-1]
 
     @property
-    def resampled_value(self):
+    def filtered_value(self):
+        return self._filtered_values[-1]
+
+    @property
+    def filtered_values(self):
+        return self._filtered_values
+
+    @filtered_values.setter
+    def filtered_values(self, filtered_values):
+        self._filtered_values = filtered_values[-FEATURE_TRAJECTORY_MAX_MEMORY_SIZE:]
+
+    @property
+    def digitized_value(self):
         return self._digitized_values[-1]
 
     @property
@@ -189,7 +216,7 @@ class ReferenceRecordingFeature(BaseFeature):
         # Even though we do the following in a higher dimension than necessary, we preserve the naming that we find in the ReferenceFeatuereCollection to provide a unified API.
         self.highest_value = np.amax(self.values)
         self.lowest_value = np.amin(self.values)
-        self.recording_length = len(self.values)
+        self.recording_length = max(1, len(self.values))
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
@@ -206,6 +233,9 @@ class ReferenceRecordingFeature(BaseFeature):
                         self.scale, \
                             self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary)
         
+        for value in self.values:
+            self.add_filter_value(value)
+
         self.discretized_values = discrete_trajectories_tensor[0]
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
@@ -218,22 +248,22 @@ class ReferenceRecordingFeature(BaseFeature):
 
         self.median_beginning_state = np.median(self.beginning_state)
 
-    def predict(self, feature: BaseFeature, pose: np.ndarray):
-        # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
-        reference_trajectory_hankel_matrix = self.hankel_tensor[0]
-        errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
-        prediction = np.argmin(errors)
-        # TODO: This should be only one dimension in this tensor. Check if this works!!!
-        self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
-        median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
-        progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-        self.progress_vector = map_progress_to_vector(progress)
-        self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
-        self.reference_pose = self.recording[int(len(self.recording) * progress)]
+    # def predict(self, feature: BaseFeature, pose: np.ndarray):
+    #     # TODO: This should be only one dimension in the hankel tensor. Check if this works!!!
+    #     reference_trajectory_hankel_matrix = self.hankel_tensor[0]
+    #     errors = custom_metric(reference_trajectory_hankel_matrix, feature.discretized_values, 100, 1)
+    #     prediction = np.argmin(errors)
+    #     # TODO: This should be only one dimension in this tensor. Check if this works!!!
+    #     self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
+    #     median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
+    #     progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+    #     self.progress_vector = map_progress_to_vector(progress)
+    #     self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
+    #     self.reference_pose = self.recording[int(len(self.recording) * progress)]
 
-        joint_difference = total_joint_difference(pose, self.reference_pose)
-        self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
-        self.total_joint_differences_this_rep.append(joint_difference)
+    #     joint_difference = total_joint_difference(pose, self.reference_pose)
+    #     self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
+    #     self.total_joint_differences_this_rep.append(joint_difference)
 
     @property
     def average_total_joint_difference_last_rep(self):
@@ -296,7 +326,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         self.reference_recording_features.append(reference_feature)
 
     def update_static_data(self):
-        """Re-)Calculate the information that we find in this reference feature collection's trajectories."""
+        """(Re-)Calculate the information that we find in this reference feature collection's trajectories."""
         lowest_values = []
         highest_values = []
         recording_lengths = []
@@ -305,7 +335,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         for trajectory in trajectories:
             lowest_values.append(np.amin(trajectory))
             highest_values.append(np.amax(trajectory))
-            recording_lengths.append(len(trajectory))
+            recording_lengths.append(max(1, len(trajectory)))
 
         # We take the average of highest and lowest values to compute the boundaries
         self.highest_value = np.average(highest_values)
@@ -334,12 +364,12 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         beginning_states = [r.beginning_state for r in self.reference_recording_features]
         self.median_beginning_state = np.median(beginning_states)
         
-    def predict(self, feature: BaseFeature, pose: np.ndarray):
-        recording_moving_average_total_joint_differences = dict()
-        lowest_moving_average_total_joint_difference = np.inf
-        for r in self.reference_recording_features:
-            r.predict(feature, pose)
-            recording_moving_average_total_joint_differences[r.recording_hash] = lowest_moving_average_total_joint_difference
+    # def predict(self, feature: BaseFeature, pose: np.ndarray):
+    #     recording_moving_average_total_joint_differences = dict()
+    #     lowest_moving_average_total_joint_difference = np.inf
+    #     for r in self.reference_recording_features:
+    #         r.predict(feature, pose)
+    #         recording_moving_average_total_joint_differences[r.recording_hash] = lowest_moving_average_total_joint_difference
 
     @property
     def average_total_joint_difference_last_rep(self):
@@ -385,6 +415,7 @@ class Feature(BaseFeature):
 
     def update(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
+        self.add_filter_value(value)
 
         try:
             discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
@@ -551,7 +582,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
     resolution = range_of_motion * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
     discrete_trajectories_tensor = []
     discretization_reference_trajectory_indices_tensor = [] # For every resampled value, we need an index to point us to the original pose
-    hankel_tensor = [] # In the comparing algorithm, we need a hankel matrix of every resampled reference trajectory
+    hankel_tensor = [] # In the analysis algorithm, we need a hankel matrix of every resampled reference trajectory
     feature_states_matrix = list()
     for trajectory in feature_trajectories:
         last_values = [trajectory[0]]
@@ -665,6 +696,9 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
         median_trajectory.append(median_feature_value)
         discretization_ranges.append({"median_resampled_values_reference_trajectory_fraction_from": median_resampled_values_reference_trajectory_fraction_from, \
             "median_resampled_values_reference_trajectory_fraction_to": median_resampled_values_reference_trajectory_fraction_to})
+
+    # Since the last median_resampled_values_reference_trajectory_fraction_to always refers to the first index, set it to 1
+    discretization_ranges[-1]["median_resampled_values_reference_trajectory_fraction_to"] = 1
 
     # Shorten median_reference_trajectory, if values double
     last_value = np.inf

@@ -20,7 +20,6 @@ def publish_message(publisher, topic, data):
         # This is currently how our REST API wants messages to be formed
         message = json.dumps({'topic': topic, 'data': data})
         publisher.publish(message)
-        log("ComparingSystem_Sender.py sent message: " + str(message))
     except Exception as e:
         rp.logerr(e)
         log("Issue sending message" + str(message) + " to REST API. Error: " + str(e))

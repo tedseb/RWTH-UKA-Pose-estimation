@@ -1,5 +1,6 @@
 from ast import literal_eval as make_tuple
 from typing import List, Tuple
+from multiprocessing import Lock
 import psycopg2
 import copy
 
@@ -10,6 +11,7 @@ class DataManager():
         self._camera_station_frames = {}
         self._camera_weight_frames = {}
         self._camera_infos = {} #{id : [names, args]}
+        self._station_cameras = {} #{station_id : [camera_id]}
 
         try:
             self._connection = psycopg2.connect(user="trainerai",
@@ -21,15 +23,21 @@ class DataManager():
         except psycopg2.Error as error:
             raise RuntimeError('Failed to open database') from error
 
-        self.update_frames()
-        self.update_camera_infos()
+        self._update_frames()
+        self._update_camera_infos()
+        self._update_station_camera()
+
+        self._frame_mutex = Lock()
+        self._camera_info_mutex = Lock()
+        self._station_camera_mutex = Lock()
+        self._postgres_mutex = Lock()
 
     def __del__(self):
         print("close data manager")
         self._cursor.close()
         self._connection.close()
 
-    def update_frames(self):
+    def _update_frames(self):
         try:
             select_query = 'SELECT camera_station_mappings.id, camera_station_mappings."cameraId", ' + \
                 'camera_station_mappings."stationId", frames.frame_box, frames.type ' + \
@@ -42,7 +50,7 @@ class DataManager():
             for row in table:
                 if row[4] == 0:
                     frames = self._camera_station_frames
-                else: 
+                else:
                     frames = self._camera_weight_frames
 
                 if row[1] not in frames:
@@ -65,7 +73,7 @@ class DataManager():
         except psycopg2.Error as error:
             print("Error while fetching frame data from PostgreSQL", error)
 
-    def update_camera_infos(self):
+    def _update_camera_infos(self):
         try:
             select_query = 'SELECT cameras.id, cameras.name, cameras.type, cameras."typeInfo" ' + \
                 "FROM cameras;"
@@ -80,54 +88,101 @@ class DataManager():
         except psycopg2.Error as error:
             print("Error while fetching data from PostgreSQL", error)
 
-    def get_station_frame_list(self, camer_id : int):
-        val = copy.deepcopy(self._camera_station_frames[camer_id])
-        return val
 
-    def get_station_frame_lists(self):
-        val = copy.deepcopy(self._camera_station_frames)
-        return val
+    def _update_station_camera(self):
+        try:
+            select_query = 'SELECT id, "cameraId", "stationId" FROM camera_station_mappings'
+            self._cursor.execute(select_query)
+            mobile_records = self._cursor.fetchall()
+
+            station_cameras = {}
+            for row in mobile_records:
+                if row[2] not in station_cameras:
+                    station_cameras[row[2]] = []
+                station_cameras[row[2]].append(row[1])
+            self._station_cameras = station_cameras
+        except psycopg2.Error as error:
+            raise RuntimeError("Error while fetching station/cameras from PostgreSQL") from error
+
+    def get_weight_colors(self, camera_id : int, station_id : int):
+        with self._postgres_mutex:
+            try:
+                select_query = 'SELECT station_weight_colors.id, name, weight, hsv_low, hsv_high, "cameraStationMappingId" ' + \
+                'FROM camera_station_mappings ' + \
+                'INNER JOIN station_weight_colors ON camera_station_mappings.id=station_weight_colors."cameraStationMappingId" ' + \
+                f'WHERE camera_station_mappings."cameraId"={camera_id} and camera_station_mappings."stationId"={station_id};'
+                self._cursor.execute(select_query)
+                mobile_records = self._cursor.fetchall()
+                data = {}
+                for record in mobile_records:
+                    data[record[0]] = [record[1], record[2], record[3], record[4], record[5]]
+                return data
+            except psycopg2.Error as error:
+                raise RuntimeError("Error while inserting data into weight color") from error
 
     def get_station_names(self):
-        try:
-            select_query = 'SELECT id, name FROM stations;'
-            self._cursor.execute(select_query)
-            table = self._cursor.fetchall()
-            station_names = {}
-            for row in table:
-                station_names[row[0]] = row[1]
-        except psycopg2.Error as error:
-            print("Error while fetching stations data from PostgreSQL", error)
-        return station_names
+        with self._postgres_mutex:
+            try:
+                select_query = 'SELECT id, name FROM stations;'
+                self._cursor.execute(select_query)
+                table = self._cursor.fetchall()
+                station_names = {}
+                for row in table:
+                    station_names[row[0]] = row[1]
+            except psycopg2.Error as error:
+                print("Error while fetching stations data from PostgreSQL", error)
+            return station_names
+
+    def get_station_frame_list(self, camer_id : int):
+        with self._frame_mutex:
+            val = copy.deepcopy(self._camera_station_frames[camer_id])
+            return val
+
+    def get_station_frame_lists(self):
+        with self._frame_mutex:
+            val = copy.deepcopy(self._camera_station_frames)
+            return val
 
     def get_weight_frame_list(self, camer_id : int):
-        val = copy.deepcopy(self._camera_weight_frames[camer_id])
-        return val
+        with self._frame_mutex:
+            val = copy.deepcopy(self._camera_weight_frames[camer_id])
+            return val
 
     def get_weight_frame_lists(self):
-        val = copy.deepcopy(self._camera_weight_frames)
-        return val
+        with self._frame_mutex:
+            val = copy.deepcopy(self._camera_weight_frames)
+            return val
 
     def get_camera_name(self, id : int) -> str:
-        return self._camera_infos[id][0]
+        with self._camera_info_mutex:
+            return self._camera_infos[id][0]
 
     def get_camera_names(self) -> List[str]:
-        camera_names = [info[0] for info in self._camera_infos.values()]
-        return camera_names
+        with self._camera_info_mutex:
+            camera_names = [info[0] for info in self._camera_infos.values()]
+            return camera_names
 
     def get_camera_names_and_indices(self) -> List[Tuple[str, int]]:
-        camera_indices = [(info[0], index) for index, info in self._camera_infos.items()]
-        return camera_indices
+        with self._camera_info_mutex:
+            camera_indices = [(info[0], index) for index, info in self._camera_infos.items()]
+            return camera_indices
 
     def get_camera_id(self, camera_name : str) -> int:
-        print(self._camera_infos)
-        for index, info in self._camera_infos.items():
-            if info[0] == camera_name:
-                return index
-        return -1
+        with self._camera_info_mutex:
+            print(self._camera_infos)
+            for index, info in self._camera_infos.items():
+                if info[0] == camera_name:
+                    return index
+            return -1
 
     def get_camera_type(self, camera_id : int) -> int:
-        return self._camera_infos[camera_id][1]
+        with self._camera_info_mutex:
+            return self._camera_infos[camera_id][1]
 
     def get_camera_type_info(self, camera_id : int) -> str:
-        return self._camera_infos[camera_id][2]
+        with self._camera_info_mutex:
+            return self._camera_infos[camera_id][2]
+
+    def get_cameras_of_station(self, station_id : int):
+        with self._station_camera_mutex:
+            return copy.deepcopy(self._station_cameras[station_id])

@@ -5,7 +5,7 @@
 In order to implement low latency, high throughput and scalable queueing, we may want to employ different queues.
 This file defines the several interfaces that cover queueing of data and handling of shared data.
 It also offers implementations of said interfaces. 
-The queueing should be trasparent to the Comparator and the ComparingNode.
+The queueing should be trasparent to the Worker Nodes.
 """
 
 import hashlib

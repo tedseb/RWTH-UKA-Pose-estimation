@@ -17,15 +17,13 @@ import torch
 from torch import nn
 from torchvision import transforms
 
-utils = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_ssd_processing_utils')
-url = "https://www.youtube.com/watch?v=wqctLW0Hb_0"
-
 
 class ObjectDetectionPipeline:
     def __init__(self, threshold=0.5, device="cpu", renderer=False, stationChk=False):
         self.stationBoxesChk = getBoxesInStation()
         self.stationChk=stationChk
-        self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s').eval().to(device)
+        self.model = torch.hub.load('/home/trainerai/trainerai-core/src/AI/objectDetector/yolov5', 'custom', path='/home/trainerai/trainerai-core/src/AI/objectDetector/yolov5s.pt', source='local')
+        #self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).eval().to(device)
         self.threshold = threshold # Confidence threshold for displaying boxes.
         self.renderer=renderer
         rospy.Subscriber('image', Image, self.run_objectdetector)
@@ -60,7 +58,7 @@ class ObjectDetectionPipeline:
 
         img = self.obj_detectYolo(img_original_bgr)
 
-        # fps = int(1/(time.time()-tmpTime))
+        fps = int(1/(time.time()-tmpTime))
         # print("FPS : ",fps)
         if self.renderer==True:
             msg_renderImage = Image()
@@ -88,7 +86,7 @@ class ObjectDetectionPipeline:
         labels.sensorID = self.frame_id
         labels.data=array1D_labels[0]
         self.publisher_labels.publish(labels)
-
+        
     def obj_detectYolo(self, img):
         """
         This function uses the Yolo object detector. It predicts BBOX with label and confidence values. 
@@ -107,8 +105,7 @@ class ObjectDetectionPipeline:
         self.info_station=[]
         self.info_frameID=[]
 
-        resul_np=results.xyxy[0].cpu().detach().numpy()
-        
+        resul_np=results.xyxy[0].cpu().detach().numpy() # BBox is in x1,y1,x2,y2
         bbox_size =  [ ((x[2]-x[0]) * (x[3]-x[1])) for x in resul_np]
         idx_big2small = np.argsort(bbox_size)[::-1]                                
         resul_np = [ resul_np[i] for i in idx_big2small ]  
@@ -129,10 +126,11 @@ class ObjectDetectionPipeline:
                     chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box,frame_id , self.stationChk)
                     if chkIsstation and (stationID not in self.info_station): #ToDo: SensorID to check the correct yaml file
                         #Change it to x,y,w,h for the PoseAI
-                        x=box[0]
-                        y=box[1]
-                        w=box[2]-x
-                        h=box[3]-y
+                        extraWidth=(box[2]-box[0])*0.1
+                        x=box[0]-extraWidth
+                        y=box[1]-extraWidth
+                        w=box[2]+extraWidth-x
+                        h=box[3]+extraWidth-y
                         self.body_bbox.append([x,y,w,h])
                         self.info_station.append(stationID)
                         self.info_frameID.append(frame_id)

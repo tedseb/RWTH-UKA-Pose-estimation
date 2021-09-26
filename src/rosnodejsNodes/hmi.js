@@ -5,7 +5,6 @@ const https = require('https');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-const StationUsage = rosnodejs.require("backend").msg.StationUsage;
 const pose_estimation_messages = rosnodejs.require("backend");
 const motion_analysis_messages = rosnodejs.require("motion_analysis");
 const url = require('url');
@@ -51,47 +50,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const recordings = db.collection("recordings");
   const hmiExercises = db.collection("hmiExercises");
 
-
-  //get me this amend
-  nh.subscribe('/station_usage', StationUsage, async (msg) => {
-    console.log(msg);
-    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
-      if (err) throw err;
-      if (result) {
-        const stringified = YAML.stringify(result);
-        nh.setParam('exercise' + msg['stationID'], stringified);
-        const obj = {
-          stationID: msg['stationID'],
-          isActive: msg['isActive'],
-          exerciseName: msg['exerciseName'],
-          parameterServerKey: 'exercise' + msg['stationID']
-        }
-        pubex.publish({'data': YAML.stringify(obj)});
-      } else {
-        console.error(`No such exercise  ${msg['exerciseName']}`)
-      }
-    });
-    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
-      if (err) throw err;
-      if (result) {
-        const stringified = YAML.stringify(result);
-        nh.setParam('hmiExercise' + msg['stationID'], stringified);
-        console.log(result);
-        const obj = {
-          stationID: msg['stationID'],
-          isActive: msg['isActive'],
-          exerciseName: msg['exerciseName'],
-          parameterServerKey:'hmiExercise' + msg['stationID']
-        }
-        pubex.publish({'data': YAML.stringify(obj)});
-      } else {
-        console.error(`No such exercise  ${msg['exerciseName']}`)
-      }
-    });
-  });
-
-
-  app.post('/expert/exercise/recordings', (req, res) => {
+    app.post('/expert/exercise/recordings', (req, res) => {
     console.log(req.body);
     res.status(200).send();
   });

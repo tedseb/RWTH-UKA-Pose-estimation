@@ -5,14 +5,11 @@ const https = require('https');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-const StationUsage = rosnodejs.require("backend").msg.StationUsage;
 const pose_estimation_messages = rosnodejs.require("backend");
 const motion_analysis_messages = rosnodejs.require("motion_analysis");
 const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
-const redis = require('redis')
-const createClient = require('redis').createClient
 var MongoClient = require('mongodb').MongoClient;
 const { stringify } = require('querystring');
 const { features } = require('process');
@@ -23,11 +20,6 @@ const PORT = config.PORT;
 const ownpose_labels = config.ownpose_labels;
 const ownpose_used = config.ownpose_used;
 const ownpose = config.ownpose;
-
-// Redis connection
-const redis_client = createClient({url: 'redis://localhost:5678'});
-redis_client.on('error', (err) => console.log('Redis Client Error', err));
-redis_client.connect();
 
 // Web App Code:
 const app = express();

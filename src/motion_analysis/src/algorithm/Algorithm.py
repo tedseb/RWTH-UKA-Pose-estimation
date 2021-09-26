@@ -124,86 +124,8 @@ def analyze_feature_progressions(
     return increase_reps, bad_repetition
 
 
-def calculate_reference_pose_mapping(features: dict, exercise_data: dict, gui: MotionAnaysisGUI = None) -> np.ndarray:
-    """Calculate the pose in the reference trajectory that we think our user is most probably in.
-
-    This method measures the similarity between the recent feature_trajectory of a user and the vectors
-    inside a hankel matrix of the reference trajectory. Thereby we can compute how likely it is that the
-    use is at a certain point in the execution of the exercise of the expert.
-
-    Args:
-        features: A dictionary that holds a list of past feature values for every type of feature
-                                in every feature category
-        exercise data: A dictionary containing metadata around the exercise
-        gui: A GUI to update with the data of this analysis
-
-    Returns:
-        reference_pose: The reference pose that we think the user is in
-        mean_resampled_values_reference_trajectory_fractions_average_difference: The average difference of "where different features think we are"
-
-    """
-    recordings = exercise_data['recordings']
-
-    if len(recordings.values()) > 1:
-        raise NotImplementedError("We have not gotten this method ready for multiple recordings!")
-
-    recording = list(recordings.values())[0]
-
-    predicted_indices = []
-    median_resampled_values_reference_trajectory_fractions = []
-    progress_vectors = []
-
-    for h, f in features.items():
-        # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
-        discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
-        hankel_tensor_1 = f.reference_feature_collection.hankel_tensor
-        discrete_feature_trajectory = np.array(f.discretized_values)
-
-        for idx, reference_trajectory_hankel_matrix in enumerate(hankel_tensor_1):
-            errors = trajectory_distance(reference_trajectory_hankel_matrix, discrete_feature_trajectory, 100, 1)
-            prediction = np.argmin(errors)
-            index = discretization_reference_trajectory_indices_tensor[idx][prediction]
-            median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
-            progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-            progress_vector = map_progress_to_vector(progress)
-            progress_vectors.append(progress_vector)
-            median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
-            predicted_indices.append(index)
-
-            f.errors = errors
-            f.progress_vector = progress_vector
-            f.prediction = prediction
-
-            update_gui_feature_widget(gui, f)
-                
-        # Look at every reference feature separately
-        # for r in f.reference_feature_collection.reference_recording_features:
-        #     joint_difference = total_joint_difference(pose, reference_pose)
-        #     r.moving_average_joint_difference = r.moving_average_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + r * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
-
-
-    progress, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
-
-    update_gui_overall(gui, progress, alignment, progress_alignment_vector)
-
-    median_resampled_values_reference_trajectory_fractions_errors = []
-    # TODO: This is a little bit overkill but should still give the correct result, maybe change to something more elegant
-    for idx1, value in enumerate(median_resampled_values_reference_trajectory_fractions):
-        for idx2 in range(len(median_resampled_values_reference_trajectory_fractions)):
-            if idx2 == idx1:
-                continue
-            median_resampled_values_reference_trajectory_fractions_errors.append(custom_metric(value, median_resampled_values_reference_trajectory_fractions[idx2]))
-    
-    reference_pose = recording[int(len(recording) * progress)]
-
-    mean_resampled_values_reference_trajectory_fractions_average_difference = np.average(median_resampled_values_reference_trajectory_fractions_errors)/2 # divide by two, since we account for every errors twice
-        
-    return reference_pose, mean_resampled_values_reference_trajectory_fractions_average_difference
-
-
 def total_joint_difference(pose: np.ndarray, reference_pose: np.ndarray):
     return np.average(pose - reference_pose)
-
 
 
 class Predictor(ABC):

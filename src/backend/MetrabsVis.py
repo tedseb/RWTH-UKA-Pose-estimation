@@ -83,7 +83,7 @@ class RealtimeVisualization():
                 idx+=1
                 m.ns = ''
                 m.color = ColorRGBA(0.98, 0.30, 0.30, 1.00)
-                m.scale = Vector3(0.03,0.03,0.03)
+                m.scale = Vector3(0.1,0.1,0.1)
                 m.pose.position.x, m.pose.position.y, m.pose.position.z = bodypart.point.x, (bodypart.point.y), bodypart.point.z
                 m.type = 2
                 m.action = 0

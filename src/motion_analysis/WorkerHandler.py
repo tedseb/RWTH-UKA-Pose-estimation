@@ -63,7 +63,7 @@ class WorkerHandler(QThread):
     def __init__(self, 
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
-    pose_definition_adapter_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter,
+    pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
     features_interface_class: FeaturesInterface = RedisFeaturesInterface):
         super().__init__()
 

@@ -26,7 +26,7 @@ import websockets
 import json
 import yaml
 
-adapter = SpinPoseDefinitionAdapter()
+adapter = MetrabsPoseDefinitionAdapter()
 
 functions = inspect.getmembers(FeatureExtractionModule, inspect.isfunction)
 functions = {a: b for a, b in functions}

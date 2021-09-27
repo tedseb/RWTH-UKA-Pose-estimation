@@ -109,8 +109,8 @@ def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter:
     """
     raise NotImplementedError("see extract angle!")
     
-    neck_idx = pose_definition_adapter.get_joint_index("OP_Neck")
-    pelvis_idx = pose_definition_adapter.get_joint_index("Pelvis_MPII")
+    neck_idx = pose_definition_adapter.get_joint_index("Neck")
+    pelvis_idx = pose_definition_adapter.get_joint_index("M_Hip")
 
     return np.average([pose_array[neck_idx][Z], pose_array[pelvis_idx][Z]])
     

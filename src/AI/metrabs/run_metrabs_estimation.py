@@ -29,8 +29,8 @@ class run_metrabs():
         #self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined')
         self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl')
         image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        #self.intrinsics = tf.constant([[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]], dtype=tf.float32)
         self.intrinsics = tf.constant([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], dtype=tf.float32)
-
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
         person_boxes = tf.constant([[0, 626, 367, 896], [524, 707, 475, 841], [588, 512, 54, 198]], tf.float32)

@@ -17,9 +17,9 @@ const { features } = require('process');
 
 // Parameters and Constants:
 const PORT = config.PORT;
-const ownpose_labels = config.ownpose_labels;
-const ownpose_used = config.ownpose_used;
-const ownpose = config.ownpose;
+const ownpose_labels = config.matrabs_labels;
+const ownpose_used = config.matrabs_used;
+const ownpose = config.matrabs;
 
 // Web App Code:
 const app = express();
@@ -115,8 +115,7 @@ const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg
   let pose = {};
   this.coordinates = msg;
   let bodyParts = msg.persons[0]['bodyParts'];
-  let labels = ['nose', 'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'];
-
+  
   ownpose_used.forEach(index => {
     let point = {};
     point.x = bodyParts[index].point.x;
@@ -163,6 +162,11 @@ app.get('/api/connections', (req, res) => {
     else { dict[ownpose_labels[element[0]]] = [ownpose_labels[element[1]]] }
   });
   console.log(dict);
+  res.json(dict);
+});
+
+app.get('/api/connections/dict', (req, res) => {
+  const dict = {'ownpose_labels': ownpose_labels, 'ownpose_used': ownpose_used, 'ownpose': ownpose};
   res.json(dict);
 });
 

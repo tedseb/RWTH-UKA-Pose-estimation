@@ -29,7 +29,7 @@ from geometry_msgs.msg import Vector3
 
 class Visualizer():
     def __init__(self,
-    feature_extractor_class: PoseDefinitionAdapter = SpinPoseDefinitionAdapter):
+    feature_extractor_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter):
         # define a publisher to publish the 3D skeleton of multiple people
         self.input_pub = rp.Publisher('motion_analysis_input_marker', MarkerArray, queue_size=100)
         self.reference_pub = rp.Publisher('motion_analysis_reference_prediction_marker', MarkerArray, queue_size=100)
@@ -87,5 +87,5 @@ class Visualizer():
 
 if __name__ == '__main__':
     rp.init_node('Motion_Analysis_Visualizer', anonymous=False)
-    visualization = Visualizer(SpinPoseDefinitionAdapter)
+    visualization = Visualizer(MetrabsPoseDefinitionAdapter)
     rp.spin()

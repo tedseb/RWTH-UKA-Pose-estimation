@@ -4,7 +4,7 @@ This file contains some parameters to our data plane, such as ROS Topic names an
 
 # GENERAL CONFIGURATION (not algorithmic)
 
-MONGO_DB_URI = "mongodb://mongoadmin:secret@host.docker.internal:27888/?authSource=admin"
+MONGO_DB_URI = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin"
 
 DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
 

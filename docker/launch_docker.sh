@@ -65,8 +65,6 @@ docker run -it -d --rm \
         --name trainerAI \
         -e DISPLAY=$display \
 	    -p 3000:3000 \
-        -p 3001:3001 \
-        -p 3002:3002 \
         --privileged \
         --net=host \
         -v /tmp/.X11-unix:/tmp/.X11-unix \

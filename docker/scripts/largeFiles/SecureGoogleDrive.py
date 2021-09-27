@@ -3,7 +3,7 @@ from pydrive.auth import GoogleAuth
 import pandas as pd
 
 
-GoogleAuth.DEFAULT_SETTINGS['client_config_file'] = "./docker/scripts/spin/client_secrets.json"
+GoogleAuth.DEFAULT_SETTINGS['client_config_file'] = "./docker/scripts/largeFiles/client_secrets.json"
         
 gauth = GoogleAuth()
 gauth.LocalWebserverAuth()

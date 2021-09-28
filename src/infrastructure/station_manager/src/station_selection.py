@@ -9,7 +9,7 @@ import copy
 from typing import Callable
 from websocket import create_connection
 from PyQt5.QtWidgets import QApplication, QMainWindow, QListWidgetItem, QDialog
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QObject
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QObject, QtGui
 
 if __name__=="__main__":
     currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -46,11 +46,18 @@ class StationSelection(StationSelectionUi, QObject):
             self._is_connected = True
         except ConnectionRefusedError:
             print(f"Could not connect to {MOBILE_SERVER}")
-        self.confirm_button.clicked.connect(self.station_confirm)
+        self.activate_station_button.clicked.connect(self.set_station_state)
+        self.activate_exercise_button.clicked.connect(self.set_exercise_state)
         id_data = self._web_socket.recv()
         id_data = json.loads(id_data)
         self._id = id_data["id"]
         signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+        only_int = QtGui.QIntValidator()
+        self.exercise_edit.setValidator(self.only_int)
+
+        self.station_active = False
+        self.exercise_active = False
 
     def show(self):
         stations = self._data_manager.get_station_names()
@@ -61,21 +68,16 @@ class StationSelection(StationSelectionUi, QObject):
         self._main_window.show()
         sys.exit(self._app.exec_())
 
-    def station_confirm(self):
+    def set_station_state(self):
+        self.toggle_station()
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
         is_active = self.active_box.isChecked()
-        exercise = self.exercise_edit.text()
         data = copy.deepcopy(REQUEST_DICT)
         data["id"] = self._id
         data["request"] = 1 if is_active else 2
-        
-        data["payload"] = {"station" : station_id, "exercise" : int(exercise)}
+        data["payload"] = {"station" : station_id, "exercise" : int(-1)}
         json_str_station = json.dumps(data)
-        
-        data["request"] = 3 if is_active else 4
-        data["payload"]["set_id"] = 1
-        json_str_exercise = json.dumps(data)
         
         if not self._is_connected:
             try:
@@ -97,6 +99,45 @@ class StationSelection(StationSelectionUi, QObject):
                 print(self._web_socket.recv())
                 self._web_socket.send(json_str_station)
                 self.output_text.append(json_str_station)
+
+    def set_exercise_state(self):
+        self.toggle_exercise()
+        exercise = self.exercise_edit.text()
+        data = copy.deepcopy(REQUEST_DICT)
+        data["id"] = self._id        
+        data["request"] = 3 if self.exercise_active else 4
+        data["payload"] = {"station" : station_id, "exercise" : int(exercise)}
+        data["payload"]["set_id"] = 1
+        json_str_exercise = json.dumps(data)
+        
+
+        if self._is_connected:
+                self._web_socket.send(json_str_station)
+                self.output_text.append(json_str_station)
+                print(self._web_socket.recv())
+                self._web_socket.send(json_str_exercise)
+                self.output_text.append(json_str_exercise)
+
+    def toggle_exercise(self): 
+        if self.exercise_active:
+            self.exercise_edit.setEnabled(True)
+            self.activate_exercise_button.setText("Stop Exercise")
+        else:
+            self.exercise_edit.setEnabled(False)
+            self.activate_exercise_button.setText("Start Exercise")
+
+        self.exercise_active = not self.exercise_active
+
+    def toggle_station(self): 
+        if self.station_active:
+            self.station_combobox.setEnabled(True)
+            self.activate_station_button.setText("Activate Station")
+        else:
+            self.station_combobox.setEnabled(False)
+            self.activate_station_button.setText("Deactivate Station")
+
+        self.station_active = not self.station_active
+
 
 if __name__=="__main__":
     data_manager = DataManager()

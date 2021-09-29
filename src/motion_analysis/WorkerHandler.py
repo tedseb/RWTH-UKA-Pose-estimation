@@ -132,6 +132,7 @@ class WorkerHandler(QThread):
                 current_worker.running = False
                 del self.workers[station_id]
             self.gui.update_available_spots(spot_name=station_id, active=False)
+            self.spot_metadata_interface.delete(spot_info_key)
 
 
 if __name__ == '__main__':

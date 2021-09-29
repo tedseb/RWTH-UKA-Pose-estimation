@@ -9,7 +9,7 @@ from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from tensorflow.python.keras.backend import set_session
 

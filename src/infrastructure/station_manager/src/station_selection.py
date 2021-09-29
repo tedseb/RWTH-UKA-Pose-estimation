@@ -50,6 +50,7 @@ class StationSelection(StationSelectionUi, QObject):
             print(f"Could not connect to {MOBILE_SERVER}")
         self.activate_station_button.clicked.connect(self.set_station_state)
         self.activate_exercise_button.clicked.connect(self.set_exercise_state)
+        self.weight_detection_button.clicked.connect(self.start_weight_detection)
         id_data = self._web_socket.recv()
         id_data = json.loads(id_data)
         self._id = id_data["id"]
@@ -137,6 +138,27 @@ class StationSelection(StationSelectionUi, QObject):
 
         self.station_active = not self.station_active
 
+    def start_weight_detection(self):
+        index = self.station_combobox.currentIndex()
+        station_id = self.station_combobox.itemData(index, Qt.UserRole)
+        data = copy.deepcopy(REQUEST_DICT)
+        data["id"] = self._id        
+        data["request"] = 7
+        data["payload"] = {"station" : station_id, "time" : float(self.time_spin.value())}
+        json_str_exercise = json.dumps(data)
+        
+        if self._is_connected:
+            self.activate_exercise_button.setEnabled(False)
+            self.activate_station_button.setEnabled(False)
+            self._web_socket.send(json_str_exercise)
+            self.output_text.append(json_str_exercise)
+            id_data = self._web_socket.recv()
+            id_data = json.loads(id_data)
+            if id_data["response"] == 507:
+                value = id_data["payload"]["weight"]
+                self.weight_edit.setText(str(value))
+            self.activate_exercise_button.setEnabled(True)
+            self.activate_station_button.setEnabled(True)
 
 if __name__=="__main__":
     data_manager = DataManager()

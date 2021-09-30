@@ -57,7 +57,6 @@ RUN pip3 install pymongo
 
 RUN chmod 777 -R /home/trainerai/.config
 RUN sudo ln -s /usr/local/cuda-11.2/lib64/libcusolver.so.11 /usr/local/cuda-11.2/lib64/libcusolver.so.10
-RUN export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:$LD_LIBRARY_PATH
 
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]

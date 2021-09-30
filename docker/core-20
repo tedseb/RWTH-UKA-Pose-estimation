@@ -4,10 +4,10 @@ USER root
 #System
 RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
 RUN echo ". devel/setup.bash" >>  /home/trainerai/.bashrc
-COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 
 #Software
-RUN apt-get update && apt-get -y install gedit iputils-ping
+RUN apt-get update 
+RUN apt-get -y install gedit iputils-ping
 RUN apt-get install python-software-properties || true
 RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y python3-opencv
 RUN apt-get install -y redis
@@ -58,7 +58,9 @@ RUN pip3 install pymongo
 RUN chmod 777 -R /home/trainerai/.config
 RUN sudo ln -s /usr/local/cuda-11.2/lib64/libcusolver.so.11 /usr/local/cuda-11.2/lib64/libcusolver.so.10
 
+RUN echo LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:$LD_LIBRARY_PATH >> /home/trainerai/.bashrc
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
+COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
 ENTRYPOINT ["/home/trainerai/start_script.sh"]
 

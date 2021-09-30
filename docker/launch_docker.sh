@@ -7,16 +7,18 @@ cpus_option=""
 webcam_option=""
 display=$DISPLAY
 osx=false
+mongo=false
 
 # functions
 usage() {
     echo '---------------- help -------------------'
     echo '-h, --help                Show this help.'
-    echo '-o, --osx		    Set display to "host.docker.internal:0" and your IP to the X access control list of the container'
+    echo '-o, --osx		            Set display to "host.docker.internal:0" and your IP to the X access control list of the container'
     echo '-w, --linux-webcam        Enable webcam under linux.          (--device=/dev/video0)'
     echo '-d, --display DISPLAY     Speficy a display for X11.          (-e DISPLAY=$DISPLAY)'
     echo '-g, --gpu                 Hand over GPUs to Container.        (--gpus=all -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all)'
     echo '-c, --cpus decimal        Limit number of CPUs.               (--cpus decimal)'
+    echo '-m, --mongo-db            Start Mongo-db.                     (--cpus decimal)'
     echo 'Note: Different options can be combined.'
 }
 
@@ -39,7 +41,10 @@ case $key in
     cpus_option="--cpus=${1}"
     shift
     ;;
-    -w|--nebcam)
+    -m|--mongo-db)
+    mongo=true
+    ;;
+    -w|--webcam)
     webcam_option="--device=/dev/video2"
     ;;
     -d|--display)
@@ -73,6 +78,14 @@ docker run -it -d --rm \
         $webcam_option \
         $gpu_option \
         registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 > /dev/null
+
+if $mongo; then
+	if [ ! "docker container list -a | grep mongo-on-docker" ]; then
+        docker run -d --name mongo-on-docker -p 27888:27017  -v expert_mongo:/data/db -e MONGO_INITDB_ROOT_USERNAME=mongoadmin -e MONGO_INITDB_ROOT_PASSWORD=secret mongo
+    else
+        docker start mongo-on-docker
+    fi
+fi
 
 if $osx; then
 	docker exec -it trainerAI sh -c "export DISPLAY=host.docker.internal:0 && xhost + $(ifconfig en0 | grep 'inet[ ]' | awk '{print$2}')"

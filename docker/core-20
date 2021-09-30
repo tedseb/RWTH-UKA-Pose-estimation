@@ -45,7 +45,7 @@ RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-pyt
 
 RUN pip3 install msgpack_numpy
 
-RUN apt-get install libpq-dev
+RUN apt-get -y install libpq-dev
 RUN pip3 install psycopg2
 RUN pip3 install websocket-client
 RUN pip3 install autobahn
@@ -53,8 +53,12 @@ RUN pip3 install twisted
 RUN pip3 install pyqtgraph
 RUN pip3 install websockets
 RUN pip3 install PyQt5==5.15.4
+RUN pip3 install pymongo
 
 RUN chmod 777 -R /home/trainerai/.config
+RUN sudo ln -s /usr/local/cuda-11.2/lib64/libcusolver.so.11 /usr/local/cuda-11.2/lib64/libcusolver.so.10
+RUN export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:$LD_LIBRARY_PATH
+
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
 ENTRYPOINT ["/home/trainerai/start_script.sh"]

@@ -213,9 +213,9 @@ class StationManager():
             return self.return_error("Payload must have a station, exercise and set_id field", 8)
         self._publisher_station_usage.publish(StationUsage(payload["station"], True , str(payload["exercise"])))
 
-        for i in range(10): 
-            time.sleep(2)
-            self.send_repitition(user_id, i, payload["exercise"], payload["set_id"])
+        # for i in range(10): 
+        #     time.sleep(2)
+        #     self.send_repitition(user_id, i, payload["exercise"], payload["set_id"])
 
         return ResponseAnswer(503, 1, {})
 

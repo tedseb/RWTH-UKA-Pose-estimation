@@ -10,7 +10,7 @@ import signal
 import psutil
 import time 
 
-from .src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
+from src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
 from src.server import ServerController, ServerSocket, ResponseAnswer
 import rospy
 

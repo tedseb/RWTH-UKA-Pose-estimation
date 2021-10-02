@@ -1,3 +1,3 @@
 <launch>
-  <node name="weight_detection" pkg="weight_detection" type="weight_detection.py" />
+  <node name="weight_detection" pkg="weight_detection" output="screen" type="weight_detection.py" />
 </launch> 

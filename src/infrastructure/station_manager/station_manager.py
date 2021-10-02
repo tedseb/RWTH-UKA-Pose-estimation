@@ -10,9 +10,10 @@ import signal
 import psutil
 import time 
 
-from src import DataManager, CameraStationController, VideoSelection, StationSelection
+from .src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
 from src.server import ServerController, ServerSocket, ResponseAnswer
 import rospy
+
 
 from std_msgs.msg import String
 from rospy.exceptions import ROSException
@@ -65,7 +66,7 @@ class StationManager():
             self.video_selection_gui.show()
 
         # Thread Shared Data. Don't Use without Mutex lock!!!
-        self._active_stations : Dict[str, int] = {} #Dict[station_id : user_id]
+        self._active_stations = TwoWayDict({}) #Dict[station_id : user_id]
         self._active_exercises : Dict[str, (int, int, int)] = {} #Dict[user_id : (exercise_id, set_id, repetition)]
         self._camera_process = {}
         self._transform_process = {}
@@ -186,7 +187,7 @@ class StationManager():
         station_id = int(payload["station"])
 
         with self._exercise_station_mutex:
-            if station_id in self._active_stations.values():
+            if station_id in self._active_stations:
                 return ResponseAnswer(501, 4, {})
 
             if user_id in self._active_stations:
@@ -212,7 +213,9 @@ class StationManager():
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
 
         with self._exercise_station_mutex:
-            station_id = self._active_stations[user_id]
+            station_id = self._active_stations.get(user_id)
+            if station_id is None:
+                return ResponseAnswer(502, 10, {})
 
         with self._param_updater_mutex:
             self._param_updater.set_station(int(station_id), False)
@@ -302,8 +305,7 @@ class StationManager():
         print(data["data"]["station_id"])
         #TODO 1:1 Mapping of station and id
         with self._exercise_station_mutex:
-            user_id = next(key for key, value in self._active_stations.items() if value == station_id)   
-            station_id = self._active_stations[user_id]
+            user_id = self._active_stations[station_id] 
             exercise_data = self._active_exercises[user_id]
             exercise_id = exercise_data[0]
             set_id = exercise_data[1]

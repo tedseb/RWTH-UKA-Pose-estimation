@@ -113,7 +113,7 @@ class CameraNode():
             self._cap = cv2.VideoCapture(self._camera_index)
 
     def set_ipcam(self):
-        self._cap = cv2.VideoCapture(f"rtsp://admin:admin@{ip_adress}")
+        self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{ip_adress}")
 
 if __name__ == '__main__':
     print(sys.argv)

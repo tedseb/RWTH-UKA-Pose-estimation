@@ -3,6 +3,7 @@ function associate(sequelize) {
     color_station_onetomany(sequelize)
 /*     station_camera_mapping_camera(sequelize);
     station_camera_mapping_station(sequelize); */
+    station_exercise_onetomany(sequelize);
     station_usage_station_onetomany(sequelize);
     digigym_user_digigym_role_manytomany(sequelize);
     camera_station_mapping(sequelize);
@@ -40,6 +41,12 @@ function camera_station_mapping(sequelize) {
     camera_station_mapping.belongsTo(station);
     camera.hasMany(camera_station_mapping);
     camera_station_mapping.belongsTo(camera);
+}
+
+function station_exercise_onetomany(sequelize) {
+    const {station, exercise} = sequelize.models;
+    station.hasMany(exercise);
+    exercise.belongsTo(station);
 }
 
 function digigym_user_digigym_role_manytomany(sequelize) {

@@ -25,7 +25,7 @@ const modelDefiners = [
     require('./models/stations_usage.model'),
     require('./models/digigym/user.model'),
     require('./models/digigym/role.model'),
-    require('./models/emergency.model')
+    require('./models/exercise.model')
     //require (./models/item.model)
 ]
 
@@ -41,6 +41,7 @@ module.exports = {
     Stations: sequelize.models.station,
     Cameras: sequelize.models.camera,
     Frames: sequelize.models.frame,
+    Exercise: sequelize.models.exercise,
     Emergency: sequelize.models.emergency,
     CameraStationMappings: sequelize.models.camera_station_mapping,
     StationUsages: sequelize.models.station_usage,

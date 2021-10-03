@@ -11,6 +11,7 @@ devel_isolated
 src/AI/spin/extra_data
 src/AI/weight_detection/models
 src/AI/weight_detection/data
+src/AI/metrabs/models
 node_modules
 package-lock.json
 bagfiles
@@ -18,3 +19,5 @@ package-lock.json
 .gitignore
 trainerai.sh
 qt-station-calibration
+Ultralytics/
+*.pt

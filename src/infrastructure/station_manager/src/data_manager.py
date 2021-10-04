@@ -57,8 +57,8 @@ class DataManager():
     def _load_station_exercises(self):
         select_query = 'select "stationId", "exerciseId" from exercises'
         try:
-            self.cursor.execute(select_query)
-            mobile_records = self.cursor.fetchall()
+            self._cursor.execute(select_query)
+            mobile_records = self._cursor.fetchall()
             exercise_list = {}
             for row in mobile_records:
                 print(row)

@@ -29,6 +29,23 @@ REQUEST_DICT = {
     "payload": {}
 }
 
+def make_items_from_dict(labels):
+    item_list = []
+    for key, value in labels.items():
+        item = QListWidgetItem()
+        item.setText(value)
+        item.setData(Qt.UserRole, int(key))
+        item_list.append(item)
+    return item_list
+
+def insert_items_into_widget(qt_widget, item_list):
+    for i in item_list:
+        qt_widget.addItem(i)
+
+def insert_dict_into_widget(qt_widget, label_dict):
+    item_list = make_items_from_dict(label_dict)
+    insert_items_into_widget(qt_widget, item_list)
+
 class StationSelection(StationSelectionUi, QObject):
     def __init__(self, data_manager = None):
         super().__init__()
@@ -67,6 +84,7 @@ class StationSelection(StationSelectionUi, QObject):
             self.exercise_edit.setEnabled(False)
         else:
             self.exercise_combobox.setEnabled(False)
+            self.load_exercises()
 
     def show(self):
         stations = self._data_manager.get_station_names()
@@ -76,6 +94,11 @@ class StationSelection(StationSelectionUi, QObject):
         #self.video_combobox.addItems(names)
         self._main_window.show()
         sys.exit(self._app.exec_())
+
+    def load_exercises(self):
+        exercises = self._data_manager.get_exercises()
+        for exercise_id, exercise_name in exercises.items():
+            self.station_combobox.addItem(exercise_name, exercise_id)
 
     def set_station_state(self):
         self.toggle_station()

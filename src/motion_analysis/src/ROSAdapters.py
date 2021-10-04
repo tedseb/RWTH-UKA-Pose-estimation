@@ -108,7 +108,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         return body_parts
 
 
-
+class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
     """
     This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper.
     The Adapter is considered legacy, because we use the Metrabs code now by default.

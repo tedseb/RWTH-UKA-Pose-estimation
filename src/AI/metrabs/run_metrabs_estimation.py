@@ -9,7 +9,7 @@ from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from tensorflow.python.keras.backend import set_session
 
@@ -28,15 +28,15 @@ class run_metrabs():
     def __init__(self):
         #self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined')
         self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl')
-        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        self.img_original_bgr = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
         #self.intrinsics = tf.constant([[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]], dtype=tf.float32)
         self.intrinsics = tf.constant([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], dtype=tf.float32)
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
         person_boxes = tf.constant([[0, 626, 367, 896], [524, 707, 475, 841], [588, 512, 54, 198]], tf.float32)
 
-        poses3d = self.model.predict_single_image(image, self.intrinsics, person_boxes)
-        #detections, poses3d, poses2d  = self.model.predict_single_image(image)
+        poses3d = self.model.predict_single_image(self.img_original_bgr, self.intrinsics, person_boxes)
+        #detections, poses3d, poses2d  = self.model.predict_single_image(self.img_original_bgr)
         poses2d = ((poses3d / poses3d[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
         print("3D AI loaded")
 

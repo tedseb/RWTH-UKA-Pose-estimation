@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import json
 from typing import Set, Dict
 from multiprocessing import Lock
 import pathlib
@@ -9,9 +10,12 @@ import signal
 import psutil
 import time 
 
-from src import DataManager, CameraStationController, VideoSelection, StationSelection
+from src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
 from src.server import ServerController, ServerSocket, ResponseAnswer
 import rospy
+
+
+from std_msgs.msg import String
 from rospy.exceptions import ROSException
 from backend.msg import StationUsage, WeightColor
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
@@ -33,7 +37,7 @@ class StationManager():
     def __init__(self, debug_mode=False, verbose=False):
         rospy.init_node('param_updater', anonymous=True)
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
-        #rospy.Subscriber('station_usage', StationUsage, self.station_usage_callback)
+        rospy.Subscriber('user_state', String, self.user_state_callback)
         try:
             rospy.wait_for_service('ai/weight_detection', 3)
         except ROSException:
@@ -62,13 +66,14 @@ class StationManager():
             self.video_selection_gui.show()
 
         # Thread Shared Data. Don't Use without Mutex lock!!!
-        self._active_stations : Dict[int, str] = {}
+        self._active_stations = TwoWayDict({}) #Dict[station_id : user_id]
+        self._active_exercises : Dict[str, (int, int, int)] = {} #Dict[user_id : (exercise_id, set_id, repetition)]
         self._camera_process = {}
         self._transform_process = {}
         self._param_updater = CameraStationController(self._data_manager,  self._verbose)
 
         #Mutex 
-        self._active_stations_mutex = Lock()
+        self._exercise_station_mutex = Lock()
         self._camera_process_mutex = Lock()
         self._param_updater_mutex = Lock()
 
@@ -92,6 +97,9 @@ class StationManager():
         with self._camera_process_mutex:
             for cam_index in self._camera_process.keys():
                 self.stop_camera(cam_index)
+
+    ## Mutex functions TODO ##
+    
 
     def client_callback(self, client_id, callback):
         LOG_DEBUG("Register Message Callback", self._verbose)
@@ -176,8 +184,17 @@ class StationManager():
         if "station" not in payload:
             return self.return_error("Payload must have a station and an exercise field", 8)
 
+        station_id = int(payload["station"])
+
+        with self._exercise_station_mutex:
+            if station_id in self._active_stations:
+                return ResponseAnswer(501, 4, {})
+
+            if user_id in self._active_stations:
+                return ResponseAnswer(501, 10, {})
+
         with self._param_updater_mutex:
-            self._param_updater.set_station(payload["station"], True)
+            self._param_updater.set_station(station_id, True)
             cameras = self._param_updater.get_involved_cameras()
 
         print("CAMERAS", cameras)
@@ -187,15 +204,21 @@ class StationManager():
         for cam_index in turn_on:
             self.start_camera(cam_index)
 
-        return ResponseAnswer(501, 1, {})
+        with self._exercise_station_mutex:
+            self._active_stations[user_id] = station_id
+
+        return ResponseAnswer(501, 1, {"station": station_id})
 
     def logout_station(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
-        if "station" not in payload:
-            return self.return_error("Payload must have a station and an exercise field", 8)
+
+        with self._exercise_station_mutex:
+            station_id = self._active_stations.get(user_id)
+            if station_id is None:
+                return ResponseAnswer(502, 10, {})
 
         with self._param_updater_mutex:
-            self._param_updater.set_station(int(payload["station"]), False)
+            self._param_updater.set_station(int(station_id), False)
             cameras = self._param_updater.get_involved_cameras()
 
         
@@ -205,25 +228,52 @@ class StationManager():
         for cam_index in turn_off:
             self.stop_camera(cam_index)
 
-        return ResponseAnswer(502, 1, {})
+        with self._exercise_station_mutex:
+            self._active_stations.pop(user_id)
+
+        return ResponseAnswer(502, 1, {"station": station_id})
 
     def start_exercise(self, user_id : str, payload : Dict):
+        LOG_DEBUG(f"Start exercise {user_id}, payload : {payload}", self._verbose)
         self._exercise_count = 0
         if "station" not in payload or "exercise" not in payload or "set_id" not in payload:
             return self.return_error("Payload must have a station, exercise and set_id field", 8)
-        self._publisher_station_usage.publish(StationUsage(payload["station"], True , str(payload["exercise"])))
 
-        for i in range(10): 
-            time.sleep(2)
-            self.send_repitition(user_id, i, payload["exercise"], payload["set_id"])
+        station_id = int(payload["station"])
+        exercise_id = int((payload["exercise"]))
+        set_id = int((payload["set_id"]))
 
-        return ResponseAnswer(503, 1, {})
+        with self._exercise_station_mutex:
+            if self._active_stations[user_id] != station_id:
+                return ResponseAnswer(502, 10, {})
+
+            if user_id in self._active_exercises:
+                return ResponseAnswer(501, 11, {})
+
+        self._publisher_station_usage.publish(StationUsage(station_id, True , str(exercise_id)))
+
+        with self._exercise_station_mutex:
+            self._active_exercises[user_id] = (exercise_id, set_id, 0)
+
+        return ResponseAnswer(503, 1, {"station": station_id, "exercise": exercise_id})
 
     def stop_exercise(self, user_id : str, payload : Dict):
-        if "station" not in payload or "exercise" not in payload:
-            return self.return_error("Payload must have a station and an exercise field", 8)
-        self._publisher_station_usage.publish(StationUsage(payload["station"], False , str(payload["station"])))
-        return ResponseAnswer(504, 1, {})
+        LOG_DEBUG(f"Stop exercise {user_id}, payload : {payload}", self._verbose)
+        station_id = int(payload["station"])
+        set_id = int((payload["set_id"]))
+
+        with self._exercise_station_mutex:
+            station_id = self._active_stations[user_id]
+            exercise_data = self._active_exercises[user_id]
+            exercise_id = exercise_data[0]
+            set_id = exercise_data[1]
+
+        self._publisher_station_usage.publish(StationUsage(station_id, False , str(exercise_id)))
+
+        with self._exercise_station_mutex:
+            self._active_exercises.pop(user_id)
+
+        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id})
 
     def get_weight_detection(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"weight detection {user_id}, payload : {payload}", self._verbose)
@@ -246,6 +296,26 @@ class StationManager():
             #LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
             return ResponseAnswer(507, 1, {"weight" : result.weight, "probability" : 1})
             #return ResponseAnswer(507, 0, {"weight" : 30, "probability" : 1})
+
+    def user_state_callback(self, msg):
+        data = str(msg.data) #.replace("\\", "")
+        print(data)
+        data = json.loads(data)
+        station_id = data["data"]["station_id"]
+        print(data["data"]["station_id"])
+        #TODO 1:1 Mapping of station and id
+        with self._exercise_station_mutex:
+            user_id = self._active_stations[station_id] 
+            exercise_data = self._active_exercises[user_id]
+            exercise_id = exercise_data[0]
+            set_id = exercise_data[1]
+            repetition = exercise_data[2] + 1
+            self._active_exercises[user_id] = (exercise_id, set_id, repetition)
+        # print(user_id) 
+        # print(exercise_id) 
+        # print(set_id) 
+        # print(repetition)
+        self.send_repitition(user_id, repetition, exercise_id, set_id)
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)

@@ -189,7 +189,7 @@ class Worker(Thread):
                 if increase_reps:
                     self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
                     user_state_data = {
-                        'user_id': 0,
+                        'station_id': self.spot_key,
                         'current_exercise_name': self.spot_info_dict.get('exercise_data').get('name'),
                         'repetitions': self.spot_info_dict['repetitions'],
                         'seconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time'))) / 1e+9,

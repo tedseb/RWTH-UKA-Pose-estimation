@@ -3,6 +3,7 @@ from typing import List, Tuple
 from multiprocessing import Lock
 import psycopg2
 import copy
+import pymongo
 
 class DataManager():
     def __init__(self):
@@ -12,6 +13,8 @@ class DataManager():
         self._camera_weight_frames = {}
         self._camera_infos = {} #{id : [names, args]}
         self._station_cameras = {} #{station_id : [camera_id]}
+        self._exercises = {}
+        self._station_exercises = {}
 
         try:
             self._connection = psycopg2.connect(user="trainerai",
@@ -26,6 +29,8 @@ class DataManager():
         self._update_frames()
         self._update_camera_infos()
         self._update_station_camera()
+        self._load_station_exercises()
+        self._mongo_is_on = self._load_exercises()
 
         self._frame_mutex = Lock()
         self._camera_info_mutex = Lock()
@@ -36,6 +41,33 @@ class DataManager():
         print("close data manager")
         self._cursor.close()
         self._connection.close()
+
+    def _load_exercises(self):
+        mongo_client = pymongo.MongoClient("mongodb://mongoadmin:secret@localhost:27888/?authSource=admin", serverSelectionTimeoutMS=2000)
+        if mongo_client is None:
+            return False
+        db = mongo_client.trainerai
+        exercises = db.exercises
+        x = exercises.find()
+        self._exercises = {}
+        for data in x:
+            self._exercises[int(data["name"])] = data["description"]
+        return True
+
+    def _load_station_exercises(self):
+        select_query = 'select "stationId", "exerciseId" from exercises'
+        try:
+            self.cursor.execute(select_query)
+            mobile_records = self.cursor.fetchall()
+            exercise_list = {}
+            for row in mobile_records:
+                print(row)
+                if row[0] not in exercise_list:
+                    exercise_list[row[0]] = []
+                exercise_list[row[0]].append(row[1])
+            self._station_exercises = exercise_list
+        except psycopg2.Error as error:
+            raise RuntimeError("Error while fetching station exercises from PostgreSQL") from error
 
     def _update_frames(self):
         try:
@@ -186,3 +218,12 @@ class DataManager():
     def get_cameras_of_station(self, station_id : int):
         with self._station_camera_mutex:
             return copy.deepcopy(self._station_cameras[station_id])
+
+    def is_mongo_on(self):
+        return self._mongo_is_on
+
+    def get_exercises(self):
+        return copy.deepcopy(self._exercises)
+
+    def get_exercises_on_station(self, station_id : int): 
+        return copy.deepcopy(self._station_exercises[station_id])

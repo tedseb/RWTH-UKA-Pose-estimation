@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>765</width>
-    <height>327</height>
+    <width>655</width>
+    <height>280</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -53,8 +53,14 @@
        <widget class="QComboBox" name="station_combobox">
         <property name="minimumSize">
          <size>
-          <width>300</width>
+          <width>310</width>
           <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>310</width>
+          <height>16777215</height>
          </size>
         </property>
         <property name="currentText">
@@ -119,26 +125,35 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="maximumSize">
+         <size>
+          <width>50</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <property name="text">
          <string>105</string>
         </property>
        </widget>
       </item>
       <item>
-       <spacer name="horizontalSpacer">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeType">
-         <enum>QSizePolicy::Fixed</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
+       <widget class="QComboBox" name="exercise_combobox">
+        <property name="minimumSize">
          <size>
-          <width>150</width>
-          <height>20</height>
+          <width>252</width>
+          <height>0</height>
          </size>
         </property>
-       </spacer>
+        <property name="maximumSize">
+         <size>
+          <width>252</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="currentText">
+         <string/>
+        </property>
+       </widget>
       </item>
       <item>
        <widget class="QPushButton" name="activate_exercise_button">
@@ -301,7 +316,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>765</width>
+     <width>655</width>
      <height>22</height>
     </rect>
    </property>

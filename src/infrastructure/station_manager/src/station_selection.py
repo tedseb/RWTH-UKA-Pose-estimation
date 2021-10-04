@@ -62,6 +62,12 @@ class StationSelection(StationSelectionUi, QObject):
         self.station_active = False
         self.exercise_active = False
 
+        self._use_exercise_names = self._data_manager._mongo_is_on()
+        if self._use_exercise_names:
+            self.exercise_edit.setEnabled(False)
+        else:
+            self.exercise_combobox.setEnabled(False)
+
     def show(self):
         stations = self._data_manager.get_station_names()
         for station_id, station_name in stations.items():

@@ -20,7 +20,7 @@ RUN npm config set unsafe-perm true
 # RUN npm install @tensorflow/tfjs-node
 # RUN npm install @tensorflow-models/posenet
 
-RUN npm install opencv4nodejs rosnodejs express ws nodemon socket.io mongodb
+RUN npm install opencv4nodejs rosnodejs express ws nodemon socket.io mongodb@3
 # RUN npm install rosnodejs
 # RUN npm install express
 # RUN npm install ws

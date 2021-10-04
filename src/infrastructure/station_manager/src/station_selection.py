@@ -29,6 +29,23 @@ REQUEST_DICT = {
     "payload": {}
 }
 
+def make_items_from_dict(labels):
+    item_list = []
+    for key, value in labels.items():
+        item = QListWidgetItem()
+        item.setText(value)
+        item.setData(Qt.UserRole, int(key))
+        item_list.append(item)
+    return item_list
+
+def insert_items_into_widget(qt_widget, item_list):
+    for i in item_list:
+        qt_widget.addItem(i)
+
+def insert_dict_into_widget(qt_widget, label_dict):
+    item_list = make_items_from_dict(label_dict)
+    insert_items_into_widget(qt_widget, item_list)
+
 class StationSelection(StationSelectionUi, QObject):
     def __init__(self, data_manager = None):
         super().__init__()
@@ -46,14 +63,15 @@ class StationSelection(StationSelectionUi, QObject):
         try:
             self._web_socket = create_connection(MOBILE_SERVER)
             self._is_connected = True
+            id_data = self._web_socket.recv()
+            id_data = json.loads(id_data)
+            self._id = id_data["id"]
         except ConnectionRefusedError:
             print(f"Could not connect to {MOBILE_SERVER}")
         self.activate_station_button.clicked.connect(self.set_station_state)
         self.activate_exercise_button.clicked.connect(self.set_exercise_state)
         self.weight_detection_button.clicked.connect(self.start_weight_detection)
-        id_data = self._web_socket.recv()
-        id_data = json.loads(id_data)
-        self._id = id_data["id"]
+
         signal.signal(signal.SIGINT, signal.SIG_DFL)
 
         only_int = QIntValidator()
@@ -62,14 +80,29 @@ class StationSelection(StationSelectionUi, QObject):
         self.station_active = False
         self.exercise_active = False
 
+        self._use_exercise_names = self._data_manager.is_mongo_on()
+        if self._use_exercise_names:
+            self.exercise_edit.setEnabled(False)
+            self.load_exercises()
+        else:
+            self.exercise_combobox.setEnabled(False)
+            
+
     def show(self):
         stations = self._data_manager.get_station_names()
+        
         for station_id, station_name in stations.items():
             self.station_combobox.addItem(station_name, station_id)
         #self.station_combo.addItems(station_names)
         #self.video_combobox.addItems(names)
         self._main_window.show()
         sys.exit(self._app.exec_())
+
+    def load_exercises(self):
+        exercises = self._data_manager.get_exercises()
+        print(exercises)
+        for exercise_id, exercise_name in exercises.items():
+            self.exercise_combobox.addItem(exercise_name, exercise_id)
 
     def set_station_state(self):
         self.toggle_station()
@@ -95,13 +128,17 @@ class StationSelection(StationSelectionUi, QObject):
 
     def set_exercise_state(self):
         self.toggle_exercise()
-        exercise = self.exercise_edit.text()
+        if self._use_exercise_names:
+            index = self.exercise_combobox.currentIndex()
+            exercise_id = self.exercise_combobox.itemData(index, Qt.UserRole)
+        else:
+            exercise_id = self.exercise_edit.text()
         data = copy.deepcopy(REQUEST_DICT)
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
         data["id"] = self._id        
         data["request"] = 3 if self.exercise_active else 4
-        data["payload"] = {"station" : station_id, "exercise" : int(exercise)}
+        data["payload"] = {"station" : station_id, "exercise" : int(exercise_id)}
         data["payload"]["set_id"] = 1
         json_str_exercise = json.dumps(data)
         

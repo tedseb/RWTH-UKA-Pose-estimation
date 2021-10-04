@@ -18,3 +18,8 @@ package-lock.json
 .gitignore
 trainerai.sh
 qt-station-calibration
+Ultralytics
+src/AI/metrabs/models/metrabs_multiperson_smpl
+src/AI/metrabs/models/metrabs_multiperson_smpl_combined
+src/AI/metrabs/models/metrabs_singleperson_smpl
+src/AI/objectDetector/yolov5s.pt

@@ -86,13 +86,14 @@ class StationSelection(StationSelectionUi, QObject):
             self.load_exercises()
         else:
             self.exercise_combobox.setEnabled(False)
-            
+
 
     def show(self):
         stations = self._data_manager.get_station_names()
-        
+
         for station_id, station_name in stations.items():
             self.station_combobox.addItem(station_name, station_id)
+        self.station_combobox.addItem("video ./data/video.avi", 999)
         #self.station_combo.addItems(station_names)
         #self.video_combobox.addItems(names)
         self._main_window.show()
@@ -113,7 +114,7 @@ class StationSelection(StationSelectionUi, QObject):
         data["request"] = 1 if self.station_active else 2
         data["payload"] = {"station" : station_id, "exercise" : int(-1)}
         json_str_station = json.dumps(data)
-        
+
         if not self._is_connected:
             try:
                 self._web_socket = create_connection(MOBILE_SERVER)
@@ -136,18 +137,18 @@ class StationSelection(StationSelectionUi, QObject):
         data = copy.deepcopy(REQUEST_DICT)
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
-        data["id"] = self._id        
+        data["id"] = self._id
         data["request"] = 3 if self.exercise_active else 4
         data["payload"] = {"station" : station_id, "exercise" : int(exercise_id)}
         data["payload"]["set_id"] = 1
         json_str_exercise = json.dumps(data)
-        
+
         if self._is_connected:
             self._web_socket.send(json_str_exercise)
             self.output_text.append(json_str_exercise)
             print(self._web_socket.recv())
 
-    def toggle_exercise(self): 
+    def toggle_exercise(self):
         if self.exercise_active:
             self.exercise_edit.setEnabled(True)
             self.activate_exercise_button.setText("Start Exercise")
@@ -161,7 +162,7 @@ class StationSelection(StationSelectionUi, QObject):
 
         self.exercise_active = not self.exercise_active
 
-    def toggle_station(self): 
+    def toggle_station(self):
         if self.station_active:
             self.station_combobox.setEnabled(True)
             self.activate_station_button.setText("Activate Station")
@@ -179,11 +180,11 @@ class StationSelection(StationSelectionUi, QObject):
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
         data = copy.deepcopy(REQUEST_DICT)
-        data["id"] = self._id        
+        data["id"] = self._id
         data["request"] = 7
         data["payload"] = {"station" : station_id, "time" : float(self.time_spin.value())}
         json_str_exercise = json.dumps(data)
-        
+
         if self._is_connected:
             self.activate_exercise_button.setEnabled(False)
             self.activate_station_button.setEnabled(False)

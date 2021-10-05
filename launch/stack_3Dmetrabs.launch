@@ -1,12 +1,12 @@
 <launch>
   <arg name="args" default=" " doc="Parameters of Station Manager e.g: args:='-d'"/>
-  <arg name="smo" default="log" doc="Output of station manager, sms:='screen'"/>
+  <arg name="smo" default="log" doc="Output of station manager, smo:=screen"/>
   <!-- <include file="$(find infrastructure)/launch/all_cameras.launch">
     <arg name="cam_args" value="$(arg cam_args)"/>
   </include>  -->
   <include file="$(find infrastructure)/launch/station_manager.launch">
     <arg name="args" value="$(arg args)"/>
-    <arg name="smo" value="$(arg sms)"/>
+    <arg name="smo" value="$(arg smo)"/>
   </include>
   <include file="$(find infrastructure)/launch/mobile_server.launch" />
   <include file="$(find metrabs)/launch/metrabs.launch"/>

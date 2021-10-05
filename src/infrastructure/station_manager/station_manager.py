@@ -193,6 +193,12 @@ class StationManager():
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
 
         with self._exercise_station_mutex:
+            if user_id not in self.__active_stations:
+                return ResponseAnswer(502, 10, {})
+
+            if user_id in self.__active_exercises:
+                self.__active_exercises.pop(user_id)
+
             station_id = self.__active_stations.get(user_id)
             if station_id is None:
                 return ResponseAnswer(502, 10, {})
@@ -201,7 +207,6 @@ class StationManager():
             self.__param_updater.set_station(int(station_id), False)
             cameras = self.__param_updater.get_involved_cameras()
 
-        
         with self._camera_process_mutex:
             turn_off = self.__camera_process.keys() - cameras
 
@@ -242,6 +247,8 @@ class StationManager():
         # set_id = int((payload["set_id"]))
 
         with self._exercise_station_mutex:
+            if user_id not in self.__active_stations or user_id not in self.__active_exercises:
+                return ResponseAnswer(502, 10, {})
             station_id = self.__active_stations[user_id]
             exercise_data = self.__active_exercises[user_id]
             exercise_id = exercise_data[0]
@@ -252,7 +259,7 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_exercises.pop(user_id)
 
-        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id})
+        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id})
 
     def get_weight_detection(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"weight detection {user_id}, payload : {payload}", self._verbose)

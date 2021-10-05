@@ -3,6 +3,7 @@ import sys
 import traceback
 from typing import Callable, Dict
 import json
+import autobahn.exception as aex
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
 from twisted.internet import reactor
 
@@ -26,7 +27,7 @@ class ServerSocket(WebSocketServerProtocol):
 
     def onConnect(self, request):
         print("Client connecting: {0}".format(request.peer))
-        self._id = "id123"
+        self._id = self.factory.get_id()
         if self.factory._register_client_callback is not None:
             self.factory._register_client_callback(self._id, self.send_msg_ts)
 
@@ -52,16 +53,7 @@ class ServerSocket(WebSocketServerProtocol):
         if not result.request_requiered:
             return
             
-        response = copy.deepcopy(RESPONSE_DICT)
-        response["id"] = self._id
-        response["response"] = result.response_code
-        response["status_code"] = result.status_code
-        response["payload"] = result.payload
-
-        response = str(json.dumps(response))
-        response = response.encode('utf8')
-        print(response)
-        reactor.callFromThread(self.sendMessage, response, False)
+        self.send_msg_ts(result.response_code, result.status_code, result.payload)
 
     def onMessage(self, payload, isBinary):
         if isBinary:
@@ -121,16 +113,12 @@ class ServerSocket(WebSocketServerProtocol):
         reactor.callFromThread(self.send_error, error, satus_code, response_code)
 
     def send_error(self, error="Error", satus_code=2, response_code=508):
-        response = copy.deepcopy(RESPONSE_DICT)
-        response["id"] = self._id
-        response["response"] = response_code
-        response["status_code"] = satus_code
-        response["payload"] = {"error" : error}
-        response = str(json.dumps(response))
-        print(response)
-        self.sendMessage(response.encode('utf8'), isBinary=False)
+        self.send_msg(response_code, satus_code, {"error" : error})
 
     def send_msg_ts(self, response_code=508, satus_code=2, payload=dict({})):
+        reactor.callFromThread(self.send_msg, response_code, satus_code, payload)
+
+    def send_msg(self, response_code=508, satus_code=2, payload=dict({})):
         response = copy.deepcopy(RESPONSE_DICT)
         response["id"] = self._id
         response["response"] = response_code
@@ -138,15 +126,26 @@ class ServerSocket(WebSocketServerProtocol):
         response["payload"] = payload
         response = str(json.dumps(response))
         response = response.encode('utf8')
-        reactor.callFromThread(self.sendMessage, response, False)
+        print("[RESPONSE]:", response)
+        try:
+            self.sendMessage(response, False)
+        except aex.Disconnected:
+            print("[DISCONNECTED]: Could not send response")
+        except Exception:
+            print("[UNKNOWN ERROR]: Could not send response")
 
 class ServerController(WebSocketServerFactory):
 
     def __init__(self, uri, register_client_callback = None):
-        print("init")
+        print("Init Server Factory")
         WebSocketServerFactory.__init__(self, uri)
+        self._ids = 0
         self._callbacks : Dict[int, Callable] = {}
         self._register_client_callback = register_client_callback
 
     def register_callback(self, message_code : int, callback : Callable):
         self._callbacks[message_code] = callback
+
+    def get_id(self) -> str:
+        self._ids += 1
+        return f"user_{self._ids}"

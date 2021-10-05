@@ -1,5 +1,5 @@
 <launch>
   <arg name="args" default=" "/>
   <arg name="smo" default="log" />
-  <node name="station_manager" pkg="infrastructure" output="$(arg sms)" type="station_manager.py" args="$(arg args)"/>
+  <node name="station_manager" pkg="infrastructure" output="$(arg smo)" type="station_manager.py" args="$(arg args)"/>
 </launch> 

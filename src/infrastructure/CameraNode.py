@@ -48,7 +48,7 @@ class CameraNode():
         self._dev_id = "dev" + str(dev_id)
         
         rospy.init_node('camera', anonymous=True)
-        self._pub = rospy.Publisher('image', Image, queue_size=2)
+        self._pub = rospy.Publisher('image', Image, queue_size=1)
 
         if youtube_id != "":
             self._url = f"https://www.youtube.com/watch?v={youtube_id}"
@@ -61,8 +61,10 @@ class CameraNode():
             self._camera_mode = 1
         elif camera_ip != "":
             self._youtube_mode = False
-            self.set_ipcam()
+            #self.set_ipcam()
             self._camera_mode = 2
+            self.set_video()
+
 
         if not self._cap.isOpened() or self._cap is None: 
             self.set_youtube_stream()
@@ -70,18 +72,16 @@ class CameraNode():
             self._youtube_mode = True
 
     def start_camera_publisher(self):
-        rate = rospy.Rate(30)
-
+        rate = rospy.Rate(25)  #ToDO: Aufnahme ist in 25FPS
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
-            
+            frame = cv2.resize(frame, (1280,720))
             if not ret:
                 if self._youtube_mode: 
                     self._cap.open(self._video_stream.url)
                     continue
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
-
             msg = Image()
             msg.header.stamp = rospy.Time.now()
             msg.header.frame_id = self._dev_id
@@ -113,7 +113,10 @@ class CameraNode():
             self._cap = cv2.VideoCapture(self._camera_index)
 
     def set_ipcam(self):
-        self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{ip_adress}")
+        self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{self._camera_ip}")
+
+    def set_video(self):
+        self._cap = cv2.VideoCapture("/home/trainerai/trainerai-core/deaflifts.avi")
 
 if __name__ == '__main__':
     print(sys.argv)

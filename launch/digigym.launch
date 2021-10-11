@@ -1,0 +1,6 @@
+<launch>
+  <include file="$(find infrastructure)/launch/all_cameras.launch" />
+  <include file="$(find objectDetector)/launch/objectDetector.launch" />
+  <node name="DigiGymNode" pkg="infrastructure" type="DigiGym.py" />
+</launch> 
+ 

@@ -12,7 +12,6 @@ from scheduler import getBoxesInStation
 import time
 import rospy
 import yaml
-
 import torch
 from torch import nn
 from torchvision import transforms
@@ -29,8 +28,8 @@ class ObjectDetectionPipeline:
         rospy.Subscriber('image', Image, self.run_objectdetector)
         if self.renderer==True:
             self.publisher_img = rospy.Publisher('imageYOLO', Image , queue_size=2)
-        self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
-        self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
+        self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=1)
+        self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=1)
         self.body_bbox=[]
         self.labels=[]
         self.info_station=[]
@@ -92,8 +91,8 @@ class ObjectDetectionPipeline:
         This function uses the Yolo object detector. It predicts BBOX with label and confidence values. 
         The labels are analyzed to see if they are human, then they are examined to see if their BBOX are within a station. 
         If yes, then FrameID, StationID and BBOX are published. The getBoxesInStation class in scheduler is used for the examination.
-        """  
-        img_tens =img   
+        """    
+        img_tens =img 
         results = self.model(img_tens,size=640)
         if self.renderer==True:
             results.render()  # updates results.imgs with boxes and labels
@@ -126,7 +125,7 @@ class ObjectDetectionPipeline:
                     chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box,frame_id , self.stationChk)
                     if chkIsstation and (stationID not in self.info_station): #ToDo: SensorID to check the correct yaml file
                         #Change it to x,y,w,h for the PoseAI
-                        extraWidth=(box[2]-box[0])*0.1
+                        extraWidth=(box[2]-box[0])*0.0
                         x=box[0]-extraWidth
                         y=box[1]-extraWidth
                         w=box[2]+extraWidth-x

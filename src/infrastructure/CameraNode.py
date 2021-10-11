@@ -9,21 +9,6 @@ import pylint
 import sys
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
-YOUTUBE_INDICES = {
-    0 : "https://youtu.be/bqpCkbAr8dY",
-    1 : "https://youtu.be/YiVXPZQhHSA",
-    2 : "https://youtu.be/LujrsivJmbQ",
-    3 : "https://youtu.be/QVQ5WaEKyFU",
-    4 : "https://youtu.be/EsZ_GA8Pk7k",
-    5 : "https://youtu.be/gTux94rB92w",
-    6 : "https://youtu.be/BzpF-yAIstU",
-    7 : "https://youtu.be/tZvIbg5SiB0",
-    8 : "https://youtu.be/HAvKEgNne_s",
-    9 : "https://youtu.be/6Jmuqqzdngg",
-    10: "https://youtu.be/ETYFGYjXcUw",
-    11: "https://youtu.be/yC-8upm5kBc",
-}
-
 def returnCameraIndices():
     index = 0
     arr = []
@@ -61,10 +46,9 @@ class CameraNode():
             self._camera_mode = 1
         elif camera_ip != "":
             self._youtube_mode = False
-            #self.set_ipcam()
+            self.set_ipcam()
             self._camera_mode = 2
-            self.set_video()
-
+            #self.set_video()
 
         if not self._cap.isOpened() or self._cap is None: 
             self.set_youtube_stream()
@@ -72,7 +56,7 @@ class CameraNode():
             self._youtube_mode = True
 
     def start_camera_publisher(self):
-        rate = rospy.Rate(25)  #ToDO: Aufnahme ist in 25FPS
+        rate = rospy.Rate(25)  #T ODO: Aufnahme ist in 25FPS
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
             frame = cv2.resize(frame, (1280,720))

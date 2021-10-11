@@ -5,7 +5,7 @@
   "main": "index.js",
   "dependencies": {
     "express": "^4.17.1",
-    "mongodb": "^3.7.1",
+    "mongodb": "^3.7.2",
     "nodemon": "^2.0.13",
     "opencv4nodejs": "^5.6.0",
     "rosnodejs": "^3.0.2",

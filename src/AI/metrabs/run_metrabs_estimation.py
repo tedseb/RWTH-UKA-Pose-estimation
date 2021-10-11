@@ -11,6 +11,9 @@ from std_msgs.msg import Float32MultiArray
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+import logging
+logging.basicConfig(level='ERROR')
+
 from tensorflow.python.keras.backend import set_session
 
 config = tf.compat.v1.ConfigProto()
@@ -21,29 +24,25 @@ set_session(sess)
 
 import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')
-# noinspection PyUnresolvedReferences
 from mpl_toolkits.mplot3d import Axes3D
 
-class run_metrabs():
+CONFIG = {
+    'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]]
+}
+
+class PoseEstimator():
     def __init__(self):
         #self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined')
         self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl')
         self.img_original_bgr = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
         #self.intrinsics = tf.constant([[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]], dtype=tf.float32)
-        self.intrinsics = tf.constant([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], dtype=tf.float32)
+        self.intrinsics = tf.constant(CONFIG.get("intrinsics", [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]]), dtype=tf.float32)
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
-        person_boxes = tf.constant([[0, 626, 367, 896], [524, 707, 475, 841], [588, 512, 54, 198]], tf.float32)
-
-        poses3d = self.model.predict_single_image(self.img_original_bgr, self.intrinsics, person_boxes)
-        #detections, poses3d, poses2d  = self.model.predict_single_image(self.img_original_bgr)
-        poses2d = ((poses3d / poses3d[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-        print("3D AI loaded")
 
         # define a publisher to publish the 3D skeleton of multiple people
         self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
         self.publisher_crop = rospy.Publisher('cropImage', Image, queue_size=2)   
-
 
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
@@ -51,14 +50,6 @@ class run_metrabs():
 
         rospy.Subscriber('image', Image, self.callback_setImage)       
         #srospy.Subscriber('image1', Image, self.callback_setImage)
-        self.spin()
-
-
-    def spin(self):
-        '''
-        We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
-        '''
-        rospy.spin()
 
     def callback_setImage(self, msg):
         self.msg_image = msg
@@ -68,23 +59,16 @@ class run_metrabs():
         self.img_original_bgr = cv2.cvtColor(self.img_original_bgr, cv2.COLOR_BGR2RGB)
 
     def callback_regress(self, body_bbox_list_station):
-        '''
-        This function will be called everytime whenever a message is received by the subscriber
-        '''
         body_bbox_list_station_reshaped=np.array(body_bbox_list_station.data).reshape(-1,4)
         tmpTime = time.time()
-
-        #ToDo: differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
+        # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
     
         # Body Pose Regression
         pred_output_list = self.model.predict_single_image(self.img_original_bgr, self.intrinsics, body_bbox_list_station_reshaped)
         poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
         #self.visualize_pose((self.img_original_bgr), (pred_output_list.numpy()), (poses2d.numpy()), (self.model.crop_model.joint_edges.numpy()),(self.msg_image.header.stamp))
         
-        fps = int(1/(time.time()-tmpTime))
-        print("FPS for Metrabs : ",fps)
         self.publish_results(pred_output_list.numpy(), self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID,body_bbox_list_station_reshaped )
-
 
     def publish_results(self,results, img_msg, stationID,sensorID,boxes):  
         if len(results) == 0:
@@ -102,7 +86,7 @@ class run_metrabs():
             #croppedImg= self.img_original_bgr[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]-bb[3]/2+bb[2]/2):int(bb[0]+bb[2]/2+bb[3]/2)]
             cropImage.append(croppedImg)
         
-            lenPoints=len(joints)       #ToDo use fix number of joints to save calculation time
+            lenPoints=len(joints)       # TODO: use fix number of joints to save calculation time
             person_msg = Person()
             if len(stationID) >0:
                 person_msg.stationID = int(stationID[inc])
@@ -166,5 +150,5 @@ class run_metrabs():
 
 if __name__ == '__main__':
     rospy.init_node('metrabs', anonymous=True)
-    # instantiate the Comparator class
-    run_spin_obj = run_metrabs()
+    run_spin_obj = PoseEstimator()
+    rospy.spin()

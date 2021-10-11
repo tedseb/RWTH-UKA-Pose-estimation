@@ -31,8 +31,6 @@ class getBoxesInStation:
         """
         Function that checks if the BBOX is in one of the stations named in the server parameters.
         """
-
-        #print("self.station_dic: ",self.station_boxes)
         frame_id_str = str(frame_id)
         if station_check:
             if frame_id_str in self.station_boxes:

@@ -238,8 +238,8 @@ class StationManager():
 
     def stop_exercise(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Stop exercise {user_id}, payload : {payload}", self._verbose)
-        station_id = int(payload["station"])
-        set_id = int((payload["set_id"]))
+        #station_id = int(payload["station"])
+        #set_id = int((payload["set_id"]))
 
         with self._exercise_station_mutex:
             station_id = self.__active_stations[user_id]

@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from pathlib import Path
+import glob
 import rospy
 import cv2
 from sensor_msgs.msg import Image
@@ -7,8 +9,10 @@ import pafy
 import argparse
 import pylint
 import sys
+from pytube import YouTube
 from enum import Enum
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here.
+VIDEO_DIR_PATH = "/home/trainerai/trainerai-core/data/videos/"
 
 class VideoMode(Enum):
     INVALID = 0
@@ -89,10 +93,60 @@ class CameraNode():
             rate.sleep()
 
     def set_youtube_stream(self, url = "https://youtu.be/bqpCkbAr8dY"):
-        video = pafy.new(url)
-        self._video_stream = video.getbest(preftype="mp4")
-        self._cap = cv2.VideoCapture()
-        self._cap.open(self._video_stream.url)
+        video_path = Path(VIDEO_DIR_PATH)
+        if not video_path.is_dir():
+            print("Create video dir")
+            video_path.mkdir(parents=True, exist_ok=True)
+
+        video_path = f"{VIDEO_DIR_PATH}{url[-11:]}*"
+        video = None
+        for file in glob.glob(video_path):
+            video = file
+
+        if video is None:
+            video = self.download_youtube_video(url, VIDEO_DIR_PATH)
+        print("OPEN VIDEO: {video}")
+        self._cap = cv2.VideoCapture(video)
+
+    def download_youtube_video(self, url : str, download_path = VIDEO_DIR_PATH) -> str:
+        yid = url[-11:]
+        video = YouTube(url)
+        data = video.streams.all()
+        options = []
+        # Get all possible youtube qualities
+        for option in data:
+            option = str(option)
+            option = option[1:-1].split()
+            option_dict = {}
+            for setting in option[1:]:
+                setting = setting.replace('"', '')
+                setting = setting.split("=")
+                option_dict[setting[0]] = setting[1]
+            options.append(option_dict)
+
+        # Select quality with highest resolution
+        selected_option = None
+        for option in options:
+            if option["type"] != "video":
+                continue
+
+            option["res"] = int(option["res"][0:-1])
+            if selected_option is None:
+                selected_option = option
+                continue
+
+            if option["res"] > selected_option["res"]:
+                selected_option = option
+
+        itag = int(selected_option["itag"])
+        ext = selected_option["mime_type"].split("/")[1]
+        res = selected_option["res"]
+
+        video = video.streams.get_by_itag(itag)
+        filename = f"{yid}_{res}p.{ext}"
+        video.download(output_path=download_path, filename=filename)
+        return f"{download_path}{filename}"
+        #print(f"tag={itag}, ext={ext}, res={res}p")
 
     def set_webcam(self, check_cameras = False, camera_index = 0):
         if check_cameras:

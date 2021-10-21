@@ -8,7 +8,7 @@ import argparse
 import sys
 import signal
 import psutil
-import time 
+import time
 
 from src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
 from src.server import ServerController, ServerSocket, ResponseAnswer
@@ -21,6 +21,8 @@ from backend.msg import StationUsage, WeightColor
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from src.config import *
 from twisted.internet import reactor
+
+DEBUG_ID = 999
 
 def signal_handler(signal, frame):
     print("EXIT")
@@ -52,15 +54,16 @@ class StationManager():
         self._path_transform_node = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
         self._path_station_selection = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
         self._station_selection_process = subprocess.Popen([self._path_station_selection])
-        
+
         # Thread Shared Data. Don't Use without Mutex lock!!!
         self.__active_stations = TwoWayDict({}) #Dict[station_id : user_id]
         self.__active_exercises : Dict[str, (int, int, int)] = {} #Dict[user_id : (exercise_id, set_id, repetition)]
         self.__camera_process = {}
         self.__transform_process = {}
         self.__param_updater = CameraStationController(self._data_manager,  self._verbose)
+        self.__param_updater.add_debug_station(DEBUG_ID, DEBUG_ID, [0, 0, 4000, 4000])
 
-        #Mutex 
+        #Mutex
         self._exercise_station_mutex = Lock()
         self._camera_process_mutex = Lock()
         self._param_updater_mutex = Lock()
@@ -84,15 +87,19 @@ class StationManager():
     def start(self):
         LOG_DEBUG("Start StationManager", self._verbose)
         rospy.spin()
-    
+
     def client_callback(self, client_id, callback):
         LOG_DEBUG("Register Message Callback", self._verbose)
         self._client_callbacks[client_id] = callback
 
-    def start_camera(self, camera_id : int):
+    def start_camera(self, camera_id : int, debug_station = False):
         LOG_DEBUG(f"Start Camera with id {camera_id}", self._verbose)
-        cam_type = self._data_manager.get_camera_type(camera_id)
-        cam_info = self._data_manager.get_camera_type_info(camera_id)
+        if debug_station:
+            cam_type = 3
+            cam_info = "/home/trainerai/trainerai-core/data/video.avi"
+        else:
+            cam_type = self._data_manager.get_camera_type(camera_id)
+            cam_info = self._data_manager.get_camera_type_info(camera_id)
 
         LOG_DEBUG(f"start cam type {cam_type}, on {cam_info}", self._verbose)
 
@@ -102,6 +109,8 @@ class StationManager():
             args = f"-i {cam_info} -d {camera_id}"
         if cam_type == 2:
             args = f"-p {cam_info} -d {camera_id}"
+        if cam_type == 3:
+            args = f"--disk {cam_info} -d {camera_id}"
 
         if self._verbose:
             args += " -v"
@@ -182,7 +191,7 @@ class StationManager():
             turn_on = cameras - self.__camera_process.keys()
 
         for cam_index in turn_on:
-            self.start_camera(cam_index)
+            self.start_camera(cam_index, station_id==DEBUG_ID)
 
         with self._exercise_station_mutex:
             self.__active_stations[user_id] = station_id
@@ -193,6 +202,12 @@ class StationManager():
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
 
         with self._exercise_station_mutex:
+            if user_id not in self.__active_stations:
+                return ResponseAnswer(502, 10, {})
+
+            if user_id in self.__active_exercises:
+                self.__active_exercises.pop(user_id)
+
             station_id = self.__active_stations.get(user_id)
             if station_id is None:
                 return ResponseAnswer(502, 10, {})
@@ -201,7 +216,6 @@ class StationManager():
             self.__param_updater.set_station(int(station_id), False)
             cameras = self.__param_updater.get_involved_cameras()
 
-        
         with self._camera_process_mutex:
             turn_off = self.__camera_process.keys() - cameras
 
@@ -238,10 +252,12 @@ class StationManager():
 
     def stop_exercise(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Stop exercise {user_id}, payload : {payload}", self._verbose)
-        station_id = int(payload["station"])
-        set_id = int((payload["set_id"]))
+        # station_id = int(payload["station"])
+        # set_id = int((payload["set_id"]))
 
         with self._exercise_station_mutex:
+            if user_id not in self.__active_stations or user_id not in self.__active_exercises:
+                return ResponseAnswer(502, 10, {})
             station_id = self.__active_stations[user_id]
             exercise_data = self.__active_exercises[user_id]
             exercise_id = exercise_data[0]
@@ -252,7 +268,7 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_exercises.pop(user_id)
 
-        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id})
+        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id})
 
     def get_weight_detection(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"weight detection {user_id}, payload : {payload}", self._verbose)
@@ -282,7 +298,7 @@ class StationManager():
         station_id = data["data"]["station_id"]
         print(data["data"]["station_id"])
         with self._exercise_station_mutex:
-            user_id = self.__active_stations[station_id] 
+            user_id = self.__active_stations[station_id]
             exercise_data = self.__active_exercises[user_id]
             exercise_id = exercise_data[0]
             set_id = exercise_data[1]

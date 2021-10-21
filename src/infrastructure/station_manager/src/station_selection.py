@@ -262,6 +262,11 @@ class StationSelection(StationSelectionUi, QObject):
         if not data:
             return
 
+    def get_repetition(self, msg : str):
+        data = self.parse_message(msg)
+        if not data:
+            return
+
 class MyClientProtocol(WebSocketClientProtocol):
 
     def onConnect(self, response):
@@ -307,7 +312,7 @@ class MyClientProtocol(WebSocketClientProtocol):
 
         request_func = self.factory._callbacks.get(int(data["response"]))
         if request_func is None:
-            self.send_error("Request currently not implemented", 2)
+            print("Request currently not implemented", 2)
             return
 
         request_func(msg)
@@ -342,6 +347,7 @@ if __name__=="__main__":
     factory.register_callback(504, station_selection.stop_exercise)
     factory.register_callback(507, station_selection.get_weight_detection)
     factory.register_callback(508, station_selection.error_message)
+    factory.register_callback(509, station_selection.get_repetition)
     station_selection.show()
     print("SHOW END")
     #app.exec_()

@@ -67,10 +67,9 @@ class CameraNode():
         rate = rospy.Rate(25)  #ToDO: Aufnahme ist in 25FPS
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
-            frame = cv2.resize(frame, (1280,720))
             if not ret:
                 if self._youtube_mode:
-                    self._cap.open(self._video_stream.url)
+                    self._cap.open(self._disk_path)
                     continue
                 elif self._disk_mode:
                     self._cap.open(self._disk_path)
@@ -78,6 +77,8 @@ class CameraNode():
 
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
+
+            frame = cv2.resize(frame, (1280,720))
             msg = Image()
             msg.header.stamp = rospy.Time.now()
             msg.header.frame_id = self._dev_id
@@ -99,11 +100,15 @@ class CameraNode():
         video_path = f"{VIDEO_DIR_PATH}{url[-11:]}*"
         video = None
         for file in glob.glob(video_path):
+            #print("#########", file)
             video = file
+            break
 
         if video is None:
             video = self.download_youtube_video(url, VIDEO_DIR_PATH)
+
         print("OPEN VIDEO: {video}")
+        self._disk_path = video
         self._cap = cv2.VideoCapture(video)
 
     def download_youtube_video(self, url : str, download_path = VIDEO_DIR_PATH) -> str:
@@ -162,19 +167,11 @@ class CameraNode():
         self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{camera_ip}")
         print(f"START IP: {camera_ip}")
 
-<<<<<<< HEAD
-    def set_ipcam(self):
-        self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{self._camera_ip}")
-
-    def set_video(self):
-        self._cap = cv2.VideoCapture("/home/trainerai/trainerai-core/deaflifts.avi")
-=======
     def set_disk_video(self, path = "/home/trainerai/trainerai-core/data/video.avi"):
         print("TEEST", path)
         self._disk_path = path
         self._cap = cv2.VideoCapture(path)
         print("ALLES GUT")
->>>>>>> sp_dev
 
 if __name__ == '__main__':
     print(sys.argv)

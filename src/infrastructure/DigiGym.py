@@ -15,7 +15,7 @@ class run_spin():
         self.incSpace=incSpace
         self.station_ID=station_ID
         # define a publisher to publish the 3D skeleton of multiple people
-        self.publisher_crop = rospy.Publisher('cropImage', Image, queue_size=2)   
+        self.publisher_crop = rospy.Publisher('cropped_images', Image, queue_size=2)   
 
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_station)

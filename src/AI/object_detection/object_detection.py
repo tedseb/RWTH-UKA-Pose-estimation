@@ -21,7 +21,7 @@ class ObjectDetectionPipeline:
     def __init__(self, threshold=0.5, device="cpu", renderer=False, stationChk=False):
         self.stationBoxesChk = getBoxesInStation()
         self.stationChk=stationChk
-        self.model = torch.hub.load('/home/trainerai/trainerai-core/src/AI/objectDetector/yolov5', 'custom', path='/home/trainerai/trainerai-core/src/AI/objectDetector/yolov5s.pt', source='local')
+        self.model = torch.hub.load('/home/trainerai/trainerai-core/src/AI/object_detection/yolov5', 'custom', path='/home/trainerai/trainerai-core/src/AI/object_detection/yolov5s.pt', source='local')
         #self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).eval().to(device)
         self.threshold = threshold # Confidence threshold for displaying boxes.
         self.renderer=renderer
@@ -146,7 +146,7 @@ class ObjectDetectionPipeline:
               
 
 if __name__ == '__main__':  
-    rospy.init_node('objectNodeYOLO', anonymous=True)
+    rospy.init_node('object_detection', anonymous=True)
     rospy.set_param('param_server', yaml.dump({0 : {}}))
     # instantiate the Comparator class
     obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=True, stationChk =True)                  #Later on, we can choose a specific detector. We have to write a new class for each detector

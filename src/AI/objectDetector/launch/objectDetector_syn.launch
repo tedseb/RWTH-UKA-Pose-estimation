@@ -1,3 +1,0 @@
-<launch>
-  <node name="objectDetectorYolo" pkg="objectDetector" type="object_detection_yolo_syn.py" />
-</launch> 

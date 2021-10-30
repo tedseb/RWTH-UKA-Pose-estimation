@@ -7,9 +7,9 @@
   </include>
   <include file="$(find infrastructure)/launch/mobile_server.launch" />
   <include file="$(find metrabs)/launch/metrabs.launch"/>
-  <include file="$(find objectDetector)/launch/objectDetector.launch" />
+  <include file="$(find object_detection)/launch/object_detection.launch" />
   <include file="$(find motion_analysis)/launch/motion_analysis.launch" />
-  <include file="$(find weight_detection)/launch/objectDetector.launch" />
+  <include file="$(find weight_detection)/launch/object_detection.launch" />
   <node name="MetrabsVis" pkg="backend" type="MetrabsVis.py" />
 </launch> 
  

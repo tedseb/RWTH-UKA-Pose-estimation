@@ -7,7 +7,6 @@ import pafy
 import argparse
 import pylint
 import sys
-# from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here. 
 
 def returnCameraIndices():
     index = 0
@@ -56,7 +55,7 @@ class CameraNode():
             self._youtube_mode = True
 
     def start_camera_publisher(self):
-        rate = rospy.Rate(25)  #T ODO: Aufnahme ist in 25FPS
+        rate = rospy.Rate(25)  #TODO: Aufnahme ist in 25FPS
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
             frame = cv2.resize(frame, (1280,720))
@@ -69,8 +68,6 @@ class CameraNode():
             msg = Image()
             msg.header.stamp = rospy.Time.now()
             msg.header.frame_id = self._dev_id
-            #if self._youtube_mode:
-                #msg.header.frame_id = 'dev1'
             msg.encoding = "bgr8"
             msg.data = np.array(frame, dtype=np.uint8).tobytes()
             msg.height, msg.width = frame.shape[:-1]
@@ -115,16 +112,11 @@ if __name__ == '__main__':
     last_arg = sys.argv[arg_count - 1]
      
     if last_arg[:2] == "__":
-        #print("1")
         valid_args = sys.argv[1:arg_count - 2]
         args = parser.parse_args(valid_args)
     else:
-        # arg_count > 1:
-        #     print(sys.argv[1])
-        #     if str(sys.argv[1]).contains(" "):
         args = parser.parse_args()
     
-    #Todo: In Ros Logger
     if args.verbose:
         rospy.loginfo("Verbosity turned on")
         if args.youtube_id != "":
@@ -137,8 +129,6 @@ if __name__ == '__main__':
             rospy.loginfo(f"Try to find ip camera on {args.ip}")
         rospy.loginfo(f"Send on dev{args.dev_id}")
     
-    #youtube_index = 0 if args.force_youtube else args.youtube_index
-
     try:
         node = CameraNode(args.verbose, args.dev_id, args.youtube_id, args.check_cameras, args.camera_index, args.ip)
         node.start_camera_publisher()

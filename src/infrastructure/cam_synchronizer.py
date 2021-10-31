@@ -24,5 +24,5 @@ class cam_syn:
 
 if __name__ == '__main__':  
     rospy.init_node('cam_syn', anonymous=True)
-    cam_syn = cam_syn() # Later on, we can choose a specific detector. We have to write a new class for each detector
+    cam_syn = cam_syn()
     rospy.spin()

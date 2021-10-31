@@ -7,6 +7,7 @@ from std_msgs.msg import ColorRGBA
 from geometry_msgs.msg import Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray
 import argparse
+import sys
 
 metrabs_pose = [
     (1,4),(1,0),(2,5),(2,0),(3,6),(3,0),(4,7),(5,8),(6,9),(7,10),(8,11),(9,12),(12,13),(12,14),(12,15),(13,16),(14,17),(16,18),(17,19),
@@ -24,8 +25,10 @@ class RealtimeVisualization():
     def __init__(self, ai):
         if ai == "metrabs":
             self.ownpose = metrabs_pose
+            self.skeleton_scale = Vector3(0.1,0.1,0.1)
         elif ai == "spin":
             self.ownpose = spinvis_pose
+            self.skeleton_scale = Vector3(0.03,0.03,0.03)
 
         # define a few colors we are going to use later on
         self.colors = [ColorRGBA(0.12, 0.63, 0.42, 1.00),
@@ -83,14 +86,14 @@ class RealtimeVisualization():
                 idx+=1
                 m.ns = ''
                 m.color = ColorRGBA(0.98, 0.30, 0.30, 1.00)
-                m.scale = Vector3(0.1,0.1,0.1)
+                m.scale = self.skeleton_scale
                 m.pose.position.x, m.pose.position.y, m.pose.position.z = bodypart.point.x, (bodypart.point.y), bodypart.point.z
                 m.type = 2
                 m.action = 0
                 m.lifetime = rospy.Duration(0.2) 
                 marker_array.markers.append(m)
 
-            for pair in ownpose:
+            for pair in self.ownpose:
                 if (person.bodyParts[pair[0]].score < 0.01) or (person.bodyParts[pair[1]].score < 0.01):
                     continue
                 m = Marker()
@@ -117,7 +120,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
     parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
-    args = parser.parse_args()
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
 
     # initialize ros node
     rospy.init_node('visualizer_node', anonymous=False)

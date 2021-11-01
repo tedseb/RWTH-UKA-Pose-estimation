@@ -61,8 +61,8 @@ class ImageCropper():
         img_draw = cv2.rectangle(img_draw, start_point2, end_point2, color2, thickness)
         
             
-        if os.path.exists('/home/trainerai/trainerai-core/src/infrastructure/stations/'+ str(self.sensor_name)+ '.yaml'):
-            with open(r'/home/trainerai/trainerai-core/src/infrastructure/stations/'+ str(self.sensor_name)+ '.yaml') as file:
+        if os.path.exists('/home/trainerai/trainerai-core/src/station_manager/stations/'+ str(self.sensor_name)+ '.yaml'):
+            with open(r'/home/trainerai/trainerai-core/src/station_manager/stations/'+ str(self.sensor_name)+ '.yaml') as file:
                 station_dic = yaml.load(file,Loader=yaml.Loader)
             print("Content: ",station_dic) 
         else:
@@ -70,9 +70,9 @@ class ImageCropper():
             print("Content: ",station_dic) 
 
         station_dic[(self.station_ID)] = [start_point2[0], start_point2[1], end_point2[0], end_point2[1]]
-        with open('/home/trainerai/trainerai-core/src/infrastructure/stations/'+ str(self.sensor_name)+'.yaml', "w+") as file:  # Safely open the file
+        with open('/home/trainerai/trainerai-core/src/station_manager/stations/'+ str(self.sensor_name)+'.yaml', "w+") as file:  # Safely open the file
             documents = yaml.dump(station_dic, file)
-        cv2.imwrite('/home/trainerai/trainerai-core/src/infrastructure/stations/' + str(self.sensor_name) + '_station_ID_'+ str(self.station_ID)+'.png',img_draw)
+        cv2.imwrite('/home/trainerai/trainerai-core/src/station_manager/stations/' + str(self.sensor_name) + '_station_ID_'+ str(self.station_ID)+'.png',img_draw)
             
 
 if __name__ == '__main__':

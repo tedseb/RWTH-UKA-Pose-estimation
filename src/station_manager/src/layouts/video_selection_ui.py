@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/basti/git/trainerai-core/src/infrastructure/station_manager/layouts/video_selection_ui.ui'
+# Form implementation generated from reading ui file '/home/basti/git/trainerai-core/src/station_manager/station_manager/layouts/video_selection_ui.ui'
 #
 # Created by: PyQt5 UI code generator 5.14.1
 #

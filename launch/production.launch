@@ -1,7 +1,7 @@
 <launch>
   <arg name="args" default=" " doc="Parameters of Station Manager e.g: args:='-d'"/>
   <arg name="sms" default="log" doc="Output of station manager, sms:='screen'"/>
-  <include file="$(find infrastructure)/launch/station_manager.launch">
+  <include file="$(find station_manager)/launch/station_manager.launch">
     <arg name="args" value="$(arg args)"/>
     <arg name="sms" value="$(arg sms)"/>
   </include>

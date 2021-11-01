@@ -34,8 +34,7 @@ class ComputerWorkload:
         self.stations = set({})
 
 class StationManager():
-    def __init__(self, debug_mode=False, verbose=False):
-        rospy.init_node('param_updater', anonymous=True)
+    def __init__(self, camera_path, transform_node_path, station_selection_path, debug_mode=False, verbose=False):
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
         try:
@@ -48,9 +47,9 @@ class StationManager():
         #Todo: verbose in args
         self._verbose = verbose or VERBOSE_MODE
         self._debug_mode = debug_mode or DEBUG_MODE
-        self._path_camera_node = str(pathlib.Path(__file__).absolute().parent.parent) + "/CameraNode.py"
-        self._path_transform_node = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
-        self._path_station_selection = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
+        self._path_camera_node = camera_path
+        self._path_transform_node = transform_node_path
+        self._path_station_selection = station_selection_path
         self._station_selection_process = subprocess.Popen([self._path_station_selection])
         
         # Thread Shared Data. Don't Use without Mutex lock!!!
@@ -291,6 +290,7 @@ class StationManager():
         self.send_repitition(user_id, repetition, exercise_id, set_id)
 
 if __name__ == '__main__':
+    rospy.init_node('station_manager', anonymous=False)
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
@@ -303,4 +303,8 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-    station_manager = StationManager(debug_mode=args.debug, verbose=args.verbose)
+    camera_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/infrastructure/CameraNode.py"
+    transform_node_path = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
+    station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
+
+    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=args.verbose)

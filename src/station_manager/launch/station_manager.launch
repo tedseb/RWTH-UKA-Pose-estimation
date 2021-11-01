@@ -1,0 +1,5 @@
+<launch>
+  <arg name="args" default=" "/>
+  <arg name="sms" default="log" />
+  <node name="station_manager" pkg="station_manager" output="$(arg sms)" type="station_manager.py" args="$(arg args)"/>
+</launch> 

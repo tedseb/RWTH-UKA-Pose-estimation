@@ -1,4 +1,6 @@
-#!/usr/bin/python3 
+#!/usr/bin/python3
+from pathlib import Path
+import glob
 import rospy
 import cv2
 from sensor_msgs.msg import Image
@@ -7,6 +9,17 @@ import pafy
 import argparse
 import pylint
 import sys
+from pytube import YouTube
+from enum import Enum
+# from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here.
+VIDEO_DIR_PATH = "/home/trainerai/trainerai-core/data/videos/"
+
+class VideoMode(Enum):
+    INVALID = 0
+    YOUTUBE = 1
+    WEB_CAM = 2
+    IP_CAM = 3
+    DISK_VIDEO = 4
 
 def returnCameraIndices():
     index = 0
@@ -22,49 +35,50 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose = False, dev_id = 0, youtube_id = "", check_cameras = False, camera_index = -1, camera_ip = "", ):
+    def __init__(self, verbose = False, dev_id = 0, check_cameras = False, camera_mode = VideoMode.INVALID, video_info = None):
         self._cap = None
-        self._camera_index = camera_index
-        self._camera_ip = camera_ip
-        self._check_cameras = check_cameras
         self._verbose = verbose
-        self._camera_mode = -1
+        self._camera_mode = camera_mode
         self._dev_id = "dev" + str(dev_id)
-        
+        self._youtube_mode = False
+
         rospy.init_node('camera', anonymous=True)
         self._pub = rospy.Publisher('image', Image, queue_size=1)
 
-        if youtube_id != "":
-            self._url = f"https://www.youtube.com/watch?v={youtube_id}"
+        if self._camera_mode is VideoMode.INVALID:
+            raise RuntimeError("Invalid video mode")
+        elif self._camera_mode is VideoMode.YOUTUBE:
+            url = f"https://www.youtube.com/watch?v={video_info}"
+            self.set_youtube_stream(url)
             self._youtube_mode = True
-            self.set_youtube_stream()
-            self._camera_mode = 0
-        elif check_cameras or camera_index >= 0: 
-            self._youtube_mode = False
-            self.set_webcam()
-            self._camera_mode = 1
-        elif camera_ip != "":
-            self._youtube_mode = False
-            self.set_ipcam()
-            self._camera_mode = 2
-            #self.set_video()
+        elif self._camera_mode is VideoMode.WEB_CAM:
+            self.set_webcam(check_cameras, int(video_info))
+        elif self._camera_mode is VideoMode.IP_CAM:
+            self.set_ipcam(video_info)
+        elif self._camera_mode is VideoMode.DISK_VIDEO:
+            self.set_disk_video(video_info)
+            self._disk_mode = True
 
-        if not self._cap.isOpened() or self._cap is None: 
+        if not self._cap.isOpened() or self._cap is None:
             self.set_youtube_stream()
-            self._camera_mode = 0
             self._youtube_mode = True
 
     def start_camera_publisher(self):
         rate = rospy.Rate(25)  #TODO: Aufnahme ist in 25FPS
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
-            frame = cv2.resize(frame, (1280,720))
             if not ret:
-                if self._youtube_mode: 
-                    self._cap.open(self._video_stream.url)
+                if self._youtube_mode:
+                    self._cap.open(self._disk_path)
                     continue
+                elif self._disk_mode:
+                    self._cap.open(self._disk_path)
+                    continue
+
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
+
+            frame = cv2.resize(frame, (1280,720))
             msg = Image()
             msg.header.stamp = rospy.Time.now()
             msg.header.frame_id = self._dev_id
@@ -74,63 +88,138 @@ class CameraNode():
             msg.step = frame.shape[-1]*frame.shape[0]
             self._pub.publish(msg)
             rate.sleep()
-    
-    def set_youtube_stream(self):
-        video = pafy.new(self._url)
-        self._video_stream = video.getbest(preftype="mp4")
-        self._cap = cv2.VideoCapture()
-        self._cap.open(self._video_stream.url)
 
-    def set_webcam(self):
-        if self._check_cameras: 
+    def set_youtube_stream(self, url = "https://youtu.be/bqpCkbAr8dY"):
+        video_path = Path(VIDEO_DIR_PATH)
+        if not video_path.is_dir():
+            print("Create video dir")
+            video_path.mkdir(parents=True, exist_ok=True)
+
+        video_path = f"{VIDEO_DIR_PATH}{url[-11:]}*"
+        video = None
+        for file in glob.glob(video_path):
+            #print("#########", file)
+            video = file
+            break
+
+        if video is None:
+            video = self.download_youtube_video(url, VIDEO_DIR_PATH)
+
+        print("OPEN VIDEO: {video}")
+        self._disk_path = video
+        self._cap = cv2.VideoCapture(video)
+
+    def download_youtube_video(self, url : str, download_path = VIDEO_DIR_PATH) -> str:
+        yid = url[-11:]
+        video = YouTube(url)
+        data = video.streams.all()
+        options = []
+        # Get all possible youtube qualities
+        for option in data:
+            option = str(option)
+            option = option[1:-1].split()
+            option_dict = {}
+            for setting in option[1:]:
+                setting = setting.replace('"', '')
+                setting = setting.split("=")
+                option_dict[setting[0]] = setting[1]
+            options.append(option_dict)
+
+        # Select quality with highest resolution
+        selected_option = None
+        for option in options:
+            if option["type"] != "video":
+                continue
+
+            option["res"] = int(option["res"][0:-1])
+            if selected_option is None:
+                selected_option = option
+                continue
+
+            if option["res"] > selected_option["res"]:
+                selected_option = option
+
+        itag = int(selected_option["itag"])
+        ext = selected_option["mime_type"].split("/")[1]
+        res = selected_option["res"]
+
+        video = video.streams.get_by_itag(itag)
+        filename = f"{yid}_{res}p.{ext}"
+        video.download(output_path=download_path, filename=filename)
+        return f"{download_path}{filename}"
+        #print(f"tag={itag}, ext={ext}, res={res}p")
+
+    def set_webcam(self, check_cameras = False, camera_index = 0):
+        if check_cameras:
             indices = returnCameraIndices()
             if len(indices) == 0:
                 rospy.logerr('No Cameras Found')
                 raise IOError('[CameraNode] No Cameras Found')
-            self._cap = cv2.VideoCapture(indices[0])  
-            if self._verbose: 
+            self._cap = cv2.VideoCapture(indices[0])
+            if self._verbose:
                 print(f"[CameraNode] start cam on index [indices[0]]")
         else:
-            self._cap = cv2.VideoCapture(self._camera_index)
+            self._cap = cv2.VideoCapture(camera_index)
 
-    def set_ipcam(self):
-        self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{self._camera_ip}")
+    def set_ipcam(self, camera_ip = None):
+        self._cap = cv2.VideoCapture(f"rtsp://admin:Vergessen1@{camera_ip}")
+        print(f"START IP: {camera_ip}")
 
-    def set_video(self):
-        self._cap = cv2.VideoCapture("/home/trainerai/trainerai-core/deaflifts.avi")
+    def set_disk_video(self, path = "/home/trainerai/trainerai-core/data/video.avi"):
+        print("TEEST", path)
+        self._disk_path = path
+        self._cap = cv2.VideoCapture(path)
+        print("ALLES GUT")
 
 if __name__ == '__main__':
     print(sys.argv)
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
-    parser.add_argument("-y", "--youtube-id", default="", type=str, help="start on youtube ID")
+    parser.add_argument("-y", "--youtube-id", type=str, help="start on youtube ID")
     parser.add_argument("-c", "--check-cameras", help="Check all camera input id's from 0 to 10. Takes the first working match.", action="store_true")
-    parser.add_argument("-i", "--camera-index", default=-1, type=int, help="Open camera on opencv camera index")
-    parser.add_argument("-p", "--ip", default="", type=str, help="Start IP cam on ip")
+    parser.add_argument("-i", "--camera-index", type=int, help="Open camera on opencv camera index")
+    parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
+    parser.add_argument("--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
-     
+
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]
         args = parser.parse_args(valid_args)
     else:
         args = parser.parse_args()
-    
+
+    #Todo: In Ros Logger
     if args.verbose:
         rospy.loginfo("Verbosity turned on")
-        if args.youtube_id != "":
+        if args.youtube_id is None:
             rospy.loginfo("Youtube turned on")
-        if args.camera_index >= 0:
+        if args.camera_index is None:
             rospy.loginfo(f"Try to open {args.camera_index}")
         if args.check_cameras:
             rospy.loginfo("Try to find camera index")
-        if args.ip != "":
+        if args.ip is None:
             rospy.loginfo(f"Try to find ip camera on {args.ip}")
         rospy.loginfo(f"Send on dev{args.dev_id}")
-    
+
+    mode = VideoMode.INVALID
+    info = ""
+    if args.youtube_id is not None:
+        mode = VideoMode.YOUTUBE
+        info = args.youtube_id
+    elif args.camera_index is not None or args.check_cameras:
+        mode = VideoMode.WEB_CAM
+        info = args.camera_index
+    elif args.ip is not None:
+        mode = VideoMode.IP_CAM
+        info = args.ip
+    elif args.disk is not None:
+        mode = VideoMode.DISK_VIDEO
+        info = args.disk
+
     try:
-        node = CameraNode(args.verbose, args.dev_id, args.youtube_id, args.check_cameras, args.camera_index, args.ip)
+        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
         node.start_camera_publisher()
     except rospy.ROSInterruptException:
         pass

@@ -7,6 +7,8 @@ from ast import literal_eval as make_tuple
 from .data_manager import DataManager
 from typing import Set, Dict, List
 
+#TODO camera_station to station_camera
+
 class CameraStationController():
     def __init__(self, data_manager : DataManager, verbose = False):
         self._data_manager = data_manager
@@ -24,6 +26,11 @@ class CameraStationController():
 
         if self._verbose:
             rospy.loginfo(f"Camera list: {self._camera_station_frames}", logger_name="ParamUpdater")
+
+    def add_debug_station(self, station_id, camera_id, frame):
+        if camera_id not in self._camera_station_frames:
+            self._camera_station_frames[camera_id] = {}
+        self._camera_station_frames[camera_id][station_id] = frame
 
     def get_involved_cameras(self) -> Set[int]:
         active_cameras = {int(cam) for cam in self._station_frame_parameters}

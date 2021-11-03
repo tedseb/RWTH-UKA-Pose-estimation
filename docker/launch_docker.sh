@@ -8,6 +8,8 @@ webcam_option=""
 display=$DISPLAY
 osx=false
 mongo=false
+env=false
+backend=false
 
 # functions
 usage() {
@@ -18,13 +20,15 @@ usage() {
     echo '-d, --display DISPLAY     Speficy a display for X11.          (-e DISPLAY=$DISPLAY)'
     echo '-g, --gpu                 Hand over GPUs to Container.        (--gpus=all -e XAUTHORITY -e NVIDIA_DRIVER_CAPABILITIES=all)'
     echo '-c, --cpus decimal        Limit number of CPUs.               (--cpus decimal)'
-    echo '-m, --mongo-db            Start Mongo-db.                     (--cpus decimal)'
+    echo '-m, --mongo-db            Start Mongo-db.'
+    echo '-e, --start-env           Start environment (terminator + rviz).'
+    echo '-b, --start-backend       Start environment + backend.'
     echo 'Note: Different options can be combined.'
 }
 
 while [ "${1+defined}" ]; do # Simple and safe loop over arguments: https://wiki.bash-hackers.org/scripting/posparams
 key="$1"
-shift 
+shift
 case $key in
     -o|--osx)
     display=host.docker.internal:0
@@ -43,6 +47,12 @@ case $key in
     ;;
     -m|--mongo-db)
     mongo=true
+    ;;
+    -e|--start-env)
+    env=true
+    ;;
+    -b|--start-backend)
+    backend=true
     ;;
     -w|--webcam)
     webcam_option="--device=/dev/video2"
@@ -64,7 +74,7 @@ done
 echo "Trying to stop the docker container. Killing after 10s..."
 docker stop trainerAI > /dev/null || true
 echo "done"
-echo "Running new docker container..."
+echo "Running new docker con tainer..."
 # Run the image as a container with the specified option strings
 docker run -it -d --rm \
         --name trainerAI \
@@ -79,12 +89,20 @@ docker run -it -d --rm \
         $gpu_option \
         registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 > /dev/null
 
-if $mongo; then
+if $mongo || $env || $backend; then
 	if [ ! "docker container list -a | grep mongo-on-docker" ]; then
         docker run -d --name mongo-on-docker -p 27888:27017  -v expert_mongo:/data/db -e MONGO_INITDB_ROOT_USERNAME=mongoadmin -e MONGO_INITDB_ROOT_PASSWORD=secret mongo
     else
         docker start mongo-on-docker
     fi
+fi
+
+if $env; then
+    docker exec -it /trainerAI docker/scripts/start_env.sh
+fi
+
+if $backend; then
+    docker exec -it /trainerAI docker/scripts/start_backend.sh
 fi
 
 if $osx; then

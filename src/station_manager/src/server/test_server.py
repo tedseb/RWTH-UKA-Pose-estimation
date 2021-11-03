@@ -7,15 +7,15 @@ def login_station(user_id, payload):
 
 def logout_station(user_id, payload):
     print("logout from station")
-    return ResponseAnswer(501, 1)
+    return ResponseAnswer(502, 1)
 
 def start_exercise(user_id, payload):
     print("start exercise")
-    return ResponseAnswer(501, 1)
+    return ResponseAnswer(503, 1)
 
 def stop_exercise(user_id, payload):
     print("stop exercise")
-    return ResponseAnswer(501, 1)
+    return ResponseAnswer(504, 1)
 
 def weight_detection(user_id, payload):
     print("Start Weight Detection")

@@ -12,6 +12,7 @@ import signal
 import argparse
 import sys
 import pathlib
+import sched, time
  
 from station_manager import StationManager, signal_handler
 
@@ -20,7 +21,9 @@ from backend.msg import Persons
 
 class DataSetRecorder():
     def __init__(self, 
-    station_manager: StationManager):
+    station_manager: StationManager,
+    input_folder: str,
+    output_file: str):
         self.station_manager = station_manager
         # Define a subscriber to retrive tracked bodies
         rp.Subscriber(ROS_JOINTS_TOPIC, Persons, self.callback)
@@ -28,6 +31,8 @@ class DataSetRecorder():
 
         self.spot_queue_load_balancer = spot_queue_load_balancer_class()
         self.feature_extractor = feature_extractor_class()
+
+        
 
     def callback(self, message: Any) -> None:
         pass
@@ -40,8 +45,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
-    parser.add_argument("-i", "--input", help="Input directory", action="store_true")
-    parser.add_argument("-o", "--output", help="Output file", action="store_true")
+    parser.add_argument("-i", "--input", help="Input directory", default=None)
+    parser.add_argument("-o", "--output", help="Output file", default=None)
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
@@ -56,6 +61,6 @@ if __name__ == '__main__':
 
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=args.verbose)
 
-    DataSetRecorder = DataSetRecorder(station_manager)
+    DataSetRecorder = DataSetRecorder(station_manager, input_folder=args.input, output_file=parser.out)
 
     rp.spin()

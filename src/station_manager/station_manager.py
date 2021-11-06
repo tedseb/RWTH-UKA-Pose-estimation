@@ -68,15 +68,13 @@ class StationManager():
         self._param_updater_mutex = Lock()
 
         self._client_callbacks = {}
-        self._server_controller = ServerController("ws://127.0.0.1:3030", self.client_callback)
-        self._server_controller.register_callback(1, self.login_station)
-        self._server_controller.register_callback(2, self.logout_station)
-        self._server_controller.register_callback(3, self.start_exercise)
-        self._server_controller.register_callback(4, self.stop_exercise)
+        self._server_controller = ServerController("ws://127.0.0.1:3030", self.set_client_callback)
+        self._server_controller.register_callback(1, self.login_station_payload)
+        self._server_controller.register_callback(2, self.logout_station_payload)
+        self._server_controller.register_callback(3, self.start_exercise_payload)
+        self._server_controller.register_callback(4, self.stop_exercise_payload)
         self._server_controller.register_callback(7, self.get_weight_detection)
         self._server_controller.protocol = ServerSocket
-        reactor.listenTCP(3030, self._server_controller)
-        reactor.run()
 
     def __del__(self):
         with self._camera_process_mutex:
@@ -87,7 +85,7 @@ class StationManager():
         LOG_DEBUG("Start StationManager", self._verbose)
         rospy.spin()
 
-    def client_callback(self, client_id, callback):
+    def set_client_callback(self, client_id, callback):
         LOG_DEBUG("Register Message Callback", self._verbose)
         self._client_callbacks[client_id] = callback
 
@@ -166,13 +164,15 @@ class StationManager():
         callback(response_code=509, satus_code=1, payload=payload)
 
     ### Server Callback functions ###
-
-    def login_station(self, user_id : str, payload : Dict):
+    def login_station_payload(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Login {user_id} payload: {payload}", self._verbose)
         if "station" not in payload:
             return self.return_error("Payload must have a station and an exercise field", 8)
 
         station_id = int(payload["station"])
+        return self.login_station(user_id, station_id)
+
+    def login_station(self, user_id : str, station_id : int):
 
         with self._exercise_station_mutex:
             if station_id in self.__active_stations:
@@ -197,9 +197,11 @@ class StationManager():
 
         return ResponseAnswer(501, 1, {"station": station_id})
 
-    def logout_station(self, user_id : str, payload : Dict):
+    def logout_station_payload(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
+        return self.logout_station(user_id)
 
+    def logout_station(self, user_id):
         with self._exercise_station_mutex:
             if user_id not in self.__active_stations:
                 return ResponseAnswer(502, 10, {})
@@ -226,7 +228,7 @@ class StationManager():
 
         return ResponseAnswer(502, 1, {"station": station_id})
 
-    def start_exercise(self, user_id : str, payload : Dict):
+    def start_exercise_payload(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Start exercise {user_id}, payload : {payload}", self._verbose)
         if "station" not in payload or "exercise" not in payload or "set_id" not in payload:
             return self.return_error("Payload must have a station, exercise and set_id field", 8)
@@ -234,7 +236,9 @@ class StationManager():
         station_id = int(payload["station"])
         exercise_id = int((payload["exercise"]))
         set_id = int((payload["set_id"]))
+        return self.start_exercise(user_id, station_id, exercise_id, set_id)
 
+    def start_exercise(self, user_id : str, station_id : int, exercise_id : int, set_id = 1):
         with self._exercise_station_mutex:
             if self.__active_stations[user_id] != station_id:
                 return ResponseAnswer(502, 10, {})
@@ -249,8 +253,11 @@ class StationManager():
 
         return ResponseAnswer(503, 1, {"station": station_id, "exercise": exercise_id})
 
-    def stop_exercise(self, user_id : str, payload : Dict):
+    def stop_exercise_payload(self, user_id : str, payload : Dict):
         LOG_DEBUG(f"Stop exercise {user_id}, payload : {payload}", self._verbose)
+        return self.stop_exercise(user_id)
+
+    def stop_exercise(self, user_id):
         # station_id = int(payload["station"])
         # set_id = int((payload["set_id"]))
 
@@ -305,6 +312,7 @@ class StationManager():
             self.__active_exercises[user_id] = (exercise_id, set_id, repetition)
         self.send_repitition(user_id, repetition, exercise_id, set_id)
 
+
 if __name__ == '__main__':
     rospy.init_node('station_manager', anonymous=False)
     signal.signal(signal.SIGINT, signal_handler)
@@ -324,3 +332,20 @@ if __name__ == '__main__':
     station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
 
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=args.verbose)
+    reactor.listenTCP(3030, station_manager._server_controller)
+    reactor.run()
+
+    ## Use Station Manager Directly ##
+    # def repetition_callback(response_code=508, satus_code=2, payload=dict({})):
+    #     print("repetitions =", payload["repetitions"])
+    #     print("exercise =", payload["exercise"])
+    #     print("set id =", payload["set_id"])
+
+    # my_id = "id124"
+    # station_manager = StationManager(debug_mode=args.debug, verbose=args.verbose)
+    # station_manager.set_client_callback(my_id, repetition_callback)
+    # station_manager.login_station(my_id, 2)
+    # station_manager.start_exercise(my_id, 2, 105)
+    # time.sleep(5)
+    # station_manager.stop_exercise(my_id)
+    # station_manager.logout_station(my_id)

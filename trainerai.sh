@@ -1,11 +1,12 @@
 # This script downloads and build all files neccessary for the TrainerAI project
 echo ">>  Setup ROS"
 SCRIPT=`realpath $0`
-SCRIPTPATH=`dirname $SCRIPT`
+SCRIPTPATH="/home/trainerai/trainerai-core"
 
 # catkin_make builds the project with catkin in the folders src, build and evel
+source /opt/ros/noetic/setup.bash
 catkin_make
-# catkin generates a setup file that sets a couple of environment variables 
+# catkin generates a setup file that sets a couple of environment variables
 sh $SCRIPTPATH/devel/setup.sh
 # TODO: @Shawan What does this line do? Is there a link you copied this from?
 find ./devel -type f -name "*.js" -exec sed -i 's/`resolution`//g' {} \;

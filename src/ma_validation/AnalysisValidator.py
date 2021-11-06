@@ -18,6 +18,8 @@ import subprocess
  
 from msg import MAValidation
 
+from station_manager import DEBUG_STATION_ID
+
 
 class AnalysisValidator():
     def __init__(self, 

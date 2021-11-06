@@ -44,6 +44,7 @@ class CameraNode():
 
         rospy.init_node('camera', anonymous=True)
         self._pub = rospy.Publisher('image', Image, queue_size=1)
+        self._timecode_pub = rospy.Publisher('ma_validation_video_timing', float, queue_size=100)
 
         if self._camera_mode is VideoMode.INVALID:
             raise RuntimeError("Invalid video mode")
@@ -64,7 +65,7 @@ class CameraNode():
             self._youtube_mode = True
 
     def start_camera_publisher(self):
-        rate = rospy.Rate(25)  #TODO: Aufnahme ist in 25FPS
+        rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
             if not ret:
@@ -77,6 +78,40 @@ class CameraNode():
 
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
+
+            frame = cv2.resize(frame, (1280,720))
+            msg = Image()
+            msg.header.stamp = rospy.Time.now()
+            msg.header.frame_id = self._dev_id
+            msg.encoding = "bgr8"
+            msg.data = np.array(frame, dtype=np.uint8).tobytes()
+            msg.height, msg.width = frame.shape[:-1]
+            msg.step = frame.shape[-1]*frame.shape[0]
+            self._pub.publish(msg)
+            rate.sleep()
+
+    def start_video_publisher(self):
+        # Get the original FPS of the video
+        fps = self._cap.get(cv2.CV_CAP_PROP_FPS)
+        frame_no = 0
+        # Our rate reflects the fps at which we WANT the video to play to match the normal rate of our AI
+        rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
+        while not rospy.is_shutdown() and cap.isOpened():
+            ret, frame = self._cap.read()
+            if not ret:
+                if self._disk_mode:
+                    self._cap.open(self._disk_path)
+                    continue
+
+                rospy.logerr('Could not get image')
+                raise IOError('[CameraNode] Could not get image')
+
+            frame_no += 1
+            calculated_timestamp = frame_no * 1000/fps
+            # If there is a timestamp, we use it. Otherwise we use our own calculation
+            timestamp = cap.get(cv2.CAP_PROP_POS_MSEC) or calculated_timestamp
+            self._timecode_pub.publish(timestamp)
+            rospy.logerr("Timestamp:" + str(timestamp))
 
             frame = cv2.resize(frame, (1280,720))
             msg = Image()
@@ -220,7 +255,11 @@ if __name__ == '__main__':
 
     try:
         node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
-        node.start_camera_publisher()
+        if args.disk:
+            rospy.logerr("Publishing with video publisher!!!")
+            node.start_video_publisher()
+        else:
+            node.start_camera_publisher()
     except rospy.ROSInterruptException:
         pass
 

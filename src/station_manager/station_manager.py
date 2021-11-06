@@ -22,7 +22,7 @@ from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectio
 from src.config import *
 from twisted.internet import reactor
 
-DEBUG_ID = 999
+DEBUG_STATION_ID = 999
 
 def signal_handler(signal, frame):
     print("EXIT")

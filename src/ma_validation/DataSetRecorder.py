@@ -15,7 +15,7 @@ import pathlib
 import sched, time
 import yaml
  
-from station_manager import StationManager, signal_handler
+from station_manager import StationManager, signal_handler, DEBUG_STATION_ID
 
 from msg import MAValidation
 
@@ -23,8 +23,8 @@ from msg import MAValidation
 class DataSetRecorder():
     def __init__(self, 
     station_manager: StationManager,
-    input_video_file_path: str,
-    timecode_file_path: str,
+    input_video_file_path: str = "/home/trainerai/trainerai-core/data/video.mp4",
+    timecode_file_path: str = "/home/trainerai/trainerai-core/data/timecodes.yml",
     output_file_path: str):
         self.station_manager = station_manager
         # Define a subscriber to retrive tracked bodies
@@ -49,6 +49,17 @@ class DataSetRecorder():
         self.active_set = None
 
 
+        def repetition_callback(response_code=508, satus_code=2, payload=dict({})):
+            # TODO: Why do we need this?
+            print("repetitions =", payload["repetitions"])
+            print("exercise =", payload["exercise"])
+            print("set id =", payload["set_id"])
+
+        self.sm_client_id = "ma_validation_dataset_recorder"
+        self.station_manager.set_client_callback(my_id, repetition_callback)
+        self.station_manager.login_station(self.sm_client_id, 2)
+
+
     def callback(self, t: float) -> None:
         def are_we_past_t_from(_set):
             if t > _set.t_from:
@@ -65,6 +76,7 @@ class DataSetRecorder():
             set_message.start = False
             self.active_set = None
 
+            station_manager.stop_exercise(self.sm_client_id)
 
         while are_we_past_t_from(self.set_list[0]):
             current_set = self.set_list.pop(0)
@@ -76,7 +88,11 @@ class DataSetRecorder():
             set_message.start = True
             self.validation_set_publisher.publish(set_message)
 
+            station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, exercise_id)
+
             self.active_set = current_set
+
+            station_manager.logout_station(self.sm_client_id)
 
 
 if __name__ == '__main__':
@@ -106,6 +122,5 @@ if __name__ == '__main__':
 
     rp.spin()
 
-    self.video_timing_publisher = rp.Publisher("ma_validation_video_timing", float, queue_size=100)
-
-    # TODO: Tell station manager to publish 
+    # TODO: Publish video timing somehow, so that the dataset recorder can time the exercises
+    # self.video_timing_publisher = rp.Publisher("ma_validation_video_timing", float, queue_size=100)

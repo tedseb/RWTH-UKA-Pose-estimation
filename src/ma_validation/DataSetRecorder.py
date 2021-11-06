@@ -17,15 +17,14 @@ import yaml
  
 from station_manager import StationManager, signal_handler, DEBUG_STATION_ID
 
-from msg import MAValidation
-
+from ma_validation.msg import MAValidationSetInfo
 
 class DataSetRecorder():
-    def __init__(self, 
+    def __init__(self,
     station_manager: StationManager,
     input_video_file_path: str = "/home/trainerai/trainerai-core/data/video.mp4",
     timecode_file_path: str = "/home/trainerai/trainerai-core/data/timecodes.yml",
-    output_file_path: str):
+    output_file_path: str = "/home/trainerai/ma_validation_recorder_output.bag"):
         self.station_manager = station_manager
         # Define a subscriber to retrive tracked bodies
         self.validation_set_publisher = rp.Publisher("ma_validation_sets", MAValidation, queue_size=100)

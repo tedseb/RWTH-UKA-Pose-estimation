@@ -60,7 +60,7 @@ class StationManager():
         self.__camera_process = {}
         self.__transform_process = {}
         self.__param_updater = CameraStationController(self._data_manager,  self._verbose)
-        self.__param_updater.add_debug_station(DEBUG_ID, DEBUG_ID, [0, 0, 4000, 4000])
+        self.__param_updater.add_debug_station(DEBUG_STATION_ID, DEBUG_STATION_ID, [0, 0, 4000, 4000])
 
         #Mutex
         self._exercise_station_mutex = Lock()
@@ -190,7 +190,7 @@ class StationManager():
             turn_on = cameras - self.__camera_process.keys()
 
         for cam_index in turn_on:
-            self.start_camera(cam_index, station_id==DEBUG_ID)
+            self.start_camera(cam_index, station_id==DEBUG_STATION_ID)
 
         with self._exercise_station_mutex:
             self.__active_stations[user_id] = station_id

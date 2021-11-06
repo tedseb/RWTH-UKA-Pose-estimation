@@ -44,7 +44,6 @@ class CameraNode():
 
         rospy.init_node('camera', anonymous=True)
         self._pub = rospy.Publisher('image', Image, queue_size=1)
-        self._timecode_pub = rospy.Publisher('ma_validation_video_timing', float, queue_size=100)
 
         if self._camera_mode is VideoMode.INVALID:
             raise RuntimeError("Invalid video mode")
@@ -91,6 +90,7 @@ class CameraNode():
             rate.sleep()
 
     def start_video_publisher(self):
+        self._timecode_pub = rospy.Publisher('ma_validation_video_timing', float, queue_size=100)
         # Get the original FPS of the video
         fps = self._cap.get(cv2.CV_CAP_PROP_FPS)
         frame_no = 0

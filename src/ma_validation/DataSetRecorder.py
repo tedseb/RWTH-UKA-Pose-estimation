@@ -18,35 +18,36 @@ import yaml
 from station_manager import StationManager, signal_handler, DEBUG_STATION_ID
 
 from ma_validation.msg import MAValidationSetInfo
+from std_msgs.msg import Int32
 
 class DataSetRecorder():
     def __init__(self,
     station_manager: StationManager,
-    input_video_file_path: str = "/home/trainerai/trainerai-core/data/video.mp4",
-    timecode_file_path: str = "/home/trainerai/trainerai-core/data/timecodes.yml",
-    output_file_path: str = "/home/trainerai/ma_validation_recorder_output.bag"):
+    input_video: str = "/home/trainerai/trainerai-core/data/videos/video.mp4",
+    input_timecodes: str = "/home/trainerai/trainerai-core/data/videos/timecodes.yml",
+    output_file: str = "/home/trainerai/trainerai-core/data/videos/ma_validation_recorder_output.bag"):
         self.station_manager = station_manager
         # Define a subscriber to retrive tracked bodies
-        self.validation_set_publisher = rp.Publisher("ma_validation_sets", MAValidation, queue_size=100)
-        self.video_timing_subscriber = rp.Subscriber("ma_validation_video_timing", float, self.callback)
+        self.validation_set_publisher = rp.Publisher("ma_validation_sets", MAValidationSetInfo, queue_size=100)
+        self.video_timing_subscriber = rp.Subscriber("ma_validation_video_timing", Int32, self.callback)
 
-        with open(timecode_file_path) as stream:
+        with open(input_timecodes) as stream:
             try:
                 timecode_data = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
                 return
         
-        if pathlib.Path(input_video_file_path).name != timecode_data.file_name:
+        if pathlib.Path(input_video).name != timecode_data["file_name"]:
             rp.logerr("Input video file name does not match file name specified in timecode file")
 
         def get_t_from(list_item):
-            return list_item.t_from
+            return list_item["t_from_s"]
 
-        self.set_list = timecode_data.sets.sort(key=get_t_from)
+        self.set_list = timecode_data["sets"]
+        self.set_list.sort(key=get_t_from)
         self.done_sets = []
         self.active_set = None
-
 
         def repetition_callback(response_code=508, satus_code=2, payload=dict({})):
             # TODO: Why do we need this?
@@ -55,43 +56,41 @@ class DataSetRecorder():
             print("set id =", payload["set_id"])
 
         self.sm_client_id = "ma_validation_dataset_recorder"
-        self.station_manager.set_client_callback(my_id, repetition_callback)
-        self.station_manager.login_station(self.sm_client_id, 2)
+        self.station_manager.set_client_callback(self.sm_client_id, repetition_callback)
+        self.station_manager.login_station(self.sm_client_id, DEBUG_STATION_ID)
 
 
-    def callback(self, t: float) -> None:
-        def are_we_past_t_from(_set):
-            if t > _set.t_from:
-                return True
-            else:
-                return False
+    def callback(self, msg: Int32) -> None:
+        t = msg.data
 
-        if are_we_past_t_from(self.active_set):
-            set_message = MAValidation()
-            set_message.exercise_id = current_set.exercise_id
-            set_message.t_from = current_set.t_from
-            set_message.t_to = current_set.t_to
-            set_message.repetitions = current_set.repetitions
+        if self.active_set and t > self.active_set["t_to_s"]:
+            set_message = MAValidationSetInfo()
+            set_message.exercise_id = self.active_set["exercise_id"]
+            set_message.t_from_s = self.active_set["t_from_s"]
+            set_message.t_to_s = self.active_set["t_to_s"]
+            set_message.reps = self.active_set["reps"]
             set_message.start = False
             self.active_set = None
 
+            rp.logerr("Ended set: " + str(self.active_set))
+
             station_manager.stop_exercise(self.sm_client_id)
 
-        while are_we_past_t_from(self.set_list[0]):
+        while self.set_list and t > self.set_list[0]["t_from_s"]:
             current_set = self.set_list.pop(0)
-            set_message = MAValidation()
-            set_message.exercise_id = current_set.exercise_id
-            set_message.t_from = current_set.t_from
-            set_message.t_to = current_set.t_to
-            set_message.repetitions = current_set.repetitions
+            set_message = MAValidationSetInfo()
+            set_message.exercise_id = current_set["exercise_id"]
+            set_message.t_from_s = current_set["t_from_s"]
+            set_message.t_to_s = current_set["t_to_s"]
+            set_message.reps = current_set["reps"]
             set_message.start = True
             self.validation_set_publisher.publish(set_message)
 
-            station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, exercise_id)
+            rp.logerr("Started set: " + str(current_set))
+
+            station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, current_set["exercise_id"])
 
             self.active_set = current_set
-
-            station_manager.logout_station(self.sm_client_id)
 
 
 if __name__ == '__main__':
@@ -101,7 +100,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
-    parser.add_argument("-i", "--input", help="Input directory", default=None)
+    parser.add_argument("-i", "--input_video", help="Input video", default=None)
+    parser.add_argument("-t", "--input_timecodes", help="Input timecodes", default=None)
     parser.add_argument("-o", "--output", help="Output file", default=None)
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
@@ -115,11 +115,10 @@ if __name__ == '__main__':
     transform_node_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/launch/static_transform.launch"
     station_selection_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/src/station_selection.py"
 
+    # TODO: use rosbag here
+
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=args.verbose)
 
-    DataSetRecorder = DataSetRecorder(station_manager, input_folder=args.input, output_file=parser.out)
+    DataSetRecorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
 
     rp.spin()
-
-    # TODO: Publish video timing somehow, so that the dataset recorder can time the exercises
-    # self.video_timing_publisher = rp.Publisher("ma_validation_video_timing", float, queue_size=100)

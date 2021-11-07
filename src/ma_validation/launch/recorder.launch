@@ -1,6 +1,7 @@
 <launch>
-  <arg name="output" default="" doc="Specify an output file for rosbag to write to."/>
-  <arg name="input" default="" doc="Specify a folder of input videos and timecodes with the same names."/>
+  <arg name="output" default="/home/trainerai/trainerai-core/data/videos/video.bag" doc="Specify an output file for rosbag to write to."/>
+  <arg name="input_video" default="/home/trainerai/trainerai-core/data/videos/video.mp4" doc="Specify a folder of input videos and timecodes with the same names."/>
+  <arg name="input_timecodes" default="/home/trainerai/trainerai-core/data/videos/timecodes.yml" doc="Specify a folder of input videos and timecodes with the same names."/>
   <include file="$(find metrabs)/launch/metrabs.launch"/>
-  <node name="DataSetRecorder" pkg="ma_validation" type="DataSetRecorder.py" args="-i $(arg input) -o $(arg output)"/>
+  <node name="DataSetRecorder" pkg="ma_validation" type="DataSetRecorder.py" args="-i $(arg input_video) -t $(arg input_timecodes) -o $(arg output)"/>
 </launch> 

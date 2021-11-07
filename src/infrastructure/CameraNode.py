@@ -14,6 +14,8 @@ from enum import Enum
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here.
 VIDEO_DIR_PATH = "/home/trainerai/trainerai-core/data/videos/"
 
+from std_msgs.msg import Int32
+
 class VideoMode(Enum):
     INVALID = 0
     YOUTUBE = 1
@@ -89,14 +91,14 @@ class CameraNode():
             self._pub.publish(msg)
             rate.sleep()
 
-    def start_video_publisher(self):
-        self._timecode_pub = rospy.Publisher('ma_validation_video_timing', float, queue_size=100)
+    def start_video_publisher(self, calculate_timestamps=True):
+        self._timecode_pub = rospy.Publisher('ma_validation_video_timing', Int32, queue_size=100)
         # Get the original FPS of the video
-        fps = self._cap.get(cv2.CV_CAP_PROP_FPS)
+        fps = self._cap.get(cv2.CAP_PROP_FPS)
         frame_no = 0
         # Our rate reflects the fps at which we WANT the video to play to match the normal rate of our AI
         rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
-        while not rospy.is_shutdown() and cap.isOpened():
+        while not rospy.is_shutdown() and self._cap.isOpened():
             ret, frame = self._cap.read()
             if not ret:
                 if self._disk_mode:
@@ -106,11 +108,15 @@ class CameraNode():
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
 
+            if calculate_timestamps:
+                timestamp = int(frame_no / fps)
+            else:
+                timestamp = int(self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
             frame_no += 1
-            calculated_timestamp = frame_no * 1000/fps
             # If there is a timestamp, we use it. Otherwise we use our own calculation
-            timestamp = cap.get(cv2.CAP_PROP_POS_MSEC) or calculated_timestamp
-            self._timecode_pub.publish(timestamp)
+            time_message = Int32()
+            time_message.data = timestamp
+            self._timecode_pub.publish(time_message)
             rospy.logerr("Timestamp:" + str(timestamp))
 
             frame = cv2.resize(frame, (1280,720))
@@ -201,10 +207,8 @@ class CameraNode():
         print(f"START IP: {camera_ip}")
 
     def set_disk_video(self, path = "/home/trainerai/trainerai-core/data/video.avi"):
-        print("TEEST", path)
         self._disk_path = path
         self._cap = cv2.VideoCapture(path)
-        print("ALLES GUT")
 
 if __name__ == '__main__':
     print(sys.argv)
@@ -214,7 +218,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--check-cameras", help="Check all camera input id's from 0 to 10. Takes the first working match.", action="store_true")
     parser.add_argument("-i", "--camera-index", type=int, help="Open camera on opencv camera index")
     parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
-    parser.add_argument("--disk", type=str, help="Start video from disk path. Relative to root")
+    parser.add_argument("-k", "--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
@@ -239,7 +243,7 @@ if __name__ == '__main__':
         rospy.loginfo(f"Send on dev{args.dev_id}")
 
     mode = VideoMode.INVALID
-    info = ""
+
     if args.youtube_id is not None:
         mode = VideoMode.YOUTUBE
         info = args.youtube_id
@@ -253,10 +257,10 @@ if __name__ == '__main__':
         mode = VideoMode.DISK_VIDEO
         info = args.disk
 
+    
     try:
         node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
         if args.disk:
-            rospy.logerr("Publishing with video publisher!!!")
             node.start_video_publisher()
         else:
             node.start_camera_publisher()

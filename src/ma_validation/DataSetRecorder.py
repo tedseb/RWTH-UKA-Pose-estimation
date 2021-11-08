@@ -14,8 +14,11 @@ import sys
 import pathlib
 import sched, time
 import yaml
+import rosbag
+from collections import deque
  
 from station_manager import StationManager, signal_handler, DEBUG_STATION_ID
+from backend.msg import Persons
 
 from ma_validation.msg import MAValidationSetInfo
 from std_msgs.msg import Int32
@@ -27,9 +30,13 @@ class DataSetRecorder():
     input_timecodes: str = "/home/trainerai/trainerai-core/data/videos/timecodes.yml",
     output_file: str = "/home/trainerai/trainerai-core/data/videos/ma_validation_recorder_output.bag"):
         self.station_manager = station_manager
+        self._recording = True
         # Define a subscriber to retrive tracked bodies
-        self.validation_set_publisher = rp.Publisher("ma_validation_sets", MAValidationSetInfo, queue_size=100)
-        self.video_timing_subscriber = rp.Subscriber("ma_validation_video_timing", Int32, self.callback)
+        self.video_timing_subscriber = rp.Subscriber("ma_validation_video_timing", Int32, self.video_timing_callback)
+        self.skelleton_subscriber = rp.Subscriber("fused_skelleton", Persons, self.fused_skelleton_callback)
+        self.msg_queue = deque()
+
+        self.output_file = output_file
 
         with open(input_timecodes) as stream:
             try:
@@ -59,8 +66,10 @@ class DataSetRecorder():
         self.station_manager.set_client_callback(self.sm_client_id, repetition_callback)
         self.station_manager.login_station(self.sm_client_id, DEBUG_STATION_ID)
 
+    def fused_skelleton_callback(self, msg: Persons) -> None:
+        self.msg_queue.appendleft(("fused_skelleton", msg))
 
-    def callback(self, msg: Int32) -> None:
+    def video_timing_callback(self, msg: Int32) -> None:
         t = msg.data
 
         if self.active_set and t > self.active_set["t_to_s"]:
@@ -70,9 +79,11 @@ class DataSetRecorder():
             set_message.t_to_s = self.active_set["t_to_s"]
             set_message.reps = self.active_set["reps"]
             set_message.start = False
-            self.active_set = None
+            
+            self.msg_queue.appendleft(("ma_validation_sets", set_message))
 
             rp.logerr("Ended set: " + str(self.active_set))
+            self.active_set = None
 
             station_manager.stop_exercise(self.sm_client_id)
 
@@ -84,13 +95,34 @@ class DataSetRecorder():
             set_message.t_to_s = current_set["t_to_s"]
             set_message.reps = current_set["reps"]
             set_message.start = True
-            self.validation_set_publisher.publish(set_message)
+            self.msg_queue.appendleft(("ma_validation_sets", set_message))
 
             rp.logerr("Started set: " + str(current_set))
 
             station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, current_set["exercise_id"])
 
             self.active_set = current_set
+
+        if not self.set_list:
+            rp.logerr("All sets finished. Stopping recording...")
+            self._recording = False
+
+    def record_until_finished(self):
+        t0 = time.time()
+        with rosbag.Bag(self.output_file, 'w') as outbag:
+            while self._recording:
+                rp.logerr("Writing message " + str(msg))
+                try:
+                    topic, msg = self.msg_queue.pop()
+                except IndexError:
+                    continue
+
+                rp.logerr("Writing message " + str(msg))
+
+                t = time.time() - t0
+                outbag.write(topic, msg, t)
+                time.sleep(1)
+                        
 
 
 if __name__ == '__main__':
@@ -115,10 +147,10 @@ if __name__ == '__main__':
     transform_node_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/launch/static_transform.launch"
     station_selection_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/src/station_selection.py"
 
-    # TODO: use rosbag here
-
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=True)
 
-    DataSetRecorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
+    recorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
 
     rp.spin()
+
+    recorder.record_until_finished()

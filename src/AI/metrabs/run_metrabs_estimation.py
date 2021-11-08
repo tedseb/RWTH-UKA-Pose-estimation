@@ -53,6 +53,7 @@ class PoseEstimator():
         rp.Subscriber('image', Image, self.callback_setImage)       
         #srp.Subscriber('image1', Image, self.callback_setImage)
 
+
     def callback_setImage(self, msg):
         self.last_image_message = msg
 

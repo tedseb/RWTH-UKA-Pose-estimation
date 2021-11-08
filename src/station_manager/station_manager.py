@@ -93,7 +93,7 @@ class StationManager():
         LOG_DEBUG(f"Start Camera with id {camera_id}", self._verbose)
         if debug_station:
             cam_type = 3
-            cam_info = "/home/trainerai/trainerai-core/data/video.avi"
+            cam_info = "/home/trainerai/trainerai-core/data/videos/video.mp4"
         else:
             cam_type = self._data_manager.get_camera_type(camera_id)
             cam_info = self._data_manager.get_camera_type_info(camera_id)

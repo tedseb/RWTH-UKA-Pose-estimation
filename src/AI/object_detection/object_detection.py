@@ -103,14 +103,16 @@ class ObjectDetectionPipeline:
         self.labels=[]
         self.info_station=[]
         self.info_frameID=[]
-
+        
         resul_np=results.xyxy[0].cpu().detach().numpy() # BBox is in x1,y1,x2,y2
         bbox_size =  [ ((x[2]-x[0]) * (x[3]-x[1])) for x in resul_np]
         idx_big2small = np.argsort(bbox_size)[::-1]                                
         resul_np = [ resul_np[i] for i in idx_big2small ]  
         resul_np = np.array(resul_np)
-        
-        labels = resul_np[:,5]
+        try:
+            labels = resul_np[:,5]
+        except IndexError:
+            rospy.logerr_throttle(2, "Ojbect detection is currently failing. @Shawan: Please fix me @object_detection l. 115")
         self._get_Person_boxes(labels,resul_np,self.frame_id)
         return results.imgs[0]
     

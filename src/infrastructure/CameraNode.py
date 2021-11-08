@@ -95,9 +95,12 @@ class CameraNode():
         self._timecode_pub = rospy.Publisher('ma_validation_video_timing', Int32, queue_size=100)
         # Get the original FPS of the video
         fps = self._cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_no = 0
         # Our rate reflects the fps at which we WANT the video to play to match the normal rate of our AI
-        rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
+        publish_fps = 25
+        rate = rospy.Rate(publish_fps)  # TODO: Aufnahme ist in 25FPS
+        duration = frame_count/publish_fps
         while not rospy.is_shutdown() and self._cap.isOpened():
             ret, frame = self._cap.read()
             if not ret:
@@ -117,7 +120,8 @@ class CameraNode():
             time_message = Int32()
             time_message.data = timestamp
             self._timecode_pub.publish(time_message)
-            rospy.logerr("Timestamp:" + str(timestamp))
+            if self._verbose:
+                rospy.logerr_throttle(10, "\nData Set Recording is running...\nTime in original video: " + str(timestamp) + " seconds.\nFrame no. is " + str(frame_no) + "/ " + str(frame_count) + "\nVideo has " + str(fps) + "fps. \nPublishing at " + str(publish_fps) + " fps.\nEta: " + str(duration - (frame_no/publish_fps)) + " seconds.")
 
             frame = cv2.resize(frame, (1280,720))
             msg = Image()
@@ -207,6 +211,7 @@ class CameraNode():
         print(f"START IP: {camera_ip}")
 
     def set_disk_video(self, path = "/home/trainerai/trainerai-core/data/video.avi"):
+        print("CAMERA PATH: ", path)
         self._disk_path = path
         self._cap = cv2.VideoCapture(path)
 
@@ -257,8 +262,8 @@ if __name__ == '__main__':
         mode = VideoMode.DISK_VIDEO
         info = args.disk
 
-    
     try:
+        print("INFO:", info)
         node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
         if args.disk:
             node.start_video_publisher()

@@ -18,7 +18,6 @@ class ImageCropper():
         rospy.Subscriber('image', Image, self.set_image)
         self.spin()
         
-
     def set_image(self, msg):
         self.msg_image = msg
         shape = self.msg_image.height, self.msg_image.width, 3 

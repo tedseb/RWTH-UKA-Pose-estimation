@@ -117,7 +117,7 @@ class StationManager():
             self.__transform_process[camera_id] = subprocess.Popen(["roslaunch", self._path_transform_node, f"dev:={camera_id}"])
 
     def stop_camera(self, camera_id : int):
-        LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose)
+        # LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose) # We get stuck on this line when using it withing the DataSetRecorder
         with self._camera_process_mutex:
             if camera_id in self.__camera_process:
                 self.__camera_process[camera_id].terminate()

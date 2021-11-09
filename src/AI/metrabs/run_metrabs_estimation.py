@@ -63,7 +63,7 @@ class PoseEstimator():
         # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
 
         if not hasattr(self, "last_image_message"):
-            rp.logerr_throttle("Pose Estimator has no image input. If you see this message multiple times there is something wrong.", 5)
+            rp.logerr_throttle(5, "Pose Estimator has no image input. If you see this message multiple times there is something wrong.")
             return
 
         height = self.last_image_message.height
@@ -72,17 +72,17 @@ class PoseEstimator():
         image = np.frombuffer(self.last_image_message.data, dtype=np.uint8)
         image = image.reshape([height, width, 3])    #(480, 640, 3) --> (y,x,3) = (h,w,3)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
+
         # Body Pose Regression
         pred_output_list = self.model.predict_single_image(image, self.intrinsics, body_bbox_list_station_reshaped)
         poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-        
+
         stationID = body_bbox_list_station.stationID
         sensorID = body_bbox_list_station.sensorID
         boxes = body_bbox_list_station_reshaped
 
         if len(pred_output_list.numpy()) == 0:
-            rp.logerr_throttle("Station is active but Pose Estimator could not detect people.", 5)
+            rp.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
             return
 
         inc = 0

@@ -57,6 +57,9 @@ class ObjectDetectionPipeline:
 
         img = self.obj_detectYolo(img_original_bgr)
 
+        if img is None:
+            return
+
         fps = int(1/(time.time()-tmpTime))
         # print("FPS : ",fps)
         if self.renderer==True:
@@ -109,12 +112,12 @@ class ObjectDetectionPipeline:
         idx_big2small = np.argsort(bbox_size)[::-1]                                
         resul_np = [ resul_np[i] for i in idx_big2small ]  
         resul_np = np.array(resul_np)
-        # try:
-        #     labels = resul_np[:,5]
-        # except IndexError:
-        #     rospy.logerr_throttle(2, "Ojbect detection is currently failing. @Shawan: Please fix me @object_detection l. 115")
-        #     return results.imgs[0]
-        labels = resul_np[:,5]
+        try:
+            labels = resul_np[:,5]
+        except IndexError:
+            rospy.logerr_throttle(5, "Ojbect detection is currently failing. If you see this message repeatedly, there is something wrong...")
+            return None
+
         self._get_Person_boxes(labels,resul_np,self.frame_id)
         return results.imgs[0]
     

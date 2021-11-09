@@ -16,12 +16,14 @@ import sched, time
 import yaml
 import rosbag
 from collections import deque
+import sys
  
-from station_manager import StationManager, signal_handler, DEBUG_STATION_ID
+from station_manager import StationManager, DEBUG_STATION_ID
 from backend.msg import Persons
 
 from ma_validation.msg import MAValidationSetInfo
 from std_msgs.msg import Int32
+
 
 class DataSetRecorder():
     def __init__(self,
@@ -107,28 +109,21 @@ class DataSetRecorder():
             rp.logerr("All sets finished. Stopping recording...")
             self._recording = False
 
-    def record_until_finished(self):
-        t0 = time.time()
+        
         with rosbag.Bag(self.output_file, 'w') as outbag:
-            while self._recording:
-                rp.logerr("Writing message " + str(msg))
+            while self.msg_queue:
                 try:
                     topic, msg = self.msg_queue.pop()
                 except IndexError:
                     continue
 
-                rp.logerr("Writing message " + str(msg))
-
-                t = time.time() - t0
-                outbag.write(topic, msg, t)
-                time.sleep(1)
-                        
+                ros_time = rp.Time(t)
+                outbag.write(topic, msg, ros_time)
 
 
 if __name__ == '__main__':
     rp.init_node('DataSetRecorder', anonymous=False)
-
-    signal.signal(signal.SIGINT, signal_handler)
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
@@ -151,6 +146,14 @@ if __name__ == '__main__':
 
     recorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
 
+    def signal_handler():
+        recorder._recording = False
+
+    rp.on_shutdown(signal_handler)
+    
     rp.spin()
 
     recorder.record_until_finished()
+
+    
+

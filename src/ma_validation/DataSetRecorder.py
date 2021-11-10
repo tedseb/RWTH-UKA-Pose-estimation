@@ -7,12 +7,9 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 import rospy as rp
-from typing import Any
-import signal
 import argparse
 import sys
 import pathlib
-import sched, time
 import yaml
 import rosbag
 from collections import deque
@@ -35,7 +32,7 @@ class DataSetRecorder():
         self._recording = True
         # Define a subscriber to retrive tracked bodies
         self.video_timing_subscriber = rp.Subscriber("ma_validation_video_timing", Int32, self.video_timing_callback)
-        self.skelleton_subscriber = rp.Subscriber("fused_skelleton", Persons, self.fused_skelleton_callback)
+        self.ma_validation_set_publisher = rp.Publisher("ma_validation_set", MAValidationSetInfo, queue_size=100)
         self.msg_queue = deque()
 
         self.output_file = output_file
@@ -68,9 +65,6 @@ class DataSetRecorder():
         self.station_manager.set_client_callback(self.sm_client_id, repetition_callback)
         self.station_manager.login_station(self.sm_client_id, DEBUG_STATION_ID)
 
-    def fused_skelleton_callback(self, msg: Persons) -> None:
-        self.msg_queue.appendleft(("fused_skelleton", msg))
-
     def video_timing_callback(self, msg: Int32) -> None:
         t = msg.data
 
@@ -82,7 +76,7 @@ class DataSetRecorder():
             set_message.reps = self.active_set["reps"]
             set_message.start = False
             
-            self.msg_queue.appendleft(("ma_validation_sets", set_message))
+            self.ma_validation_set_publisher.publish(set_message)
 
             rp.logerr("Ended set: " + str(self.active_set))
             self.active_set = None
@@ -97,7 +91,7 @@ class DataSetRecorder():
             set_message.t_to_s = current_set["t_to_s"]
             set_message.reps = current_set["reps"]
             set_message.start = True
-            self.msg_queue.appendleft(("ma_validation_sets", set_message))
+            self.ma_validation_set_publisher.publish(set_message)
 
             rp.logerr("Started set: " + str(current_set))
 
@@ -106,19 +100,7 @@ class DataSetRecorder():
             self.active_set = current_set
 
         if not self.set_list:
-            rp.logerr("All sets finished. Stopping recording...")
-            self._recording = False
-
-        
-        with rosbag.Bag(self.output_file, 'w') as outbag:
-            while self.msg_queue:
-                try:
-                    topic, msg = self.msg_queue.pop()
-                except IndexError:
-                    continue
-
-                ros_time = rp.Time(t)
-                outbag.write(topic, msg, ros_time)
+            rp.signal_shutdown("All sets finished. Stopping recording...")
 
 
 if __name__ == '__main__':
@@ -152,8 +134,6 @@ if __name__ == '__main__':
     rp.on_shutdown(signal_handler)
     
     rp.spin()
-
-    recorder.record_until_finished()
 
     
 

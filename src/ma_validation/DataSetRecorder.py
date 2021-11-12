@@ -21,6 +21,8 @@ from backend.msg import Persons
 from ma_validation.msg import MAValidationSetInfo
 from std_msgs.msg import Int32
 
+MA_VALIDATION_VIDEO_TIMING_TOPIC = "ma_validation_video_timing"
+MA_VALIDATION_SET_TOPIC = "ma_validation_set"
 
 class DataSetRecorder():
     def __init__(self,
@@ -31,8 +33,8 @@ class DataSetRecorder():
         self.station_manager = station_manager
         self._recording = True
         # Define a subscriber to retrive tracked bodies
-        self.video_timing_subscriber = rp.Subscriber("ma_validation_video_timing", Int32, self.video_timing_callback)
-        self.ma_validation_set_publisher = rp.Publisher("ma_validation_set", MAValidationSetInfo, queue_size=100)
+        self.video_timing_subscriber = rp.Subscriber(MA_VALIDATION_VIDEO_TIMING_TOPIC, Int32, self.video_timing_callback)
+        self.ma_validation_set_publisher = rp.Publisher(MA_VALIDATION_SET_TOPIC, MAValidationSetInfo, queue_size=100)
         self.msg_queue = deque()
 
         self.output_file = output_file
@@ -69,33 +71,35 @@ class DataSetRecorder():
         t = msg.data
 
         if self.active_set and t > self.active_set["t_to_s"]:
+            _, station_usage_hash = station_manager.stop_exercise(self.sm_client_id)
+
             set_message = MAValidationSetInfo()
             set_message.exercise_id = self.active_set["exercise_id"]
             set_message.t_from_s = self.active_set["t_from_s"]
             set_message.t_to_s = self.active_set["t_to_s"]
             set_message.reps = self.active_set["reps"]
             set_message.start = False
+            set_message.station_usage_hash = station_usage_hash
             
             self.ma_validation_set_publisher.publish(set_message)
 
             rp.logerr("Ended set: " + str(self.active_set))
             self.active_set = None
 
-            station_manager.stop_exercise(self.sm_client_id)
 
         while self.set_list and t > self.set_list[0]["t_from_s"]:
             current_set = self.set_list.pop(0)
+            rp.logerr("Started set: " + str(current_set))
+            _, station_usage_hash = station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, current_set["exercise_id"])
+
             set_message = MAValidationSetInfo()
             set_message.exercise_id = current_set["exercise_id"]
             set_message.t_from_s = current_set["t_from_s"]
             set_message.t_to_s = current_set["t_to_s"]
             set_message.reps = current_set["reps"]
             set_message.start = True
+            set_message.station_usage_hash = station_usage_hash
             self.ma_validation_set_publisher.publish(set_message)
-
-            rp.logerr("Started set: " + str(current_set))
-
-            station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, current_set["exercise_id"])
 
             self.active_set = current_set
 

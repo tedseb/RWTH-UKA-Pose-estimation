@@ -1,1 +1,1 @@
-rosbag record /fused_skelleton /ma_validation_video_timing /ma_validation_set
+rosbag record /fused_skelleton /ma_validation_video_timing /ma_validation_set /station_usage

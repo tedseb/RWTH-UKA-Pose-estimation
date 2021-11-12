@@ -1,5 +1,5 @@
 <launch>
   <arg name="bagfile" default=""/>
   <include file="$(find motion_analysis)/launch/motion_analysis.launch" />
-  <node name="Validator" pkg="motion_analysis" type="Validator.py"/>
+  <node name="Validator" pkg="ma_validation" type="Validator.py"/>
 </launch> 

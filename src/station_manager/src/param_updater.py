@@ -2,7 +2,6 @@
 import yaml
 import rospy
 from std_msgs.msg import String
-from backend.msg import StationUsage
 from ast import literal_eval as make_tuple
 from .data_manager import DataManager
 from typing import Set, Dict, List

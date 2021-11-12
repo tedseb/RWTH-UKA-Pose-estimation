@@ -38,6 +38,7 @@ import yaml
 from typing import NoReturn
 import rospy as rp
 from std_msgs.msg import String
+import random
 
 mongo_client = pymongo.MongoClient(MONGO_DB_URI)
 
@@ -114,7 +115,7 @@ class WorkerHandler(QThread):
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
             
-            spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
+            spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0, 'station_usage_hash': station_usage_data.stationUsageHash}
             
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 

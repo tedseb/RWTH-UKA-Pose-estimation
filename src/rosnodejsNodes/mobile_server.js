@@ -95,7 +95,8 @@ wss.on('connection', (ws, req) => {
         const msg = new StationUsage({
             stationID: qr['stationID'],
             isActive: qr['isActive'],
-            exerciseName: qr['exerciseName']});
+            exerciseName: qr['exerciseName'],
+            stationUsageHash: '0'}); // Put an actual hash here if you want to use this.
             station_usage_publisher.publish(msg)  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));

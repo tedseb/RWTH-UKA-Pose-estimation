@@ -192,10 +192,11 @@ class Worker(Thread):
                         'station_id': self.spot_key,
                         'current_exercise_name': self.spot_info_dict.get('exercise_data').get('name'),
                         'repetitions': self.spot_info_dict['repetitions'],
-                        'seconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time'))) / 1e+9,
+                        'miliseconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time', 0))) / 1e+6,
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
                         'exercise_score': 100,
+                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
@@ -211,7 +212,8 @@ class Worker(Thread):
                         'user_id': 0,
                         'repetition': self.spot_info_dict['repetitions'],
                         'positive_correction': False,
-                        'display_text': correction
+                        'display_text': correction,
+                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
                     }
                     publish_message(self.user_correction_publisher, ROS_TOPIC_USER_CORRECTIONS, user_correction_message)
                     

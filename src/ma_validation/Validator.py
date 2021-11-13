@@ -7,6 +7,7 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 """
 
 import rospy as rp
+import numpy as np
 import argparse
 import sys
 import sys
@@ -26,45 +27,54 @@ class Validator():
         self.ma_validation_set_subscriber = rp.Subscriber(MA_VALIDATION_SET_TOPIC, MAValidationSetInfo, self.ma_validation_set_callback)
         self.exercise_states_subscriber = rp.Subscriber('user_state', String, self.exercise_state_callback)
 
-        self.active_set = None
+        self.active_set = MAValidationSetInfo()
         self.active_set_reps = None
-        self.last_set = None
+        self.last_set = MAValidationSetInfo()
         self.last_set_reps = None
-        self.station_usage_hashes_changed_flag = False
 
-    def push_set(self, msg):
-        self.last_set = self.active_set
-        self.last_set_reps = self.active_set_reps
+        self.total_reps = 0
+        self.positive_errors = 0
+        self.negative_errors = 0
+        self.done_exercises = {}
 
     def exercise_state_callback(self, msg):
-        data = json.loads(msg)
-        station_usage_hash = data.get('station_usage_hash')
-        if station_usage_hash == self.last_set['station_usage_hash']:
-            self.last_set["reps"] = data["repetitions"]
-        elif station_usage_hash == self.active_set['station_usage_hash']:
-            self.active_set["reps"] = data["repetitions"]
+        data = json.loads(msg.data)
+        station_usage_hash = str(data.get('station_usage_hash'))
+        rp.logerr("data " + str(data))
+        if station_usage_hash == str(self.last_set.station_usage_hash):
+            self.last_set.reps = data["repetitions"]
+        elif station_usage_hash == str(self.active_set.station_usage_hash):
+            self.active_set.reps = data["repetitions"]
         else:
-            # A new exercise has started
-            self.last_set_station_usage_hash = self.active_set_station_usage_hash
-            self.active_set_station_usage_hash = station_usage_hash
-            self.active_set["reps"] = data["repetitions"]
             rp.logerr("Could not match current station_usage_hash with the one that we got from the motion analysis.")
 
     def ma_validation_set_callback(self, msg):
-        station_usage_hash = data.get('station_usage_hash')
         if msg.start:
-            push_set(msg)
-            rp.logerr("Started  ` set: " + str(msg))
+            self.last_set = self.active_set
+            self.last_set_reps = self.active_set_reps
+            self.active_set = msg
+            self.active_set_reps = 0
+            rp.logerr("Started set: \n" + str(msg))
         else:
-            if station_usage_hash == self.active_set['station_usage_hash']:
-                finished_set = self.active_set
-            elif station_usage_hash == self.last_set['station_usage_hash']:
-                finished_set = self.last_set
-            rp.logerr("Finished set with " + str(msg["reps"] + " out of " + str(finished_set["reps"]) + " repetitions."))
-              
-
-            rp.logerr("Started set: " + str(current_set))
-
+            finished_set = self.active_set
+            rp.logerr("Finished set: \n" + str(msg))
+            positive_error = np.clip(self.active_set_reps - msg.reps, 0, np.inf)
+            negative_error = np.clip(msg.reps - self.active_set_reps, -np.inf, 0)
+            if not finished_set.exercise_id in self.done_exercises.keys():
+                self.done_exercises[finished_set.exercise_id] = finished_set
+            self.done_exercises[finished_set.exercise_id].reps += finished_set.reps # Use this at the end of the test
+            if self.active_set_reps == 0:
+                rp.logerr("Set with 0 reps not counted - this exercise is probably not supported by system and therefore not counted.")
+                return
+            rp.logerr(str(self.active_set_reps))
+            rp.logerr(str(msg.reps))
+            rp.logerr("Positive Error: " + str(positive_error)) 
+            rp.logerr("Negative Error: " + str(negative_error)) 
+            self.positive_errors += positive_error
+            self.negative_errors += negative_error
+            rp.logerr("Total positive errors: " + str(self.positive_errors))
+            rp.logerr("Total negative errors: " + str(self.negative_errors))
+            rp.logerr("Total error: " + str(self.positive_errors + self.negative_errors))
 
 
 if __name__ == '__main__':

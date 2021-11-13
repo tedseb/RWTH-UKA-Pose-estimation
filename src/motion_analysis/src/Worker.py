@@ -139,7 +139,7 @@ class Worker(Thread):
         self.beginning_of_next_repetition_detected = False
 
         # The following lines fetch data that we need to analyse
-        self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
+        self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions", "station_usage_hash"])
 
         while(self.running):
             try:
@@ -196,7 +196,7 @@ class Worker(Thread):
                         'milliseconds_since_last_repetition': 0,
                         'repetition_score': 100,
                         'exercise_score': 100,
-                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
+                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', "")
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 

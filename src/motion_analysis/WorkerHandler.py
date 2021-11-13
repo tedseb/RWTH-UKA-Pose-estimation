@@ -95,6 +95,10 @@ class WorkerHandler(QThread):
         if station_usage_data.isActive:
             exercise_data = exercises.find_one({"name": station_usage_data.exerciseName})
 
+            if exercise_data is None:
+                log("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
+                return
+
             # TODO: In the future: Possibly use multiple recordings
             recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
 
@@ -114,7 +118,7 @@ class WorkerHandler(QThread):
             del exercise_data['features'] # We replace features with their specification dictionary
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
-            
+
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0, 'station_usage_hash': station_usage_data.stationUsageHash}
             
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)

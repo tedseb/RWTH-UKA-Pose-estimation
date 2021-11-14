@@ -14,6 +14,7 @@ import yaml
 import rosbag
 from collections import deque
 import sys
+import os
  
 from station_manager import StationManager, DEBUG_STATION_ID
 from backend.msg import Persons
@@ -67,7 +68,12 @@ class DataSetRecorder():
         self.station_manager.set_client_callback(self.sm_client_id, repetition_callback)
         self.station_manager.login_station(self.sm_client_id, DEBUG_STATION_ID)
 
+
     def video_timing_callback(self, msg: Int32) -> None:
+        """ Publishes validation set messages.
+        
+        For every timestep in the video, published by the camera node, check if we have a set to start.
+        """
         t = msg.data
 
         if self.active_set and t > self.active_set["t_to_s"]:
@@ -103,9 +109,12 @@ class DataSetRecorder():
 
             self.active_set = current_set
 
-        if not self.set_list:
-            rp.signal_shutdown("All sets finished. Stopping recording...")
-
+        if not self.set_list or not self._recording:
+            del self.station_manager # This spawns a routine that ends the camera node process
+            self.video_timing_subscriber.unregister()
+            self.ma_validation_set_publisher.unregister()
+            os.system("rosnode kill ROSbagRecorderHelper")
+    
 
 if __name__ == '__main__':
     rp.init_node('DataSetRecorder', anonymous=False)
@@ -133,6 +142,7 @@ if __name__ == '__main__':
     recorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
 
     def signal_handler():
+        del recorder.station_manager
         recorder._recording = False
 
     rp.on_shutdown(signal_handler)

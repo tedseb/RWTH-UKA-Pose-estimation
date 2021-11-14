@@ -92,6 +92,7 @@ class CameraNode():
             rate.sleep()
 
     def start_video_publisher(self, calculate_timestamps=True):
+        """ Same as a camera publisher, only that it takes a video as input and publishes the time of the video in parallel. Stops after playback"""
         self._timecode_pub = rospy.Publisher('ma_validation_video_timing', Int32, queue_size=100)
         # Get the original FPS of the video
         fps = self._cap.get(cv2.CAP_PROP_FPS)
@@ -102,6 +103,8 @@ class CameraNode():
         rate = rospy.Rate(publish_fps)  # TODO: Aufnahme ist in 25FPS
         duration = frame_count/publish_fps
         while not rospy.is_shutdown() and self._cap.isOpened():
+            if frame_count < frame_no:
+                return
             ret, frame = self._cap.read()
             if not ret:
                 if self._disk_mode:

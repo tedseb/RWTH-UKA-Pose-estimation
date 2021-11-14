@@ -12,12 +12,24 @@ import argparse
 import sys
 import sys
 import json
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 from backend.msg import Persons
 
 from ma_validation.msg import MAValidationSetInfo
 from DataSetRecorder import MA_VALIDATION_VIDEO_TIMING_TOPIC, MA_VALIDATION_SET_TOPIC
 from std_msgs.msg import Int32, String
+
+# Make use of rosbag play
+# --rate-control-topic=RATE_CONTROL_TOPIC
+
+# watch the given topic, and if the last publish was more than <rate-control-max-delay> ago, wait until the topic publishes again to continue playback
+
+# --rate-control-max-delay=RATE_CONTROL_MAX_DELAY
+
+# maximum time difference from <rate-control-topic> before pausing
 
 
 class Validator():
@@ -57,14 +69,15 @@ class Validator():
         else:
             finished_set = self.active_set
             rp.logerr("Finished set")
+            if self.active_set_reps == 0:
+                rp.logerr("Set with 0 reps not counted - this exercise is probably not supported by system and therefore not counted.")
+                return
+
             positive_error = np.clip(self.active_set_reps - msg.reps, 0, None)
             negative_error = np.clip(msg.reps - self.active_set_reps, 0, None)
             if not finished_set.exercise_id in self.done_exercises.keys():
                 self.done_exercises[finished_set.exercise_id] = finished_set
             self.done_exercises[finished_set.exercise_id].reps += finished_set.reps # Use this at the end of the test
-            if self.active_set_reps == 0:
-                rp.logerr("Set with 0 reps not counted - this exercise is probably not supported by system and therefore not counted.")
-                return
             rp.logerr("Positive Error: " + str(positive_error)) 
             rp.logerr("Negative Error: " + str(negative_error)) 
             self.positive_errors += positive_error
@@ -72,6 +85,24 @@ class Validator():
             rp.logerr("Total positive errors: " + str(self.positive_errors))
             rp.logerr("Total negative errors: " + str(self.negative_errors))
             rp.logerr("Total error: " + str(self.positive_errors + self.negative_errors))
+
+    def create_report(self, df):
+        fig, ax = plt.subplots()
+
+        # hide axes
+        fig.patch.set_visible(False)
+        ax.axis('off')
+        ax.axis('tight')
+
+        df = pd.DataFrame(np.random.randn(10, 4), columns=list('ABCD'))
+
+        ax.table(cellText=df.values, colLabels=df.columns, loc='center')
+
+        fig.tight_layout()
+
+        pp = PdfPages('multipage.pdf')
+        pp.savefig()
+        pp.close()
 
 
 if __name__ == '__main__':

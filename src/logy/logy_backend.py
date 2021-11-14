@@ -5,6 +5,7 @@ import sys
 import time
 import pathlib
 import pickle
+import argparse
 from typing import Dict
 from datetime import datetime
 import traceback
@@ -109,8 +110,11 @@ class LogyBackend:
         if self._log_to_file:
             self._open_log_file(file_prefix)
 
+        if self._use_neptune:
+            self._log_message(" Logy: Log online with Neptune. neptune.ai", INFO)
+
     def __del__(self):
-        self._log_message("Logy: Clean Shutdown of Logy Backend", INFO)
+        self._log_message(" Logy: Clean Shutdown of Logy Backend", INFO)
         if self._pipe is not None:
             self._pipe.close()
         if self._log_file is not None:
@@ -136,11 +140,11 @@ class LogyBackend:
         except OSError as exception:
             self._log_file = None
             trace = traceback.format_exc()
-            self._log_message(f"Can not open Logger File. \n{trace}", CRITICAL)
+            self._log_message(f" Logy: Can not open Logger File. \n{trace}", CRITICAL)
 
     def _log_data(self, data : Dict):
         if "type" not in data:
-            self._log_message("Message does not contain 'type'", ERROR)
+            self._log_message(" Logy: Message does not contain 'type'", ERROR)
             return
 
         if data["type"] == 0:
@@ -204,11 +208,10 @@ class LogyBackend:
     def pipe_loop(self):
         data = None
         self._open_pipe()
-        print("Logy Backend is listening")
         while True:
             if self._pipe.closed:
                 if not self._open_pipe():
-                    self._log_message("Logy: Logger Closed. Can not open Pipe.", CRITICAL)
+                    self._log_message(" Logy: Logger Closed. Can not open Pipe.", CRITICAL)
                     return
             while data is None:
                 try:
@@ -221,7 +224,7 @@ class LogyBackend:
                 self._log_data(data)
             except Exception:
                 trace = traceback.format_exc()
-                self._log_message(f"Logy: Error During Message Parsing. \n{trace}", ERROR)
+                self._log_message(f" Logy: Error During Message Parsing. \n{trace}", ERROR)
 
             data = None
 
@@ -242,20 +245,30 @@ class LogyBackend:
 
         if self._neptune_run is not None:
             if self._log_to_file:
+                self._log_file.flush()
                 self._neptune_run["log_file"].upload(self._log_file_path)
             if self._error_occured < ERROR:
                 self._neptune_run["Info"] = {"State" : "SUCCESS"}
             self._neptune_run.stop()
 
-def main():
+def main(start_neptune=False):
     try:
         os.mkfifo(FIFO)
     except OSError as oe:
         if oe.errno != errno.EEXIST:
             raise
 
-    logger_backend = LogyBackend()
+    logger_backend = LogyBackend(use_neptune=start_neptune)
     logger_backend.start_reading()
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-n", "--neptune", help="Start with Neptune logging", action="store_true")
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+    main(args.neptune)

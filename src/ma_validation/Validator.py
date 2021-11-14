@@ -38,13 +38,12 @@ class Validator():
         self.done_exercises = {}
 
     def exercise_state_callback(self, msg):
-        data = json.loads(msg.data)
-        station_usage_hash = str(data.get('station_usage_hash'))
-        rp.logerr("data " + str(data))
+        data = json.loads(msg.data)['data']
+        station_usage_hash = str(data['station_usage_hash'])
         if station_usage_hash == str(self.last_set.station_usage_hash):
-            self.last_set.reps = data["repetitions"]
+            self.last_set_reps = data["repetitions"]
         elif station_usage_hash == str(self.active_set.station_usage_hash):
-            self.active_set.reps = data["repetitions"]
+            self.active_set_reps = data["repetitions"]
         else:
             rp.logerr("Could not match current station_usage_hash with the one that we got from the motion analysis.")
 
@@ -54,20 +53,18 @@ class Validator():
             self.last_set_reps = self.active_set_reps
             self.active_set = msg
             self.active_set_reps = 0
-            rp.logerr("Started set: \n" + str(msg))
+            rp.logerr("Started set")
         else:
             finished_set = self.active_set
-            rp.logerr("Finished set: \n" + str(msg))
-            positive_error = np.clip(self.active_set_reps - msg.reps, 0, np.inf)
-            negative_error = np.clip(msg.reps - self.active_set_reps, -np.inf, 0)
+            rp.logerr("Finished set")
+            positive_error = np.clip(self.active_set_reps - msg.reps, 0, None)
+            negative_error = np.clip(msg.reps - self.active_set_reps, 0, None)
             if not finished_set.exercise_id in self.done_exercises.keys():
                 self.done_exercises[finished_set.exercise_id] = finished_set
             self.done_exercises[finished_set.exercise_id].reps += finished_set.reps # Use this at the end of the test
             if self.active_set_reps == 0:
                 rp.logerr("Set with 0 reps not counted - this exercise is probably not supported by system and therefore not counted.")
                 return
-            rp.logerr(str(self.active_set_reps))
-            rp.logerr(str(msg.reps))
             rp.logerr("Positive Error: " + str(positive_error)) 
             rp.logerr("Negative Error: " + str(negative_error)) 
             self.positive_errors += positive_error

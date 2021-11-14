@@ -96,7 +96,7 @@ class StationSelection(StationSelectionUi, QObject):
         self._send_message = None
 
     def client_callback(self, callback):
-        #LOG_DEBUG("Register Message Callback", self._verbose)
+        #logy.debug("Register Message Callback", self._verbose)
         self._send_message = callback
 
     def show(self):

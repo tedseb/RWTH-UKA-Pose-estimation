@@ -173,6 +173,10 @@ class Logy(metaclass=Singleton):
         if module_name is not None:
             self.set_root_module(module_name)
 
+def get_or_create_logger(name : str, debug_level = WARNING, module_name = "--") -> LogyHandler:
+    logy_ = Logy()
+    return logy_.get_or_create_logger(name, debug_level, module_name)
+
 def exception_hook(exctype, value, trace):
     traceback_formated = traceback.format_exception(exctype, value, trace)
     traceback_string = "".join(traceback_formated)

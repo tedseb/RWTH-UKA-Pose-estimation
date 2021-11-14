@@ -13,7 +13,7 @@
   <include file="$(find motion_analysis)/launch/motion_analysis.launch">
     <!-- <arg name="ai" value="$(arg ai)"/> -->
   </include>
-  <include file="$(find weight_detection)/launch/weight_detection.launch"/>
+  <!-- <include file="$(find weight_detection)/launch/weight_detection.launch"/> -->
   <include file="$(find backend)/launch/SkeletonVisualizationHelper.launch">
     <arg name="ai" value="$(arg ai)"/>
   </include>

@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 import numpy as np
 import cv2
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices there actually are and manage them
+
 import tensorflow as tf
 import time
-import rospy as rp 
+import rospy as rp
 from sensor_msgs.msg import Image
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices there actually are and manage them
 
 import logging
 logging.basicConfig(level='ERROR')
@@ -41,8 +43,8 @@ class PoseEstimator():
 
         # define a publisher to publish the 3D skeleton of multiple people
         self.publisher = rp.Publisher('personsJS', Persons, queue_size=2)
-        self.publisher_crop = rp.Publisher('cropped_images', Image, queue_size=2)   
-        
+        self.publisher_crop = rp.Publisher('cropped_images', Image, queue_size=2)
+
         # Define a CV bridge that handles images for us
         self.opencv_bridge = CvBridge()
 
@@ -50,7 +52,7 @@ class PoseEstimator():
         rp.Subscriber('bboxes', Bboxes, self.callback_regress)
         #rp.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
-        rp.Subscriber('image', Image, self.callback_setImage)       
+        rp.Subscriber('image', Image, self.callback_setImage)
         #srp.Subscriber('image1', Image, self.callback_setImage)
 
 
@@ -96,7 +98,7 @@ class PoseEstimator():
             bb=boxes[idx]
             image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
             cropped_images.append(image)
-        
+
             lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
             person_msg = Person()
             if len(stationID) > 0:

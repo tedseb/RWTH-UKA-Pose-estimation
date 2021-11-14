@@ -14,6 +14,8 @@ from src import DataManager, CameraStationController, VideoSelection, StationSel
 from src.server import ServerController, ServerSocket, ResponseAnswer
 import rospy
 
+from src.config import *
+
 
 from std_msgs.msg import String
 from rospy.exceptions import ROSException
@@ -332,6 +334,7 @@ if __name__ == '__main__':
     station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
 
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=args.verbose)
+    LOG_INFO("Station Manager is Ready")
     reactor.listenTCP(3030, station_manager._server_controller)
     reactor.run()
 

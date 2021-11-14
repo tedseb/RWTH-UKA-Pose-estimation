@@ -2,6 +2,7 @@
   <arg name="args" default=" " doc="Parameters of Station Manager e.g: args:='-d'"/>
   <arg name="smo" default="log" doc="Output of station manager, smo:=screen"/>
   <arg name="ai" default="metrabs" doc="Choose AI out of the following: (metrabs, spin)"/>
+  <include file="$(find logy_backend)/launch/logy_backend.launch" />
   <include file="$(find station_manager)/launch/station_manager.launch">
     <arg name="args" value="$(arg args)"/>
     <arg name="smo" value="$(arg smo)"/>
@@ -12,7 +13,7 @@
   <include file="$(find motion_analysis)/launch/motion_analysis.launch">
     <!-- <arg name="ai" value="$(arg ai)"/> -->
   </include>
-  <include file="$(find weight_detection)/launch/weight_detection.launch"/>
+  <!-- <include file="$(find weight_detection)/launch/weight_detection.launch"/> -->
   <include file="$(find backend)/launch/SkeletonVisualizationHelper.launch">
     <arg name="ai" value="$(arg ai)"/>
   </include>

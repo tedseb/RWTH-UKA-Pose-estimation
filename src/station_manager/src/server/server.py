@@ -6,6 +6,7 @@ import json
 import autobahn.exception as aex
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
 from twisted.internet import reactor
+import logy
 
 class ResponseAnswer:
     def __init__(self, response_code = 500, status_code = 8, payload = dict(), request_requiered = True):
@@ -32,7 +33,7 @@ class ServerSocket(WebSocketServerProtocol):
             self.factory._register_client_callback(self._id, self.send_msg_ts)
 
     def onOpen(self):
-        print("WebSocket connection open.")
+        self.factory._logger.info("New client connection")
         response = copy.deepcopy(RESPONSE_DICT)
         response["id"] = self._id
         response["response"] = 500
@@ -46,13 +47,13 @@ class ServerSocket(WebSocketServerProtocol):
             result : ResponseAnswer = function(self._id, pyaload)
         except Exception as exception:
             self.send_error_ts(str(exception))
-            traceback.print_exc()       
+            self.factory._logger.error("Could not handle client request")
             return
 
         #traceback.print_exc()
         if not result.request_requiered:
             return
-            
+
         self.send_msg_ts(result.response_code, result.status_code, result.payload)
 
     def onMessage(self, payload, isBinary):
@@ -67,8 +68,7 @@ class ServerSocket(WebSocketServerProtocol):
                 self.send_error("Wrong JSON Format", 8)
                 return
 
-        print("Received Data ", data)
-        print("Test:", type(data))
+        #self.factory._logger.debug("Received Data ", str(data))
         #user_id = data.get("id")
         # if user_id is None:
         #     self.send_error("There is no 'id' field in the request", 8)
@@ -142,6 +142,7 @@ class ServerController(WebSocketServerFactory):
         self._ids = 0
         self._callbacks : Dict[int, Callable] = {}
         self._register_client_callback = register_client_callback
+        self._logger = logy.get_or_create_logger("Server", logy.DEBUG, "SERVER")
 
     def register_callback(self, message_code : int, callback : Callable):
         self._callbacks[message_code] = callback

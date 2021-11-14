@@ -8,19 +8,17 @@ import argparse
 import sys
 import signal
 import psutil
-import time
+import logy
 
 from src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
 from src.server import ServerController, ServerSocket, ResponseAnswer
 import rospy
 import random
 
-
 from std_msgs.msg import String
 from rospy.exceptions import ROSException
 from backend.msg import StationUsage, WeightColor
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
-from src.config import *
 from twisted.internet import reactor
 
 DEBUG_STATION_ID = 999
@@ -37,19 +35,23 @@ class ComputerWorkload:
         self.stations = set({})
 
 class StationManager():
-    def __init__(self, camera_path, transform_node_path, station_selection_path, debug_mode=False, verbose=False):
+    def __init__(self, camera_path, transform_node_path, station_selection_path, verbose=False):
+        if verbose:
+            logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
+        else:
+            logy.Logy().basic_config(debug_level=logy.INFO, module_name="SM")
+
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
         try:
             rospy.wait_for_service('ai/weight_detection', 3)
+            self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
         except ROSException:
-            LOG_ERROR("Time out on channel  'ai/weight_detection'")
-        self._ai_weight_detection = rospy.ServiceProxy('ai/weight_detection', WeightDetection)
+            ("Time out on channel  'ai/weight_detection'")
+
         self._data_manager = DataManager()
 
-        #Todo: verbose in args
-        self._verbose = verbose or VERBOSE_MODE
-        self._debug_mode = debug_mode or DEBUG_MODE
+        self._verbose = verbose
         self._path_camera_node = camera_path
         self._path_transform_node = transform_node_path
         self._path_station_selection = station_selection_path
@@ -60,7 +62,7 @@ class StationManager():
         self.__active_exercises : Dict[str, (int, int, int)] = {} #Dict[user_id : (exercise_id, set_id, repetition)]
         self.__camera_process = {}
         self.__transform_process = {}
-        self.__param_updater = CameraStationController(self._data_manager,  self._verbose)
+        self.__param_updater = CameraStationController(self._data_manager)
         self.__param_updater.add_debug_station(DEBUG_STATION_ID, DEBUG_STATION_ID, [0, 0, 4000, 4000])
 
         #Mutex
@@ -83,15 +85,15 @@ class StationManager():
                 self.stop_camera(cam_index)
 
     def start(self):
-        LOG_DEBUG("Start StationManager", self._verbose)
+        logy.debug("Start StationManager")
         rospy.spin()
 
     def set_client_callback(self, client_id, callback):
-        LOG_DEBUG("Register Message Callback", self._verbose)
+        logy.debug("Register Message Callback")
         self._client_callbacks[client_id] = callback
 
     def start_camera(self, camera_id : int, debug_station = False):
-        LOG_DEBUG(f"Start Camera with id {camera_id}", self._verbose)
+        logy.debug(f"Start Camera with id {camera_id}")
         if debug_station:
             cam_type = 3
             cam_info = "/home/trainerai/trainerai-core/data/videos/video.mp4"
@@ -99,7 +101,7 @@ class StationManager():
             cam_type = self._data_manager.get_camera_type(camera_id)
             cam_info = self._data_manager.get_camera_type_info(camera_id)
 
-        LOG_DEBUG(f"start cam type {cam_type}, on {cam_info}", self._verbose)
+        logy.debug(f"Start cam type {cam_type}, on {cam_info}")
 
         if cam_type == 0:
             args = f"-y {cam_info} -d {camera_id}"
@@ -118,7 +120,7 @@ class StationManager():
             self.__transform_process[camera_id] = subprocess.Popen(["roslaunch", self._path_transform_node, f"dev:={camera_id}"])
 
     def stop_camera(self, camera_id : int):
-        # LOG_DEBUG(f"Stop Camera {camera_id}", self._verbose) # We get stuck on this line when using it withing the DataSetRecorder
+        logy.debug(f"Stop Camera {camera_id}") # We get stuck on this line when using it withing the DataSetRecorder
         with self._camera_process_mutex:
             if camera_id in self.__camera_process:
                 self.__camera_process[camera_id].terminate()
@@ -135,16 +137,6 @@ class StationManager():
                 except subprocess.TimeoutExpired:
                     self.kill(self.__transform_process[camera_id].pid)
                 del self.__transform_process[camera_id]
-
-    def debug_callback(self, index : int):
-        if not self._debug_mode:
-            return
-
-        print("Active Cameras: ", self.__camera_process.keys())
-        for cam_index in self.__camera_process.keys():
-            self.stop_camera(cam_index)
-
-        self.start_camera(index)
 
     def kill(self, proc_pid):
         process = psutil.Process(proc_pid)
@@ -166,11 +158,13 @@ class StationManager():
 
     ### Server Callback functions ###
     def login_station_payload(self, user_id : str, payload : Dict):
-        LOG_DEBUG(f"Login {user_id} payload: {payload}", self._verbose)
+
+        logy.debug(f"Login {user_id} payload: {payload}")
         if "station" not in payload:
             return self.return_error("Payload must have a station and an exercise field", 8)
 
         station_id = int(payload["station"])
+        logy.info(f"Login into Station {station_id}")
         return self.login_station(user_id, station_id)
 
     def login_station(self, user_id : str, station_id : int):
@@ -199,7 +193,7 @@ class StationManager():
         return ResponseAnswer(501, 1, {"station": station_id})
 
     def logout_station_payload(self, user_id : str, payload : Dict):
-        LOG_DEBUG(f"Logout {user_id}, payload : {payload}", self._verbose)
+        logy.debug(f"Logout {user_id}, payload : {payload}")
         return self.logout_station(user_id)
 
     def logout_station(self, user_id):
@@ -213,6 +207,7 @@ class StationManager():
             station_id = self.__active_stations.get(user_id)
             if station_id is None:
                 return ResponseAnswer(502, 10, {})
+            logy.info(f"Logout from Station {station_id}")
 
         with self._param_updater_mutex:
             self.__param_updater.set_station(int(station_id), False)
@@ -230,12 +225,14 @@ class StationManager():
         return ResponseAnswer(502, 1, {"station": station_id})
 
     def start_exercise_payload(self, user_id : str, payload : Dict):
-        LOG_DEBUG(f"Start exercise {user_id}, payload : {payload}", self._verbose)
+        logy.debug(f"Start exercise {user_id}, payload : {payload}")
         if "station" not in payload or "exercise" not in payload or "set_id" not in payload:
             return self.return_error("Payload must have a station, exercise and set_id field", 8)
 
         station_id = int(payload["station"])
         exercise_id = int((payload["exercise"]))
+        logy.info(f"Start exercise {exercise_id} on Station {station_id}")
+
         set_id = int((payload["set_id"]))
         answer, _ = self.start_exercise(user_id, station_id, exercise_id, set_id)
         return answer
@@ -276,6 +273,7 @@ class StationManager():
 
         station_usage_hash = str(random.getrandbits(128))
         self._publisher_station_usage.publish(StationUsage(station_id, False , str(exercise_id), station_usage_hash))
+        logy.info(f"Stop exercise {exercise_id} on Station {station_id}")
 
         with self._exercise_station_mutex:
             self.__active_exercises.pop(user_id)
@@ -283,7 +281,7 @@ class StationManager():
         return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id}), station_usage_hash
 
     def get_weight_detection(self, user_id : str, payload : Dict):
-        LOG_DEBUG(f"weight detection {user_id}, payload : {payload}", self._verbose)
+        logy.debug(f"weight detection {user_id}, payload : {payload}")
         if "station" not in payload:
             return self.return_error("Payload must have a exercise field", 8)
 
@@ -291,7 +289,7 @@ class StationManager():
         cameras = self._data_manager.get_cameras_of_station(payload["station"])
         if len(cameras) > 0:
             camera_id = list(cameras)[0]
-            LOG_DEBUG("Call weight detection service", self._verbose)
+            logy.debug("Call weight detection service")
 
             color_msg_list = []
             weight_colors = self._data_manager.get_weight_colors(camera_id, station_id)
@@ -300,7 +298,6 @@ class StationManager():
                     hsv_low=color_data[2], hsv_high=color_data[3], camera_station_id=color_data[4]))
 
             result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
-            #LOG_DEBUG(f"Weight detection result = {result.weight}kg, response code = {result.response}", self._verbose)
             return ResponseAnswer(507, 1, {"weight" : result.weight, "probability" : 1})
 
     def user_state_callback(self, msg):
@@ -323,7 +320,6 @@ if __name__ == '__main__':
     rospy.init_node('station_manager', anonymous=False)
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
@@ -337,7 +333,8 @@ if __name__ == '__main__':
     transform_node_path = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
     station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
 
-    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, debug_mode=args.debug, verbose=args.verbose)
+    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, verbose=True)
+    logy.info("Station Manager is Ready")
     reactor.listenTCP(3030, station_manager._server_controller)
     reactor.run()
 

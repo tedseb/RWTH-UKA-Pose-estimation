@@ -1,0 +1,3 @@
+<launch>
+  <node name="logy_backend" pkg="logy_backend" output="screen" type="logy_backend.py" />
+</launch>

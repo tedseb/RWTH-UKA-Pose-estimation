@@ -158,7 +158,7 @@
       profile = default
       type = Terminal
       uuid = 44949994-af84-40bd-8b98-bedf55a42b55
-      command = sleep 3s;export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:\$LD_LIBRARY_PATH; roslaunch launch/stack_3Dmetrabs.launch; bash
+      command = sleep 3s;export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:\$LD_LIBRARY_PATH; export PYTHONPATH=$PYTHONPATH:/home/trainerai/trainerai-core/src/logy/; roslaunch launch/stack_3Dmetrabs.launch; bash
     [[[terminal4]]]
       order = 1
       parent = child2

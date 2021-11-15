@@ -94,6 +94,7 @@ class CameraNode():
     def start_video_publisher(self, calculate_timestamps=True):
         """ Same as a camera publisher, only that it takes a video as input and publishes the time of the video in parallel. Stops after playback"""
         self._timecode_pub = rospy.Publisher('ma_validation_video_timing', Int32, queue_size=100)
+        self.ma_validation_done_pub = rospy.Publisher('ma_validation_done', Int32, queue_size=100)
         # Get the original FPS of the video
         fps = self._cap.get(cv2.CAP_PROP_FPS)
         frame_count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -104,6 +105,8 @@ class CameraNode():
         duration = frame_count/publish_fps
         while not rospy.is_shutdown() and self._cap.isOpened():
             if frame_count < frame_no:
+                rp.sleep(10) # Sleep for 10 seconds before we trigger report creation and end the process
+                self.ma_validation_done_pub.publish(Int32(0))
                 return
             ret, frame = self._cap.read()
             if not ret:

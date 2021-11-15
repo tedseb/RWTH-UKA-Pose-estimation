@@ -16,20 +16,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+import datetime
+
 from backend.msg import Persons
 
 from ma_validation.msg import MAValidationSetInfo
 from DataSetRecorder import MA_VALIDATION_VIDEO_TIMING_TOPIC, MA_VALIDATION_SET_TOPIC
 from std_msgs.msg import Int32, String
-
-# Make use of rosbag play
-# --rate-control-topic=RATE_CONTROL_TOPIC
-
-# watch the given topic, and if the last publish was more than <rate-control-max-delay> ago, wait until the topic publishes again to continue playback
-
-# --rate-control-max-delay=RATE_CONTROL_MAX_DELAY
-
-# maximum time difference from <rate-control-topic> before pausing
 
 
 class Validator():
@@ -38,6 +31,7 @@ class Validator():
         # self.video_timing_subscriber = rp.Subscriber(MA_VALIDATION_VIDEO_TIMING_TOPIC, Int32, self.video_timing_callback)
         self.ma_validation_set_subscriber = rp.Subscriber(MA_VALIDATION_SET_TOPIC, MAValidationSetInfo, self.ma_validation_set_callback)
         self.exercise_states_subscriber = rp.Subscriber('user_state', String, self.exercise_state_callback)
+        self.ma_validation_done_subscriber = rp.Subscriber('ma_validation_done', Int32, self.create_report)
 
         self.active_set = MAValidationSetInfo()
         self.active_set_reps = None
@@ -69,15 +63,9 @@ class Validator():
         else:
             finished_set = self.active_set
             rp.logerr("Finished set")
-            if self.active_set_reps == 0:
-                rp.logerr("Set with 0 reps not counted - this exercise is probably not supported by system and therefore not counted.")
-                return
 
             positive_error = np.clip(self.active_set_reps - msg.reps, 0, None)
             negative_error = np.clip(msg.reps - self.active_set_reps, 0, None)
-            if not finished_set.exercise_id in self.done_exercises.keys():
-                self.done_exercises[finished_set.exercise_id] = finished_set
-            self.done_exercises[finished_set.exercise_id].reps += finished_set.reps # Use this at the end of the test
             rp.logerr("Positive Error: " + str(positive_error)) 
             rp.logerr("Negative Error: " + str(negative_error)) 
             self.positive_errors += positive_error
@@ -86,28 +74,40 @@ class Validator():
             rp.logerr("Total negative errors: " + str(self.negative_errors))
             rp.logerr("Total error: " + str(self.positive_errors + self.negative_errors))
 
-    def create_report(self, df):
-        fig, ax = plt.subplots()
+            # We update this dictionary from which we build the report in the end
+            if not finished_set.exercise_id in self.done_exercises.keys():
+                self.done_exercises[finished_set.exercise_id] = np.array([0, 0, 0, 0, 0])
 
-        # hide axes
-        fig.patch.set_visible(False)
-        ax.axis('off')
-        ax.axis('tight')
+            self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
+            
 
-        df = pd.DataFrame(np.random.randn(10, 4), columns=list('ABCD'))
+    def create_report(self):
+        rows = list(d.keys())
+        columns = ["Total Repetitions", "Percent Counted", "Total Error", "Positive Error", " Negative Error"]
+        df = pd.DataFrame.from_dict(self.done_exercises, orient='index', columns=columns) # (np.random.randn(10, 4), columns=list('ABCD'))
+        with PdfPages('/home/trainerai/trainerai-core/test.pdf') as pdf:
+            fig, ax = plt.subplots()
+            fig.patch.set_visible(False)
+            ax.axis('off')
+            ax.axis('tight')
+            ax.table(cellText=df.values, colLabels=df.columns, loc='center', rowLabels=rows)
 
-        ax.table(cellText=df.values, colLabels=df.columns, loc='center')
+            plt.title('Motion Analysis Validation Report \nby Exercise ID')
+            pdf.savefig()
+            plt.close()
 
-        fig.tight_layout()
+            d = pdf.infodict()
+            d['Title'] = 'Multipage PDF Example'
+            d['Author'] = 'Artur Niederfahrenhorst'
+            d['Subject'] = 'Motion Analysis Validation Report'
+            d['CreationDate'] = datetime.datetime.today()
+            d['ModDate'] = datetime.datetime.today()
 
-        pp = PdfPages('multipage.pdf')
-        pp.savefig()
-        pp.close()
 
 
 if __name__ == '__main__':
     rp.init_node('Validator', anonymous=False)
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
@@ -120,7 +120,7 @@ if __name__ == '__main__':
         args = parser.parse_args()
 
     validator = Validator()
-    
+
     rp.spin()
 
     

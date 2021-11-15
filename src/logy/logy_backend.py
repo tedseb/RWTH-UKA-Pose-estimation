@@ -215,10 +215,20 @@ class LogyBackend:
                     return
             while data is None:
                 try:
+                    # while True:
+                    #     # We don't want to print all the empty lines returned by readline() when no writer have the pipe opened
+                    #     data = self._pipe.readline()
+                    #     if data:
+                    #         print(data)
+                    #     else:
+                    #         time.sleep(0.1)
                     data = pickle.load(self._pipe)
                 except EOFError:
                     data = None
                     time.sleep(self._pipe_wait_time)
+                except Exception:
+                    trace = traceback.format_exc()
+                    self._log_message(f" Pickle Error: \n{trace}", CRITICAL)
 
             try:
                 self._log_data(data)

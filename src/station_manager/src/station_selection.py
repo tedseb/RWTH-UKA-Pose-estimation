@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from logging import debug
 import sys
 import os
 import inspect
@@ -25,6 +26,7 @@ if __name__=="__main__":
 
 from src.layouts import StationSelectionUi
 from src.data_manager import DataManager
+import logy
 
 MOBILE_SERVER = "ws://localhost:3030/"
 
@@ -272,7 +274,7 @@ class MyClientProtocol(WebSocketClientProtocol):
     def onConnect(self, response):
         if self.factory._register_client_callback is not None:
             self.factory._register_client_callback(self.send_msg_ts)
-        print("Server connected: {0}".format(response.peer))
+        logy.info("Client connected to {0}".format(response.peer))
 
     def send_msg_ts(self, request_code=0, payload=dict({})):
         reactor.callFromThread(self.send_msg, request_code, payload)
@@ -323,7 +325,7 @@ class MyClientProtocol(WebSocketClientProtocol):
 class ClientController(WebSocketClientFactory):
 
     def __init__(self, uri, register_client_callback = None):
-        print("Init Server Factory")
+        logy.debug("Init WebSocketClientFactory")
         WebSocketClientFactory.__init__(self, uri)
         self._callbacks : Dict[int, Callable] = {}
         self._register_client_callback = register_client_callback
@@ -332,6 +334,7 @@ class ClientController(WebSocketClientFactory):
         self._callbacks[message_code] = callback
 
 if __name__=="__main__":
+    logy.basic_config(logy.INFO, "STATION-GUI")
     app = QApplication(sys.argv)
     import qt5reactor
     qt5reactor.install()

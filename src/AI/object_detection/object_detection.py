@@ -13,6 +13,7 @@ import time
 import rospy
 import yaml
 import torch
+import logy
 from torch import nn
 from torchvision import transforms
 
@@ -35,6 +36,7 @@ class ObjectDetectionPipeline:
         self.info_station=[]
         self.info_frameID=[]
         self.frame_id=0
+        logy.info("Object Detection is listening")
         self.spin() #Dont write any line of code after self.spin!
 
     def spin(self):
@@ -43,10 +45,10 @@ class ObjectDetectionPipeline:
         '''
         rospy.spin()
 
-    def run_objectdetector(self, img_msg):  
+    def run_objectdetector(self, img_msg):
         '''
-        This is a callback function which receives the message from the subscriber. 
-        The message contains an image from the camera, this is reshaped, 
+        This is a callback function which receives the message from the subscriber.
+        The message contains an image from the camera, this is reshaped,
         sent to the function obj_detectYolo() and then the result (BBOX) is published.
         '''
         shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
@@ -71,14 +73,14 @@ class ObjectDetectionPipeline:
             msg_renderImage.height, msg_renderImage.width = img.shape[:-1]
             msg_renderImage.step = img.shape[-1]*img.shape[0]
             self.publisher_img.publish(msg_renderImage)
-        
+
         array1D_body_bbox =np.array(self.body_bbox).reshape(1,-1)
         left_top  = Bboxes()
         left_top.header.stamp = img_msg.header.stamp #Will be important for data fusion: Use current time or older stamp from CameraNode
         left_top.header.frame_id = img_msg.header.frame_id #From which camera
         left_top.data=array1D_body_bbox[0]
-        left_top.stationID=self.info_station  
-        left_top.sensorID=self.info_frameID       
+        left_top.stationID=self.info_station
+        left_top.sensorID=self.info_frameID
         self.publisher_boxes.publish(left_top)
 
         array1D_labels = np.array(self.labels).reshape(1,-1)
@@ -88,29 +90,29 @@ class ObjectDetectionPipeline:
         labels.sensorID = self.frame_id
         labels.data=array1D_labels[0]
         self.publisher_labels.publish(labels)
-        
+
     def obj_detectYolo(self, img):
         """
-        This function uses the Yolo object detector. It predicts BBOX with label and confidence values. 
-        The labels are analyzed to see if they are human, then they are examined to see if their BBOX are within a station. 
+        This function uses the Yolo object detector. It predicts BBOX with label and confidence values.
+        The labels are analyzed to see if they are human, then they are examined to see if their BBOX are within a station.
         If yes, then FrameID, StationID and BBOX are published. The getBoxesInStation class in scheduler is used for the examination.
-        """    
-        img_tens =img 
-        results = self.model(img_tens,size=640)
+        """
+        img_tens =img
+        results = self.model(img_tens, size=640)
         if self.renderer==True:
             results.render()  # updates results.imgs with boxes and labels
-        
+
         results.imgs # array of original images (as np array) passed to model for inference
 
         self.body_bbox=[]
         self.labels=[]
         self.info_station=[]
         self.info_frameID=[]
-        
+
         resul_np=results.xyxy[0].cpu().detach().numpy() # BBox is in x1,y1,x2,y2
         bbox_size =  [ ((x[2]-x[0]) * (x[3]-x[1])) for x in resul_np]
-        idx_big2small = np.argsort(bbox_size)[::-1]                                
-        resul_np = [ resul_np[i] for i in idx_big2small ]  
+        idx_big2small = np.argsort(bbox_size)[::-1]
+        resul_np = [ resul_np[i] for i in idx_big2small ]
         resul_np = np.array(resul_np)
         try:
             labels = resul_np[:,5]
@@ -120,9 +122,9 @@ class ObjectDetectionPipeline:
 
         self._get_Person_boxes(labels,resul_np,self.frame_id)
         return results.imgs[0]
-    
+
     def _get_Person_boxes(self, labels, resul_np,frame_id):
-        """Function for checking labels and assigning stations and BBOX""" 
+        """Function for checking labels and assigning stations and BBOX"""
         tmp_conf=0
         self.labels.append(labels)
         for count, label in enumerate(labels):
@@ -150,9 +152,10 @@ class ObjectDetectionPipeline:
                         tmp_h=box[3]-tmp_y
                         self.body_bbox[0]= ([tmp_x,tmp_y,tmp_w,tmp_h])
 
-              
 
-if __name__ == '__main__':  
+
+if __name__ == '__main__':
+    logy.basic_config(debug_level=logy.DEBUG, module_name="OD")
     rospy.init_node('object_detection', anonymous=True)
     rospy.set_param('param_server', yaml.dump({0 : {}}))
     # instantiate the Comparator class

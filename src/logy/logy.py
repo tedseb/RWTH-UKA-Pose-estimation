@@ -88,29 +88,29 @@ def fatal(msg, tag = "msg"):
     logger = Logy()
     logger._root._send_msg(msg, tag, CRITICAL, 3)
 
-def debug_throttle(msg, throttel_time_s, tag = "msg"):
+def debug_throttle(msg, throttel_time_ms, tag = "msg"):
     logger = Logy()
-    logger._root._send_msg_throttle(msg, throttel_time_s, tag, DEBUG, 3)
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, DEBUG, 3)
 
-def info_throttle(msg, throttel_time_s, tag = "msg"):
+def info_throttle(msg, throttel_time_ms, tag = "msg"):
     logger = Logy()
-    logger._root._send_msg_throttle(msg, throttel_time_s, tag, INFO, 3)
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, INFO, 3)
 
-def warn_throttle(msg, throttel_time_s, tag = "msg"):
+def warn_throttle(msg, throttel_time_ms, tag = "msg"):
     logger = Logy()
-    logger._root._send_msg_throttle(msg, throttel_time_s, tag, WARNING, 3)
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, WARNING, 3)
 
-def error_throttle(msg, throttel_time_s, tag = "msg"):
+def error_throttle(msg, throttel_time_ms, tag = "msg"):
     logger = Logy()
-    logger._root._send_msg_throttle(msg, throttel_time_s, tag, ERROR, 3)
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, ERROR, 3)
 
-def critical_throttle(msg, throttel_time_s, tag = "msg"):
+def critical_throttle(msg, throttel_time_ms, tag = "msg"):
     logger = Logy()
-    logger._root._send_msg_throttle(msg, throttel_time_s, tag, CRITICAL, 3)
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
 
-def fatal_throttle(msg, throttel_time_s, tag = "msg"):
+def fatal_throttle(msg, throttel_time_ms, tag = "msg"):
     logger = Logy()
-    logger._root._send_msg_throttle(msg, throttel_time_s, tag, CRITICAL, 3)
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
 
 class LogyHandler:
     def __init__(self, logger, debug_level : int, module : str):
@@ -161,23 +161,23 @@ class LogyHandler:
     def set_module(self, module_name : str):
         self._module = module_name
 
-    def debug_throttle(self, msg, throttel_time_s, tag = "msg"):
-        self._send_msg_throttle(msg, throttel_time_s, tag, DEBUG, 3)
+    def debug_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, DEBUG, 3)
 
-    def info_throttle(self, msg, throttel_time_s, tag = "msg"):
-        self._send_msg_throttle(msg, throttel_time_s, tag, INFO, 3)
+    def info_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, INFO, 3)
 
-    def warn_throttle(self, msg, throttel_time_s, tag = "msg"):
-        self._send_msg_throttle(msg, throttel_time_s, tag, WARNING, 3)
+    def warn_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, WARNING, 3)
 
-    def error_throttle(self, msg, throttel_time_s, tag = "msg"):
-        self._send_msg_throttle(msg, throttel_time_s, tag, ERROR, 3)
+    def error_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, ERROR, 3)
 
-    def critical_throttle(self, msg, throttel_time_s, tag = "msg"):
-        self._send_msg_throttle(msg, throttel_time_s, tag, CRITICAL, 3)
+    def critical_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
 
-    def fatal_throttle(self, msg, throttel_time_s, tag = "msg"):
-        self._send_msg_throttle(msg, throttel_time_s, tag, CRITICAL, 3)
+    def fatal_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
 
 class Logy(metaclass=Singleton):
     def __init__(self):

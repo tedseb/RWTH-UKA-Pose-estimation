@@ -79,6 +79,11 @@ def time_test():
         time_ns = time.time_ns() - time_ns
         print(f"need {time_ns}ns")
 
+def throttle_test():
+    for _ in range(210):
+        time.sleep(0.01)
+        logy.warn_throttle("WARNING", 500)
+
 def multithread_test():
     threads = []
     threads.append(threading.Thread(target = _loop_test, args = (80, 0.1, )))
@@ -99,7 +104,7 @@ def fail_function():
 
 if __name__ == '__main__':
     logy.Logy().basic_config(module_name="ROOT", debug_level=logy.WARNING)
-    test_all_message()
-    # logy.Logy().set_root_debug_level(logy.DEBUG)
-    # logy.debug("DEBUG - Now you can see this Message")
-    # logy.error("INFO  - Now you can see this Message")
+    # test_all_message()
+    # multithread_test()
+    # time_test()
+    throttle_test()

@@ -12,7 +12,8 @@ from sensor_msgs.msg import Image
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
-
+import logy
+import time
 
 import logging
 logging.basicConfig(level='ERROR')
@@ -57,6 +58,8 @@ class PoseEstimator():
 
 
     def callback_setImage(self, msg):
+        #logy.info_throttle("GET IMAGE", 2000)
+        logy.info_throttle("GET IMAGE", 2000)
         self.last_image_message = msg
 
     def callback_regress(self, body_bbox_list_station):
@@ -125,6 +128,9 @@ class PoseEstimator():
 
 
 if __name__ == '__main__':
+    logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
+
     rp.init_node('metrabs', anonymous=True)
     run_spin_obj = PoseEstimator()
+    logy.info("Pose Estimator is listening")
     rp.spin()

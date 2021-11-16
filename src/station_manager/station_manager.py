@@ -20,6 +20,7 @@ from rospy.exceptions import ROSException
 from backend.msg import StationUsage, WeightColor
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from twisted.internet import reactor
+import time
 
 DEBUG_STATION_ID = 999
 

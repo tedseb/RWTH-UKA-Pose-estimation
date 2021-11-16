@@ -105,7 +105,17 @@ class CameraNode():
         duration = frame_count/publish_fps
         while not rospy.is_shutdown() and self._cap.isOpened():
             if frame_count < frame_no:
-                rp.sleep(10) # Sleep for 10 seconds before we trigger report creation and end the process
+                # For 10 more seconds, publish timecodes to trigger the ending of last exercise if it is not perfectly aligned with video.
+                if calculate_timestamps:
+                        timestamp = int(frame_no / fps)
+                else:
+                    timestamp = int(self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
+                for i in range(10):
+                    timestamp += 1
+                    time_message = Int32()
+                    time_message.data = timestamp
+                    self._timecode_pub.publish(time_message)
+                    rospy.sleep(1) # Sleep for 10 seconds before we trigger report creation and end the process
                 self.ma_validation_done_pub.publish(Int32(0))
                 return
             ret, frame = self._cap.read()

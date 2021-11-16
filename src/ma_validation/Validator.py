@@ -80,12 +80,11 @@ class Validator():
 
             self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
             
-
-    def create_report(self):
-        rows = list(d.keys())
+    def create_report(self, msg):
+        rows = list(self.done_exercises.keys())
         columns = ["Total Repetitions", "Percent Counted", "Total Error", "Positive Error", " Negative Error"]
         df = pd.DataFrame.from_dict(self.done_exercises, orient='index', columns=columns) # (np.random.randn(10, 4), columns=list('ABCD'))
-        with PdfPages('/home/trainerai/trainerai-core/test.pdf') as pdf:
+        with PdfPages('/home/trainerai/trainerai-core/data/ma_validation_report.pdf') as pdf:
             fig, ax = plt.subplots()
             fig.patch.set_visible(False)
             ax.axis('off')

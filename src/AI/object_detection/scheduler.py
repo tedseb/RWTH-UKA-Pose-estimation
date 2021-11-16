@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import rospy
 from std_msgs.msg import String
+import logy
 
 class getBoxesInStation:
     def __init__(self):
@@ -23,6 +24,8 @@ class getBoxesInStation:
 
         self.station_boxes = rospy.get_param('station_frames')
         self.weight_boxes = rospy.get_param('weight_frames')
+        logy.debug("New Station Param is set in pull_param: " + str(self.station_boxes))
+
         #print("SCHEDULER STATIONS: ", self.station_boxes)
         #print("SCHEDULER WEIGHT FRAMES: ", self.station_boxes)
 

@@ -1,11 +1,14 @@
-import sys
+import sys, os, errno
 import threading
 from datetime import datetime
 from typing import Dict
 import pickle
+import time
 import traceback
+from filelock import FileLock
 
 FIFO = '/home/trainerai/logy_pipe'
+FIFO_LOCK = '/home/trainerai/logy_pipe.lock'
 
 NOTSET = 0
 DEBUG = 10
@@ -85,17 +88,54 @@ def fatal(msg, tag = "msg"):
     logger = Logy()
     logger._root._send_msg(msg, tag, CRITICAL, 3)
 
+def debug_throttle(msg, throttel_time_ms, tag = "msg"):
+    logger = Logy()
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, DEBUG, 3)
+
+def info_throttle(msg, throttel_time_ms, tag = "msg"):
+    logger = Logy()
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, INFO, 3)
+
+def warn_throttle(msg, throttel_time_ms, tag = "msg"):
+    logger = Logy()
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, WARNING, 3)
+
+def error_throttle(msg, throttel_time_ms, tag = "msg"):
+    logger = Logy()
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, ERROR, 3)
+
+def critical_throttle(msg, throttel_time_ms, tag = "msg"):
+    logger = Logy()
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
+
+def fatal_throttle(msg, throttel_time_ms, tag = "msg"):
+    logger = Logy()
+    logger._root._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
+
 class LogyHandler:
     def __init__(self, logger, debug_level : int, module : str):
         self._debug_level = debug_level
         self._logger = logger
         self._module = module
+        self._throttle_timings = {}
 
     def _send_msg(self, msg, tag, debug_level, trace_level):
         if debug_level < self._debug_level:
             return
         file_name, line_no, function_name = findCaller(trace_level)
         self._logger.send_msg(debug_level, msg, tag, self._module, file_name, line_no, function_name)
+
+    def _send_msg_throttle(self, msg, throttel_time, tag, debug_level, trace_level):
+        if debug_level < self._debug_level:
+            return
+        file_name, line_no, function_name = findCaller(trace_level)
+        throttle_hash = hash(file_name + str(line_no) + function_name)
+        throttle_timing = self._throttle_timings.get(throttle_hash)
+        timstamp_now = time.time() * 1000
+
+        if throttle_timing is None or timstamp_now - throttle_timing >= throttel_time:
+            self._logger.send_msg(debug_level, msg, tag, self._module, file_name, line_no, function_name)
+            self._throttle_timings[throttle_hash] = timstamp_now
 
     def debug(self, msg, tag = "msg"):
         self._send_msg(msg, tag, DEBUG, 3)
@@ -121,6 +161,24 @@ class LogyHandler:
     def set_module(self, module_name : str):
         self._module = module_name
 
+    def debug_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, DEBUG, 3)
+
+    def info_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, INFO, 3)
+
+    def warn_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, WARNING, 3)
+
+    def error_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, ERROR, 3)
+
+    def critical_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
+
+    def fatal_throttle(self, msg, throttel_time_ms, tag = "msg"):
+        self._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
+
 class Logy(metaclass=Singleton):
     def __init__(self):
         print("Constructor: Init Logy Writer")
@@ -136,6 +194,13 @@ class Logy(metaclass=Singleton):
         self._pipe.close()
 
     def _open_pipe(self) -> bool:
+        print("OPEN PIPE")
+        try:
+            os.mkfifo(FIFO)
+        except OSError as oe:
+            if oe.errno != errno.EEXIST:
+                raise
+
         try:
             self._pipe =  open(FIFO, 'wb')
         except OSError:
@@ -148,8 +213,11 @@ class Logy(metaclass=Singleton):
             print("Pipe unexpectedly closed. Try to open file again")
             if not self._open_pipe():
                 return
-        pickle.dump(data, self._pipe, protocol=pickle.HIGHEST_PROTOCOL)
-        self._pipe.flush()
+        lock = FileLock(FIFO_LOCK)
+        with lock:
+            pickle.dump(data, self._pipe, protocol=pickle.HIGHEST_PROTOCOL)
+            #self._pipe.write(str(data) + "\n")
+            self._pipe.flush()
 
     def send_msg(self, level : int, msg : str, tag : str, module : str, file: str, lineno : int, function : str):
         with self._lock:
@@ -176,6 +244,14 @@ class Logy(metaclass=Singleton):
 def get_or_create_logger(name : str, debug_level = WARNING, module_name = "--") -> LogyHandler:
     logy_ = Logy()
     return logy_.get_or_create_logger(name, debug_level, module_name)
+
+def set_root_debug_level(debug_level : int):
+    logy_ = Logy()
+    logy_._root.set_debug_level(debug_level)
+
+def basic_config(debug_level = None, module_name = None):
+    logy_ = Logy()
+    logy_.basic_config(debug_level, module_name)
 
 def exception_hook(exctype, value, trace):
     traceback_formated = traceback.format_exception(exctype, value, trace)

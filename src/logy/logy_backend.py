@@ -27,7 +27,7 @@ DEFAULT_FILE_PREFIX = "/home/trainerai/trainerai-core/data/logs/log"
 PIPE_WAIT_TIME = 0.5
 
 #Debug Levels
-MESSAGE_OUTPUT_LEVEL_TERMINAL = 30
+MESSAGE_OUTPUT_LEVEL_TERMINAL = 50
 MESSAGE_OUTPUT_LEVEL_FILE = 90
 #0   [ERROR]:
 #10  [ERROR]::File:
@@ -186,7 +186,7 @@ class LogyBackend:
         module = data["module"]
 
         date = datetime.fromtimestamp(timestamp)
-        date = date.strftime("%H-%M-%S")
+        date = date.strftime("%H-%M-%S.%f")[:-3]
 
         format_str : str = self._format_strings[format]
         msg = format_str.format(module, file, function, lineno, date, msg)

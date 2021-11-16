@@ -9,6 +9,7 @@ import tensorflow as tf
 import time
 import rospy as rp
 from sensor_msgs.msg import Image
+from backend.msg import ImageData
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
@@ -30,6 +31,8 @@ import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')
 from mpl_toolkits.mplot3d import Axes3D
 
+from inspect import getmembers, isfunction
+
 CONFIG = {
     'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
     'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
@@ -38,7 +41,14 @@ CONFIG = {
 class PoseEstimator():
     def __init__(self):
         self.model = tf.saved_model.load(CONFIG["model_path"])
+
         self.intrinsics = tf.constant(CONFIG.get("intrinsics"), dtype=tf.float32)
+        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        person_boxes = tf.constant([ [1000, 350, 500, 650]], tf.float32)
+
+        self.model.predict_single_image(image, self.intrinsics, person_boxes)
+
+
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
 
@@ -53,16 +63,20 @@ class PoseEstimator():
         rp.Subscriber('bboxes', Bboxes, self.callback_regress)
         #rp.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
-        rp.Subscriber('image', Image, self.callback_setImage)
+        rp.Subscriber('image', ImageData, self.callback_setImage)
         #srp.Subscriber('image1', Image, self.callback_setImage)
 
 
-    def callback_setImage(self, msg):
+    def callback_setImage(self, msg : ImageData):
         #logy.info_throttle("GET IMAGE", 2000)
-        logy.info_throttle("GET IMAGE", 2000)
-        self.last_image_message = msg
+        #logy.info_throttle("GET IMAGE", 2000)
+        if msg.is_debug:
+            logy.debug(f"Received image. Debug frame {msg.debug_id}")
+        self.last_image_message = msg.image
 
-    def callback_regress(self, body_bbox_list_station):
+    def callback_regress(self, body_bbox_list_station : Bboxes):
+        if body_bbox_list_station.is_debug:
+            logy.debug(f"Received bboxes. Debug frame {body_bbox_list_station.debug_id}")
         body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
         tmpTime = time.time()
         # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
@@ -73,7 +87,6 @@ class PoseEstimator():
 
         height = self.last_image_message.height
         width = self.last_image_message.width
-
         image = np.frombuffer(self.last_image_message.data, dtype=np.uint8)
         image = image.reshape([height, width, 3])    #(480, 640, 3) --> (y,x,3) = (h,w,3)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -81,7 +94,6 @@ class PoseEstimator():
         # Body Pose Regression
         pred_output_list = self.model.predict_single_image(image, self.intrinsics, body_bbox_list_station_reshaped)
         poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-
         stationID = body_bbox_list_station.stationID
         sensorID = body_bbox_list_station.sensorID
         boxes = body_bbox_list_station_reshaped
@@ -94,7 +106,6 @@ class PoseEstimator():
         msg = Persons()
         msg.header = self.last_image_message.header
         msg.persons = list()
-
         cropped_images = []
         for idx,detection in enumerate(pred_output_list.numpy()):
             joints=detection
@@ -120,7 +131,6 @@ class PoseEstimator():
             inc=inc+1
             msg.persons.append(person_msg)
         self.publisher.publish(msg)
-
         # Concatenate images and convert them to ROS image format to display them later in rviz
         image_message = self.opencv_bridge.cv2_to_imgmsg(cv2.vconcat(cropped_images), encoding="passthrough")
 

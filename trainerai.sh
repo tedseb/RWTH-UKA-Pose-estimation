@@ -12,9 +12,9 @@ sh $SCRIPTPATH/devel/setup.sh
 find ./devel -type f -name "*.js" -exec sed -i 's/`resolution`//g' {} \;
 
 if [[ ! -d './src/AI/metrabs/models/' ]]
-then 
+then
     python3 docker/scripts/largeFiles/SecureGoogleDrive.py
     sh script.sh
     rm script.sh
 fi
-
+source devel/setup.bash

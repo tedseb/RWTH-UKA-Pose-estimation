@@ -5,9 +5,10 @@ import pafy
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from PIL import Image as ImagePil
-from sensor_msgs.msg import Image
+from backend.msg import ImageData
 from backend.msg import Bboxes
 from backend.msg import LabelsCameraID
+from sensor_msgs.msg import Image
 from scheduler import getBoxesInStation
 import time
 import rospy
@@ -26,11 +27,11 @@ class ObjectDetectionPipeline:
         #self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).eval().to(device)
         self.threshold = threshold # Confidence threshold for displaying boxes.
         self.renderer=renderer
-        rospy.Subscriber('image', Image, self.run_objectdetector)
+        rospy.Subscriber('image', ImageData, self.run_objectdetector)
         if self.renderer==True:
             self.publisher_img = rospy.Publisher('imageYOLO', Image , queue_size=2)
-        self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=1)
-        self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=1)
+        self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
+        self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
         self.body_bbox=[]
         self.labels=[]
         self.info_station=[]
@@ -45,12 +46,15 @@ class ObjectDetectionPipeline:
         '''
         rospy.spin()
 
-    def run_objectdetector(self, img_msg):
+    def run_objectdetector(self, img_data : ImageData):
         '''
         This is a callback function which receives the message from the subscriber.
         The message contains an image from the camera, this is reshaped,
         sent to the function obj_detectYolo() and then the result (BBOX) is published.
         '''
+        if img_data.is_debug:
+            logy.debug(f"Received image. Debug frame {img_data.debug_id}")
+        img_msg = img_data.image
         shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
         img = np.frombuffer(img_msg.data, dtype=np.uint8)
         img_original_bgr = img.reshape(shape)
@@ -81,6 +85,11 @@ class ObjectDetectionPipeline:
         left_top.data=array1D_body_bbox[0]
         left_top.stationID=self.info_station
         left_top.sensorID=self.info_frameID
+        left_top.is_debug = False
+        if img_data.is_debug:
+            left_top.is_debug = True
+            left_top.debug_id = img_data.debug_id
+            logy.debug(f"Publish bboxes. Debug frame {img_data.debug_id}")
         self.publisher_boxes.publish(left_top)
 
         array1D_labels = np.array(self.labels).reshape(1,-1)

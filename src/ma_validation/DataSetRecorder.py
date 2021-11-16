@@ -15,6 +15,7 @@ import rosbag
 from collections import deque
 import sys
 import os
+import logy
  
 from station_manager import StationManager, DEBUG_STATION_ID
 from backend.msg import Persons
@@ -31,6 +32,7 @@ class DataSetRecorder():
     input_video: str = "/home/trainerai/trainerai-core/data/videos/video.mp4",
     input_timecodes: str = "/home/trainerai/trainerai-core/data/videos/timecodes.yml",
     output_file: str = "/home/trainerai/trainerai-core/data/videos/ma_validation_recorder_output.bag"):
+        logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
         self.station_manager = station_manager
         self._recording = True
         # Define a subscriber to retrive tracked bodies
@@ -48,7 +50,7 @@ class DataSetRecorder():
                 return
         
         if pathlib.Path(input_video).name != timecode_data["file_name"]:
-            rp.logerr("Input video file name does not match file name specified in timecode file")
+            logy.warning("Input video file name does not match file name specified in timecode file")
 
         def get_t_from(list_item):
             return list_item["t_from_s"]
@@ -67,7 +69,6 @@ class DataSetRecorder():
         self.sm_client_id = "ma_validation_dataset_recorder"
         self.station_manager.set_client_callback(self.sm_client_id, repetition_callback)
         self.station_manager.login_station(self.sm_client_id, DEBUG_STATION_ID)
-
 
     def video_timing_callback(self, msg: Int32) -> None:
         """ Publishes validation set messages.
@@ -89,13 +90,13 @@ class DataSetRecorder():
             
             self.ma_validation_set_publisher.publish(set_message)
 
-            rp.logerr("Ended set: " + str(self.active_set))
+            logy.debug("Ended set: " + str(self.active_set))
             self.active_set = None
 
 
         while self.set_list and t > self.set_list[0]["t_from_s"]:
             current_set = self.set_list.pop(0)
-            rp.logerr("Started set: " + str(current_set))
+            logy.debug("Started set: " + str(current_set))
             _, station_usage_hash = station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, current_set["exercise_id"])
 
             set_message = MAValidationSetInfo()
@@ -113,7 +114,7 @@ class DataSetRecorder():
             del self.station_manager # This spawns a routine that ends the camera node process
             self.video_timing_subscriber.unregister()
             self.ma_validation_set_publisher.unregister()
-            os.system("rosnode kill ROSbagRecorderHelper")
+            os.system("rosnode kill Bagfilerecorder")
     
 
 if __name__ == '__main__':

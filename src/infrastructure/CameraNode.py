@@ -105,7 +105,7 @@ class CameraNode():
         duration = frame_count/publish_fps
         while not rospy.is_shutdown() and self._cap.isOpened():
             if frame_count < frame_no:
-                rp.sleep(10) # Sleep for 10 seconds before we trigger report creation and end the process
+                rospy.sleep(10) # Sleep for 10 seconds before we trigger report creation and end the process
                 self.ma_validation_done_pub.publish(Int32(0))
                 return
             ret, frame = self._cap.read()

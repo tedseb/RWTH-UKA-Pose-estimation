@@ -38,7 +38,7 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=0):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
@@ -88,7 +88,7 @@ class CameraNode():
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
 
-            frame = cv2.resize(frame, (2560, 1440))
+            frame = cv2.resize(frame, (1280, 720))
             img = Image()
             img.header.stamp = rospy.Time.now()
             img.header.frame_id = self._dev_id

@@ -93,8 +93,7 @@ class DataSetRecorder():
             logy.debug("Ended set: " + str(self.active_set))
             self.active_set = None
 
-
-        while self.set_list and t > self.set_list[0]["t_from_s"]:
+        if self.set_list and t > self.set_list[0]["t_from_s"]:
             current_set = self.set_list.pop(0)
             logy.debug("Started set: " + str(current_set))
             _, station_usage_hash = station_manager.start_exercise(self.sm_client_id, DEBUG_STATION_ID, current_set["exercise_id"])
@@ -110,10 +109,8 @@ class DataSetRecorder():
 
             self.active_set = current_set
 
-        if not self.set_list or not self._recording:
+        if (not self.set_list and not self.active_set)or not self._recording:
             del self.station_manager # This spawns a routine that ends the camera node process
-            self.video_timing_subscriber.unregister()
-            self.ma_validation_set_publisher.unregister()
             os.system("rosnode kill Bagfilerecorder")
     
 

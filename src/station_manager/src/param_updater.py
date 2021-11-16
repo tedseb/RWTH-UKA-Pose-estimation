@@ -21,7 +21,6 @@ class CameraStationController():
         #self._camera_weight_frames = self._data_manager.get_weight_frame_lists()
         #for camera_id, station_dict in frames.items():
             #self._camera_list[camera_id] = station_dict
-
         logy.debug(f"Camera list: {self._camera_station_frames}")
 
     def add_debug_station(self, station_id, camera_id, frame):

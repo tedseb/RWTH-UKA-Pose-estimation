@@ -110,7 +110,7 @@ class PoseEstimator():
 
     def get_next_image_in_queue(self, box_frame_number: int):
         if self._image_queue.empty():
-            logy.warn("1")
+            #logy.warn("1")
             return None
 
         bbox_num = box_frame_number
@@ -123,7 +123,7 @@ class PoseEstimator():
             next_img_num = self._image_queue[0].frame_num
 
         if next_img_num != bbox_num:
-            logy.warn("2")
+            #logy.warn("2")
             return None
         return img_data
 

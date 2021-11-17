@@ -59,8 +59,8 @@ class StationManager():
         self._station_selection_process = subprocess.Popen([self._path_station_selection])
 
         # Thread Shared Data. Don't Use without Mutex lock!!!
-        self.__active_stations = TwoWayDict({}) #Dict[station_id : user_id]
-        self.__active_exercises : Dict[str, (int, int, int)] = {} #Dict[user_id : (exercise_id, set_id, repetition)]
+        self.__active_stations = TwoWayDict({}) #Dict[station_id: user_id]
+        self.__active_exercises: Dict[str, (int, int, int)] = {} #Dict[user_id: (exercise_id, set_id, repetition)]
         self.__camera_process = {}
         self.__transform_process = {}
         self.__param_updater = CameraStationController(self._data_manager)
@@ -93,7 +93,7 @@ class StationManager():
         logy.debug("Register Message Callback")
         self._client_callbacks[client_id] = callback
 
-    def start_camera(self, camera_id : int, debug_station = False):
+    def start_camera(self, camera_id: int, debug_station = False):
         logy.debug(f"Start Camera with id {camera_id}")
         if debug_station:
             cam_type = 3
@@ -122,7 +122,7 @@ class StationManager():
             self.__camera_process[camera_id] = subprocess.Popen([self._path_camera_node] + args.split())
             self.__transform_process[camera_id] = subprocess.Popen(["roslaunch", self._path_transform_node, f"dev:={camera_id}"])
 
-    def stop_camera(self, camera_id : int):
+    def stop_camera(self, camera_id: int):
         logy.debug(f"Stop Camera {camera_id}") # We get stuck on this line when using it withing the DataSetRecorder
         with self._camera_process_mutex:
             if camera_id in self.__camera_process:
@@ -148,9 +148,9 @@ class StationManager():
         process.kill()
 
     def return_error(self, error_string, code):
-        return ResponseAnswer(508, code, {"error" : error_string})
+        return ResponseAnswer(508, code, {"error": error_string})
 
-    def send_repitition(self, user_id : str, repetition : int, exercise : str, set_id : int):
+    def send_repitition(self, user_id: str, repetition: int, exercise: str, set_id: int):
         payload = {
             "repetitions": repetition,
             "exercise": exercise,
@@ -160,7 +160,7 @@ class StationManager():
         callback(response_code=509, satus_code=1, payload=payload)
 
     ### Server Callback functions ###
-    def login_station_payload(self, user_id : str, payload : Dict):
+    def login_station_payload(self, user_id: str, payload: Dict):
 
         logy.debug(f"Login {user_id} payload: {payload}")
         if "station" not in payload:
@@ -170,7 +170,7 @@ class StationManager():
         logy.info(f"Login into Station {station_id}")
         return self.login_station(user_id, station_id)
 
-    def login_station(self, user_id : str, station_id : int):
+    def login_station(self, user_id: str, station_id: int):
 
         with self._exercise_station_mutex:
             if station_id in self.__active_stations:
@@ -195,8 +195,8 @@ class StationManager():
 
         return ResponseAnswer(501, 1, {"station": station_id})
 
-    def logout_station_payload(self, user_id : str, payload : Dict):
-        logy.debug(f"Logout {user_id}, payload : {payload}")
+    def logout_station_payload(self, user_id: str, payload: Dict):
+        logy.debug(f"Logout {user_id}, payload: {payload}")
         return self.logout_station(user_id)
 
     def logout_station(self, user_id):
@@ -227,8 +227,8 @@ class StationManager():
 
         return ResponseAnswer(502, 1, {"station": station_id})
 
-    def start_exercise_payload(self, user_id : str, payload : Dict):
-        logy.debug(f"Start exercise {user_id}, payload : {payload}")
+    def start_exercise_payload(self, user_id: str, payload: Dict):
+        logy.debug(f"Start exercise {user_id}, payload: {payload}")
         if "station" not in payload or "exercise" not in payload or "set_id" not in payload:
             return self.return_error("Payload must have a station, exercise and set_id field", 8)
 
@@ -239,7 +239,7 @@ class StationManager():
         set_id = int((payload["set_id"]))
         return self.start_exercise(user_id, station_id, exercise_id, set_id)
 
-    def start_exercise(self, user_id : str, station_id : int, exercise_id : int, set_id = 1):
+    def start_exercise(self, user_id: str, station_id: int, exercise_id: int, set_id = 1):
         with self._exercise_station_mutex:
             if self.__active_stations[user_id] != station_id:
                 return ResponseAnswer(502, 10, {})
@@ -254,8 +254,8 @@ class StationManager():
 
         return ResponseAnswer(503, 1, {"station": station_id, "exercise": exercise_id})
 
-    def stop_exercise_payload(self, user_id : str, payload : Dict):
-        logy.debug(f"Stop exercise {user_id}, payload : {payload}")
+    def stop_exercise_payload(self, user_id: str, payload: Dict):
+        logy.debug(f"Stop exercise {user_id}, payload: {payload}")
         return self.stop_exercise(user_id)
 
     def stop_exercise(self, user_id):
@@ -278,8 +278,8 @@ class StationManager():
 
         return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id})
 
-    def get_weight_detection(self, user_id : str, payload : Dict):
-        logy.debug(f"weight detection {user_id}, payload : {payload}")
+    def get_weight_detection(self, user_id: str, payload: Dict):
+        logy.debug(f"weight detection {user_id}, payload: {payload}")
         if "station" not in payload:
             return self.return_error("Payload must have a exercise field", 8)
 
@@ -295,8 +295,8 @@ class StationManager():
                 color_msg_list.append(WeightColor(id=color_id, name=color_data[0], weight=color_data[1],
                     hsv_low=color_data[2], hsv_high=color_data[3], camera_station_id=color_data[4]))
 
-            result : WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
-            return ResponseAnswer(507, 1, {"weight" : result.weight, "probability" : 1})
+            result: WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
+            return ResponseAnswer(507, 1, {"weight": result.weight, "probability": 1})
 
     def user_state_callback(self, msg):
         data = str(msg.data)

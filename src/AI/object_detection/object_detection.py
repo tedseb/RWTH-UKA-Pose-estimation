@@ -46,7 +46,7 @@ class ObjectDetectionPipeline:
         '''
         rospy.spin()
 
-    def run_objectdetector(self, img_data : ImageData):
+    def run_objectdetector(self, img_data: ImageData):
         '''
         This is a callback function which receives the message from the subscriber.
         The message contains an image from the camera, this is reshaped,
@@ -67,7 +67,7 @@ class ObjectDetectionPipeline:
             return
 
         fps = int(1/(time.time()-tmpTime))
-        # print("FPS : ",fps)
+        # print("FPS: ",fps)
         if self.renderer==True:
             msg_renderImage = Image()
             msg_renderImage.header.stamp = rospy.Time.now()
@@ -166,6 +166,6 @@ class ObjectDetectionPipeline:
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="OD")
     rospy.init_node('object_detection', anonymous=True)
-    rospy.set_param('param_server', yaml.dump({0 : {}}))
+    rospy.set_param('param_server', yaml.dump({0: {}}))
     # instantiate the Comparator class
     obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=True, stationChk =True)                  #Later on, we can choose a specific detector. We have to write a new class for each detector

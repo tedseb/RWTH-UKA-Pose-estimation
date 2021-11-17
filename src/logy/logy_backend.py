@@ -6,8 +6,9 @@ import time
 import pathlib
 import pickle
 import argparse
-from typing import Dict
+from typing import Dict, List
 from datetime import datetime
+from dataclasses import dataclass
 import traceback
 import neptune.new as neptune
 
@@ -45,6 +46,21 @@ MESSAGE_OUTPUT_LEVEL_FILE = 90
 #130 [ERROR]::Time::File:Line:
 
 FIFO = '/home/trainerai/logy_pipe'
+
+class LogType:
+    MSG = 0
+    AVG = 1
+    MEAN = 2
+    VARIABLE = 3
+
+@dataclass
+class AverageData:
+    num : int
+    last_avg : float
+
+@dataclass
+class MeanData:
+    values : List[float]
 
 class LogyBackend:
     _level_to_name = {
@@ -84,16 +100,16 @@ class LogyBackend:
     }
 
     def __init__(self,
-            log_to_terminal = LOG_TO_TERMINAL,
-            log_to_terminal_level = LOG_TO_TERMINAL_LEVEL,
-            message_output_level_terminal = MESSAGE_OUTPUT_LEVEL_TERMINAL,
-            log_to_file = LOG_TO_FILE,
+            log_to_terminal=LOG_TO_TERMINAL,
+            log_to_terminal_level=LOG_TO_TERMINAL_LEVEL,
+            message_output_level_terminal=MESSAGE_OUTPUT_LEVEL_TERMINAL,
+            log_to_file=LOG_TO_FILE,
             log_to_file_level =LOG_TO_FILE_LEVEL,
-            message_output_level_file = MESSAGE_OUTPUT_LEVEL_FILE,
-            file_prefix = DEFAULT_FILE_PREFIX,
-            pipe_wait_time = PIPE_WAIT_TIME,
-            use_neptune = USE_NEPTUNE,
-            print_tags = []):
+            message_output_level_file=MESSAGE_OUTPUT_LEVEL_FILE,
+            file_prefix=DEFAULT_FILE_PREFIX,
+            pipe_wait_time=PIPE_WAIT_TIME,
+            use_neptune=USE_NEPTUNE,
+            print_tags=[]):
 
         self._log_to_terminal = log_to_terminal
         self._log_to_terminal_level = log_to_terminal_level
@@ -109,14 +125,31 @@ class LogyBackend:
         self._error_occured = 0
         self._neptune_run = None
         self._print_tags = print_tags
+        self._avg_data: Dict[AverageData] = {}
+        self._mean_data: Dict[MeanData] = {}
         if self._log_to_file:
             self._open_log_file(file_prefix)
 
         if self._use_neptune:
             self._log_message(" Logy: Log online with Neptune. neptune.ai", INFO)
 
+        log_level = self._level_to_name[log_to_terminal_level]
+        self._log_message(f" Logy: Log to terminal with log_level={log_level}", INFO)
+
     def __del__(self):
-        self._log_message(" Logy: Clean Shutdown of Logy Backend", INFO)
+        if self._avg_data or self._mean_data:
+            self._log_message("### Print all Logy meta data ###", INFO)
+            for name, value in self._avg_data.items():
+                info_str = f"# Average '{name}'={value.last_avg}, N={value.num}"
+                self._log_message(info_str, INFO)
+
+            for name, value in self._mean_data.items():
+                num = len(value.values)
+                mean_id = int(num / 2.0) + 1
+                info_str = f"# Mean '{name}'={value.values[mean_id]}, N={num}"
+                self._log_message(info_str, INFO)
+
+        self._log_message("### Clean Shutdown of Logy Backend ###", INFO)
         if self._pipe is not None:
             self._pipe.close()
         if self._log_file is not None:
@@ -144,24 +177,58 @@ class LogyBackend:
             trace = traceback.format_exc()
             self._log_message(f" Logy: Can not open Logger File. \n{trace}", CRITICAL)
 
-    def _log_data(self, data : Dict):
+    def _log_data(self, data: Dict):
         if "type" not in data:
             self._log_message(" Logy: Message does not contain 'type'", ERROR)
             return
 
-        if data["type"] == 0:
+        message_type = data["type"]
+        if message_type == LogType.MSG:
             self._log_data_message(data)
+        elif message_type == LogType.AVG:
+            self._log_avg(data)
+        elif message_type == LogType.MEAN:
+            self._log_mean(data)
+        else:
+            self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
-    def _log_data_message(self, data : Dict):
+
+    def _log_avg(self, data: Dict):
+        name = data["name"]
+        value = data["value"]
+
+        values_before: AverageData = self._avg_data.get(name)
+        if values_before is None:
+            self._avg_data[name] = AverageData(1, value)
+            return
+
+        n = values_before.num
+        y = (n / (n + 1)) * values_before.last_avg
+        avg = y + (value / (n + 1))
+        values_before.last_avg = avg
+        values_before.num += 1
+
+    def _log_mean(self, data: Dict):
+        name = data["name"]
+        value = data["value"]
+
+        values_before: MeanData = self._mean_data.get(name)
+        if values_before is None:
+            self._mean_data[name] = MeanData([value])
+            return
+
+        values_before.values.append(value)
+
+    def _log_data_message(self, data: Dict):
         debug_level = data["level"]
         log_message = self._format_message(data, self._message_output_level_terminal)
 
         if self._use_neptune:
             if debug_level == ERROR and self._error_occured <= ERROR:
-                self._neptune_run["Info"] = {"State" : "ERROR"}
+                self._neptune_run["Info"] = {"State": "ERROR"}
                 self._error_occured = ERROR
             if debug_level == CRITICAL:
-                self._neptune_run["Info"] = {"State" : "CRITICAL"}
+                self._neptune_run["Info"] = {"State": "CRITICAL"}
                 self._error_occured = CRITICAL
 
         if debug_level >= self._log_to_terminal_level:
@@ -180,7 +247,7 @@ class LogyBackend:
         if debug_level >= self._log_to_file_level:
             self._log_msg_to_file(msg, debug_level)
 
-    def _format_message(self, data : Dict, format : int):
+    def _format_message(self, data: Dict, format: int):
         msg = data["msg"]
         timestamp = data["timestamp"]
         file = os.path.basename(data["file"])
@@ -191,11 +258,11 @@ class LogyBackend:
         date = datetime.fromtimestamp(timestamp)
         date = date.strftime("%H-%M-%S.%f")[:-3]
 
-        format_str : str = self._format_strings[format]
+        format_str: str = self._format_strings[format]
         msg = format_str.format(module, file, function, lineno, date, msg)
         return msg
 
-    def _log_msg_to_terminal(self, msg : str, debug_level : int):
+    def _log_msg_to_terminal(self, msg: str, debug_level: int):
         if self._log_to_terminal:
             color_level_str = f"{self._format_colors[debug_level]}[{self._level_to_name[debug_level]}]{self._format_colors[999]}"
             if debug_level < ERROR:
@@ -203,7 +270,7 @@ class LogyBackend:
             else:
                 sys.stderr.write(color_level_str + msg + "\n")
 
-    def _log_msg_to_file(self, msg : str, debug_level : int):
+    def _log_msg_to_file(self, msg: str, debug_level: int):
         if self._log_to_file and self._log_file is not None:
             level_str = f"[{self._level_to_name[debug_level]}]"
             self._log_file.write(level_str + msg + "\n")
@@ -249,7 +316,7 @@ class LogyBackend:
                 api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJlNGJiNzAyMi0wNmIwLTQxNjctOTRlMi1jNGNlMTEyODc0MDcifQ==",
                 source_files=[]
             )
-            self._neptune_run["Info"] = {"State" : "RUNNING"}
+            self._neptune_run["Info"] = {"State": "RUNNING"}
 
         try:
             self.pipe_loop()
@@ -261,7 +328,7 @@ class LogyBackend:
                 self._log_file.flush()
                 self._neptune_run["log_file"].upload(self._log_file_path)
             if self._error_occured < ERROR:
-                self._neptune_run["Info"] = {"State" : "SUCCESS"}
+                self._neptune_run["Info"] = {"State": "SUCCESS"}
             self._neptune_run.stop()
 
 def main(start_neptune=False, tags=[]):

@@ -145,7 +145,11 @@ class LogyBackend:
 
             for name, value in self._mean_data.items():
                 num = len(value.values)
-                mean_id = int(num / 2.0) + 1
+                print(num)
+                mean_id = int(num / 2.0)
+                value.values.sort()
+                print(mean_id)
+                print(len(value.values))
                 info_str = f"# Mean '{name}'={value.values[mean_id]}, N={num}"
                 self._log_message(info_str, INFO)
 

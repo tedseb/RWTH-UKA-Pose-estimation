@@ -110,7 +110,6 @@ class PoseEstimator():
 
     def get_next_image_in_queue(self, box_frame_number: int):
         if self._image_queue.empty():
-            logy.warn("1")
             return None
 
         bbox_num = box_frame_number
@@ -123,7 +122,6 @@ class PoseEstimator():
             next_img_num = self._image_queue[0].frame_num
 
         if next_img_num != bbox_num:
-            logy.warn("2")
             return None
         return img_data
 
@@ -146,7 +144,7 @@ class PoseEstimator():
     def callback_regress(self, body_bbox_list_station: Bboxes):
         img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num)
         if img_data is None:
-            logy.warn("The next image is missing")
+            #logy.warn_throttle("The next image is missing")
             return
         last_image = img_data.image
 

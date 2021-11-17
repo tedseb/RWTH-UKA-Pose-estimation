@@ -15,9 +15,8 @@ from backend.msg import Person, Bodypart
 already_added_nodes : Set[int] = {} #For Debug
 
 #Build order of the current TrainerAi skeleton
-BODY_BUILD_ORDER = [(39, 8), (39, 27), (39, 28), (28, 12), (12, 9), (39, 41), (41, 1), (27, 2), (28, 5), (2, 3), (3, 4),
-(5, 6), (6, 7), (27, 10), (10, 11), (11, 23), (11, 22), (28, 13), (13, 14), (14, 19), (14, 20), (1, 37),
-(37, 43), (43, 38), (43, 17), (43, 18), (17, 42), (42, 0), (0, 15), (0, 16)]
+BODY_BUILD_ORDER = [(0, 3), (3, 6), (6, 9), (9, 12), (12, 15), (12, 13), (13, 16), (16, 18), (20, 22), (12, 14), (14, 17),
+(17, 19), (19, 21), (21, 23), (0, 1), (1, 4), (4, 7), (7, 10), (0, 2), (2, 5), (5, 8), (8, 11)]
 
 CENTRAL_JOINT_IDX = 4 # Choose this to be something like the pelvis 
 
@@ -32,7 +31,6 @@ joint2_p2 : Bodypart = person2.bodyParts[body_joints[1]]
 point1_p2 = np.array([joint1_p2.point.x, joint1_p2.point.y, joint1_p2.point.z])
 point2_p2 = np.array([joint2_p2.point.x, joint2_p2.point.y, joint2_p2.point.z])
 vec_joints_person2 = np.array(point2_p2 - point1_p2)
-
 
 
 def normalize_skelleton_size(person: Person) -> Person:
@@ -89,49 +87,7 @@ def normalize_skelleton_position_and_orientation(person: Person) -> Person:
     # Turn around z axis with formula from: https://www.biancahoegel.de/mathe/matrix/drehmatrix.html
 
 
-
 if __name__ == '__main__':
-    '''Small example test with known values'''
-    person1 = Person()
-    person1.bodyParts.append(Bodypart())
-
-    bodypart1 = Bodypart()
-    bodypart2 = Bodypart()
-    bodypart3 = Bodypart()
-    bodypart4 = Bodypart()
-    bodypart1.point.x, bodypart1.point.y, bodypart1.point.z = 0, 0, 0
-    bodypart2.point.x, bodypart2.point.y, bodypart2.point.z = 0, 1, 0
-    bodypart3.point.x, bodypart3.point.y, bodypart3.point.z = -1, 1, 0
-    bodypart4.point.x, bodypart4.point.y, bodypart4.point.z = -1, 1, 1
-    person1.bodyParts.append(copy.deepcopy(bodypart1))
-    person1.bodyParts.append(copy.deepcopy(bodypart2))
-    person1.bodyParts.append(copy.deepcopy(bodypart3))
-    person1.bodyParts.append(copy.deepcopy(bodypart4))
-
-    person2 = Person()
-    person2.bodyParts.append(Bodypart())
-    bodypart1.point.x, bodypart1.point.y, bodypart1.point.z = 0, 0, 0
-    bodypart2.point.x, bodypart2.point.y, bodypart2.point.z = 2, 0, 0
-    bodypart3.point.x, bodypart3.point.y, bodypart3.point.z = 2, 0.5, 0
-    bodypart4.point.x, bodypart4.point.y, bodypart4.point.z = 6, 0.5, 3
-    person2.bodyParts.append(copy.deepcopy(bodypart1))
-    person2.bodyParts.append(copy.deepcopy(bodypart2))
-    person2.bodyParts.append(copy.deepcopy(bodypart3))
-    person2.bodyParts.append(copy.deepcopy(bodypart4))
-
-    # small test build order
-    body_order = [(1, 2), (2, 3), (3, 4)]
-    result_person = normalize_skelleton(person1, person2, body_order)
-    print("### Body parts resized (Test)###")
-    print("Point1, expect: 0, 0, 0")
-    print(result_person.bodyParts[1].point)
-    print("Point2, expect: 0, 2, 0")
-    print(result_person.bodyParts[2].point)
-    print("Point3, expect: -0.5, 2, 0")
-    print(result_person.bodyParts[3].point)
-    print("Point4, expect: -0.5, 2, 5")
-    print(result_person.bodyParts[4].point)
-
     #Node Test. Checks Joint Coverage.
     already_added_nodes : Set[int] = set({}) #For Debug
     already_added_nodes.add(BODY_BUILD_ORDER[0][0])

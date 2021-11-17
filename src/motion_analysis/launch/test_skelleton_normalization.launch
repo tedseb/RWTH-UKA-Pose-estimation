@@ -1,0 +1,3 @@
+<launch>
+  <node name="SkelletonUtilityTester" pkg="motion_analysis" type="skelleton_utility.py" />
+</launch> 

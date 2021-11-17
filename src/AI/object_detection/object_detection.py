@@ -53,7 +53,7 @@ class ObjectDetectionPipeline:
         sent to the function obj_detectYolo() and then the result (BBOX) is published.
         '''
         if img_data.is_debug:
-            logy.debug(f"Received image. Debug frame {img_data.debug_id}")
+            logy.debug(f"Received image. Debug frame {img_data.debug_id}", tag="debug_frame")
         img_msg = img_data.image
         shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
         img = np.frombuffer(img_msg.data, dtype=np.uint8)
@@ -89,7 +89,7 @@ class ObjectDetectionPipeline:
         if img_data.is_debug:
             left_top.is_debug = True
             left_top.debug_id = img_data.debug_id
-            logy.debug(f"Publish bboxes. Debug frame {img_data.debug_id}")
+            logy.debug(f"Publish bboxes. Debug frame {img_data.debug_id}", tag="debug_frame")
         self.publisher_boxes.publish(left_top)
 
         array1D_labels = np.array(self.labels).reshape(1,-1)

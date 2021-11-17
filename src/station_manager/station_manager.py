@@ -35,7 +35,7 @@ class ComputerWorkload:
         self.stations = set({})
 
 class StationManager():
-    def __init__(self, camera_path, transform_node_path, station_selection_path, verbose=False):
+    def __init__(self, camera_path, transform_node_path, station_selection_path, verbose=False, debug_frames_ms=0):
         if verbose:
             logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
         else:
@@ -49,6 +49,7 @@ class StationManager():
         except ROSException:
             ("Time out on channel  'ai/weight_detection'")
 
+        self._debug_frames_ms = debug_frames_ms
         self._data_manager = DataManager()
 
         self._verbose = verbose
@@ -114,6 +115,8 @@ class StationManager():
 
         if self._verbose:
             args += " -v"
+
+        args +=  f" --debug-frames {self._debug_frames_ms}"
 
         with self._camera_process_mutex:
             self.__camera_process[camera_id] = subprocess.Popen([self._path_camera_node] + args.split())
@@ -315,9 +318,11 @@ if __name__ == '__main__':
     rospy.init_node('station_manager', anonymous=False)
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
+    parser.add_argument("-v", "--verbose", help="Verbose mode.", action="store_true")
+    parser.add_argument("-d", "--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
+
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]
         args = parser.parse_args(valid_args)
@@ -328,7 +333,7 @@ if __name__ == '__main__':
     transform_node_path = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
     station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
 
-    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, verbose=True)
+    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, verbose=True, debug_frames_ms=args.debug_frames)
     logy.info("Station Manager is Ready")
     reactor.listenTCP(3030, station_manager._server_controller)
     reactor.run()

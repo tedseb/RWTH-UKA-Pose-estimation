@@ -1,3 +1,5 @@
 <launch>
-  <node name="logy_backend" pkg="logy_backend" output="screen" type="logy_backend.py" />
+  <arg name="log_level" default="0"/>
+  <arg name="logger_tags" default="msg" />
+  <node name="logy_backend" pkg="logy_backend" output="screen" type="logy_backend.py" args="$(eval '--log-level ' + str(arg('log_level')) + ' -t \'' + arg('logger_tags') + '\'')"/>
 </launch>

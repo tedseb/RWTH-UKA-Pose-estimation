@@ -38,7 +38,7 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=0):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
@@ -104,7 +104,7 @@ class CameraNode():
                 if time_now - time_past > self._debug_repetition_ms:
                     msg.is_debug = True
                     msg.debug_id = debug_id
-                    logy.debug(f"#### Start Debug Frame {debug_id} ####")
+                    logy.debug(f"#### Start Debug Frame {debug_id} ####", tag="debug_frame")
                     time_past = time_now
                     debug_id += 1
             self._pub.publish(msg)
@@ -244,6 +244,8 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
     parser.add_argument("-k", "--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
+    parser.add_argument("--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
+
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
 
@@ -285,7 +287,7 @@ if __name__ == '__main__':
 
     try:
         print("INFO:", info)
-        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
+        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames)
         if args.disk:
             node.start_video_publisher()
         else:

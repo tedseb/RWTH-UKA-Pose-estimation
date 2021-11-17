@@ -71,12 +71,12 @@ class PoseEstimator():
         #logy.info_throttle("GET IMAGE", 2000)
         #logy.info_throttle("GET IMAGE", 2000)
         if msg.is_debug:
-            logy.debug(f"Received image. Debug frame {msg.debug_id}")
+            logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
         self.last_image_message = msg.image
 
     def callback_regress(self, body_bbox_list_station : Bboxes):
         if body_bbox_list_station.is_debug:
-            logy.debug(f"Received bboxes. Debug frame {body_bbox_list_station.debug_id}")
+            logy.debug(f"Received bboxes. Debug frame {body_bbox_list_station.debug_id}", tag="debug_frame")
         body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
         tmpTime = time.time()
         # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest

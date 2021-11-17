@@ -92,7 +92,8 @@ class LogyBackend:
             message_output_level_file = MESSAGE_OUTPUT_LEVEL_FILE,
             file_prefix = DEFAULT_FILE_PREFIX,
             pipe_wait_time = PIPE_WAIT_TIME,
-            use_neptune = USE_NEPTUNE):
+            use_neptune = USE_NEPTUNE,
+            print_tags = []):
 
         self._log_to_terminal = log_to_terminal
         self._log_to_terminal_level = log_to_terminal_level
@@ -107,6 +108,7 @@ class LogyBackend:
         self._pipe = None
         self._error_occured = 0
         self._neptune_run = None
+        self._print_tags = print_tags
         if self._log_to_file:
             self._open_log_file(file_prefix)
 
@@ -163,7 +165,8 @@ class LogyBackend:
                 self._error_occured = CRITICAL
 
         if debug_level >= self._log_to_terminal_level:
-            self._log_msg_to_terminal(log_message, debug_level)
+            if data["tag"] == "msg" or data["tag"] in self._print_tags:
+                self._log_msg_to_terminal(log_message, debug_level)
 
         if self._message_output_level_terminal != self._message_output_level_file:
             log_message = self._format_message(data, self._message_output_level_file)
@@ -261,19 +264,22 @@ class LogyBackend:
                 self._neptune_run["Info"] = {"State" : "SUCCESS"}
             self._neptune_run.stop()
 
-def main(start_neptune=False):
+def main(start_neptune=False, tags=[]):
     try:
         os.mkfifo(FIFO)
     except OSError as oe:
         if oe.errno != errno.EEXIST:
             raise
 
-    logger_backend = LogyBackend(use_neptune=start_neptune)
+    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags)
     logger_backend.start_reading()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", "--neptune", help="Start with Neptune logging", action="store_true")
+    parser.add_argument("-t", "--tag", type=str, help="All tags which should be printed on the terminal. e.g: 'msg frame'")
+    parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
+
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
@@ -281,4 +287,9 @@ if __name__ == '__main__':
         args = parser.parse_args(valid_args)
     else:
         args = parser.parse_args()
-    main(args.neptune)
+
+    tags = []
+    if args.tag is not None and args.tag != "msg":
+        tags = str(args.tag).split()
+
+    main(args.neptune, tags=tags)

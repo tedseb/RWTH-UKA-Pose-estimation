@@ -55,12 +55,20 @@ class LogType:
 
 @dataclass
 class AverageData:
-    num : int
-    last_avg : float
+    caller_hash: hash
+    num: int
+    last_avg: float
 
 @dataclass
 class MeanData:
-    values : List[float]
+    caller_hash: hash
+    values: List[float]
+
+@dataclass
+class VariableData:
+    caller_hash: hash
+    values: List[float]
+    time_stamps: List[float]
 
 _name_to_level = {
     'critical': CRITICAL,
@@ -136,6 +144,7 @@ class LogyBackend:
         self._print_tags = print_tags
         self._avg_data: Dict[AverageData] = {}
         self._mean_data: Dict[MeanData] = {}
+        self._var_data: Dict[VariableData] = {}
         if self._log_to_file:
             self._open_log_file(file_prefix)
 
@@ -219,14 +228,14 @@ class LogyBackend:
         else:
             self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
-
     def _log_avg(self, data: Dict):
+        caller_hash = data["hash"]
         name = data["name"]
         value = data["value"]
 
         values_before: AverageData = self._avg_data.get(name)
         if values_before is None:
-            self._avg_data[name] = AverageData(1, value)
+            self._avg_data[name] = AverageData(caller_hash, 1, value)
             return
 
         n = values_before.num
@@ -235,16 +244,41 @@ class LogyBackend:
         values_before.last_avg = avg
         values_before.num += 1
 
+        if values_before.caller_hash != caller_hash:
+            self._log_message(" Logy: The avg log with name '{name}' is called from another location", WARNING)
+
     def _log_mean(self, data: Dict):
+        caller_hash = data["hash"]
         name = data["name"]
         value = data["value"]
 
         values_before: MeanData = self._mean_data.get(name)
         if values_before is None:
-            self._mean_data[name] = MeanData([value])
+            self._mean_data[name] = MeanData(caller_hash, [value])
             return
 
         values_before.values.append(value)
+
+        if values_before.caller_hash != caller_hash:
+            self._log_message(" Logy: The Mean log with name '{name}' is called from another location", WARNING)
+
+    def _log_var(self, data: Dict):
+        caller_hash = data["hash"]
+        name = data["name"]
+        value = data["value"]
+
+        if self._use_neptune:
+            self._neptune_run[f"variable/{name}"].log(value)
+
+        values_before: VariableData = self._var_data.get(name)
+        if values_before is None:
+            self._var_data[name] = VariableData(caller_hash, [value], [time.time()])
+            return
+
+        values_before.time_stamps.append(time.time())
+        values_before.values.append(value)
+        if values_before.caller_hash != caller_hash:
+            self._log_message(" Logy: The Mean log with name '{name}' is called from another location", WARNING)
 
     def _log_data_message(self, data: Dict):
         log_level = data["level"]

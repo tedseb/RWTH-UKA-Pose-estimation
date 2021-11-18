@@ -60,19 +60,21 @@ def get_message_type(level: int, msg: str, tag: str, module: str, file: str, lin
     }
     return message
 
-def get_avg_type(name: str, value: float) :
+def get_avg_type(name: str, value: float, caller_hash: hash) :
     message =  {
         "type": LogType.AVG,
         "name": name,
-        "value": value
+        "value": value,
+        "hash": caller_hash
     }
     return message
 
-def get_mean_type(name: str, value: float) :
+def get_mean_type(name: str, value: float, caller_hash: hash) :
     message =  {
         "type": LogType.MEAN,
         "name": name,
-        "value": value
+        "value": value,
+        "hash": caller_hash
     }
     return message
 
@@ -206,13 +208,17 @@ class Logy(metaclass=Singleton):
             self._pipe_send(data)
 
     def send_avg(self, msg: str, value: float):
+        file_name, line_no, function_name = findCaller(3)
+        caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_avg_type(msg, value)
+            data = get_avg_type(msg, value, caller_hash)
             self._pipe_send(data)
 
     def send_mean(self, msg: str, value: float):
+        file_name, line_no, function_name = findCaller(3)
+        caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_mean_type(msg, value)
+            data = get_mean_type(msg, value, caller_hash)
             self._pipe_send(data)
 
     def set_root_debug_level(self, debug_level: int):

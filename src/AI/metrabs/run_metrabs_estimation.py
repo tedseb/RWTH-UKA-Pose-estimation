@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 import numpy as np
 import cv2
+import os
+from multiprocessing import Lock
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices there actually are and manage them
+
 import tensorflow as tf
 import time
-import rospy
+import rospy as rp
+from collections import deque
 from sensor_msgs.msg import Image
+from backend.msg import ImageData
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
+from cv_bridge import CvBridge
+import logy
+import time
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import logging
+logging.basicConfig(level='ERROR')
 
 from tensorflow.python.keras.backend import set_session
 
@@ -21,90 +32,168 @@ set_session(sess)
 
 import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')
-# noinspection PyUnresolvedReferences
 from mpl_toolkits.mplot3d import Axes3D
 
-class run_metrabs():
+from inspect import getmembers, isfunction
+
+CONFIG = {
+    'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
+    'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
+}
+
+class Queue:
+    def __init__(self, queue_len = 10):
+        self._elements = deque([])
+        self._mutex = Lock()
+        self._queue_len = queue_len
+
+    def put(self, item):
+        with self._mutex:
+            self._elements.append(item)
+            if len(self._elements) > self._queue_len:
+                self._elements.popleft()
+
+    def get(self):
+        with self._mutex:
+            item = self._elements.popleft()
+        return item
+
+    def empty(self):
+        if self._elements:
+            return False
+        return True
+
+    def __getitem__(self, key):
+        with self._mutex:
+            item = self._elements[key]
+        return item
+
+class PoseEstimator():
     def __init__(self):
-        #self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined')
-        self.model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl')
-        self.img_original_bgr = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
-        #self.intrinsics = tf.constant([[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]], dtype=tf.float32)
-        self.intrinsics = tf.constant([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], dtype=tf.float32)
+        self.model = tf.saved_model.load(CONFIG["model_path"])
+
+        self.intrinsics = tf.constant(CONFIG.get("intrinsics"), dtype=tf.float32)
+        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        person_boxes = tf.constant([ [1000, 350, 500, 650]], tf.float32)
+
+        self.model.predict_single_image(image, self.intrinsics, person_boxes)
+
+
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
-        person_boxes = tf.constant([[0, 626, 367, 896], [524, 707, 475, 841], [588, 512, 54, 198]], tf.float32)
-
-        poses3d = self.model.predict_single_image(self.img_original_bgr, self.intrinsics, person_boxes)
-        #detections, poses3d, poses2d  = self.model.predict_single_image(self.img_original_bgr)
-        poses2d = ((poses3d / poses3d[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-        print("3D AI loaded")
 
         # define a publisher to publish the 3D skeleton of multiple people
-        self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
-        self.publisher_crop = rospy.Publisher('cropImage', Image, queue_size=2)   
+        self.publisher = rp.Publisher('personsJS', Persons, queue_size=2)
+        self.publisher_crop = rp.Publisher('cropped_images', Image, queue_size=2)
 
+        # Define a CV bridge that handles images for us
+        self.opencv_bridge = CvBridge()
 
         # define a subscriber to retrive tracked bodies
-        rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
-        #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
+        rp.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=1)
+        #rp.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
-        rospy.Subscriber('image', Image, self.callback_setImage)       
-        #srospy.Subscriber('image1', Image, self.callback_setImage)
-        self.spin()
-
-
-    def spin(self):
-        '''
-        We enter in a loop and wait for exit whenever `Ctrl + C` is pressed
-        '''
-        rospy.spin()
-
-    def callback_setImage(self, msg):
-        self.msg_image = msg
-        shape = self.msg_image.height, self.msg_image.width, 3     #(480, 640, 3) --> (y,x,3) = (h,w,3)
-        img = np.frombuffer(self.msg_image.data, dtype=np.uint8)
-        self.img_original_bgr = img.reshape(shape)
-        self.img_original_bgr = cv2.cvtColor(self.img_original_bgr, cv2.COLOR_BGR2RGB)
-
-    def callback_regress(self, body_bbox_list_station):
-        '''
-        This function will be called everytime whenever a message is received by the subscriber
-        '''
-        body_bbox_list_station_reshaped=np.array(body_bbox_list_station.data).reshape(-1,4)
-        tmpTime = time.time()
-
-        #ToDo: differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
-    
-        # Body Pose Regression
-        pred_output_list = self.model.predict_single_image(self.img_original_bgr, self.intrinsics, body_bbox_list_station_reshaped)
-        poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-        #self.visualize_pose((self.img_original_bgr), (pred_output_list.numpy()), (poses2d.numpy()), (self.model.crop_model.joint_edges.numpy()),(self.msg_image.header.stamp))
-        
-        fps = int(1/(time.time()-tmpTime))
-        print("FPS for Metrabs : ",fps)
-        self.publish_results(pred_output_list.numpy(), self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID,body_bbox_list_station_reshaped )
+        rp.Subscriber('image', ImageData, self.callback_setImage)
+        self._image_queue = Queue(3)
+        self._debug_time_queue = Queue(20)
+        #srp.Subscriber('image1', Image, self.callback_setImage)
 
 
-    def publish_results(self,results, img_msg, stationID,sensorID,boxes):  
-        if len(results) == 0:
+    def callback_setImage(self, msg: ImageData):
+        logy.info_throttle("GET IMAGE", 2000)
+        if msg.is_debug:
+            logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
+            time_ms = time.time() * 1000
+            self._debug_time_queue.put((time_ms, msg.debug_id))
+
+        self._image_queue.put(msg)
+
+    def get_next_image_in_queue(self, box_frame_number: int):
+        if self._image_queue.empty():
+            return None
+
+        bbox_num = box_frame_number
+        next_img_num = self._image_queue[0].frame_num
+
+        while next_img_num <= bbox_num:
+            img_data = self._image_queue.get()
+            if self._image_queue.empty():
+                break
+            next_img_num = self._image_queue[0].frame_num
+
+        if next_img_num != bbox_num:
+            return None
+        return img_data
+
+    def get_next_debug_frame(self, box_debug_id: int):
+        if self._debug_time_queue.empty():
+            return None
+
+        bbox_num = box_debug_id
+        next_img_num = self._debug_time_queue[0][1]
+        while next_img_num <= bbox_num:
+            debug_data = self._debug_time_queue.get()
+            if self._debug_time_queue.empty():
+                break
+            next_img_num = self._debug_time_queue[0][1]
+
+        if next_img_num != bbox_num:
+            return None
+        return debug_data
+
+    def callback_regress(self, body_bbox_list_station: Bboxes):
+        img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num)
+        if img_data is None:
+            #logy.warn_throttle("The next image is missing")
             return
-        inc=0
-        msg = Persons()
-        msg.header = img_msg.header
-        msg.persons = list()
+        last_image = img_data.image
 
-        cropImage=[]
-        for idx,detection in enumerate(results):
+        if body_bbox_list_station.is_debug:
+            debug_info = self.get_next_debug_frame(body_bbox_list_station.debug_id)
+            if debug_info is None:
+                logy.warn("The next Debug image is missing.")
+                logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
+            else:
+                logy.debug(f"Received bboxes. Debug frame {body_bbox_list_station.debug_id}", tag="debug_frame")
+                time_ms = time.time() * 1000
+                time_ms = time_ms - debug_info[0]
+                logy.log_avg("debug_frame_delay", time_ms)
+                logy.log_mean("debug_frame_delay", time_ms)
+
+        body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
+
+        # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
+        height = last_image.height
+        width = last_image.width
+        image = np.frombuffer(last_image.data, dtype=np.uint8)
+        image = image.reshape([height, width, 3])    #(480, 640, 3) --> (y,x,3) = (h,w,3)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        # Body Pose Regression
+        pred_output_list = self.model.predict_single_image(image, self.intrinsics, body_bbox_list_station_reshaped)
+        poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
+        stationID = body_bbox_list_station.stationID
+        sensorID = body_bbox_list_station.sensorID
+        boxes = body_bbox_list_station_reshaped
+
+        if len(pred_output_list.numpy()) == 0:
+            rp.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
+            return
+
+        inc = 0
+        msg = Persons()
+        msg.header = last_image.header
+        msg.persons = list()
+        cropped_images = []
+        for idx,detection in enumerate(pred_output_list.numpy()):
             joints=detection
             bb=boxes[idx]
-            croppedImg= self.img_original_bgr[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
-            #croppedImg= self.img_original_bgr[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]-bb[3]/2+bb[2]/2):int(bb[0]+bb[2]/2+bb[3]/2)]
-            cropImage.append(croppedImg)
-        
-            lenPoints=len(joints)       #ToDo use fix number of joints to save calculation time
+            image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
+            cropped_images.append(image)
+
+            lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
             person_msg = Person()
-            if len(stationID) >0:
+            if len(stationID) > 0:
                 person_msg.stationID = int(stationID[inc])
                 person_msg.sensorID = sensorID[inc]
             person_msg.bodyParts = [None]*lenPoints
@@ -112,59 +201,24 @@ class run_metrabs():
                 person_msg.bodyParts[idx] = Bodypart()
             for idx in range(lenPoints):
                 person_msg.bodyParts[idx].score = 0.8
-                person_msg.bodyParts[idx].pixel.x = joints[idx,0]
-                person_msg.bodyParts[idx].pixel.y = joints[idx,1]
-                person_msg.bodyParts[idx].point.x =joints[idx,0]/400-6
-                person_msg.bodyParts[idx].point.y =joints[idx,2]/400-25
-                person_msg.bodyParts[idx].point.z = -joints[idx,1]/400         #ToDo: Normalisierung ins Backend
+                person_msg.bodyParts[idx].pixel.x = joints[idx, 0]
+                person_msg.bodyParts[idx].pixel.y = joints[idx, 1]
+                person_msg.bodyParts[idx].point.x =joints[idx, 0] / 400-6 # TODO: @sm Please describe what these number stand for
+                person_msg.bodyParts[idx].point.y =joints[idx, 2] / 400-25
+                person_msg.bodyParts[idx].point.z = -joints[idx, 1] / 400
             inc=inc+1
             msg.persons.append(person_msg)
         self.publisher.publish(msg)
-        imgAdd=cv2.vconcat(cropImage)  
-        msg_cropImage = Image()
-        msg_cropImage.header.stamp = rospy.Time.now()
-        msg_cropImage.header.frame_id = img_msg.header.frame_id
-        msg_cropImage.encoding = "bgr8"
-        msg_cropImage.data = np.array(imgAdd, dtype=np.uint8).tostring()
-        msg_cropImage.height, msg_cropImage.width = imgAdd.shape[:-1]
-        msg_cropImage.step = imgAdd.shape[-1]*imgAdd.shape[0]
+        # Concatenate images and convert them to ROS image format to display them later in rviz
+        image_message = self.opencv_bridge.cv2_to_imgmsg(cv2.vconcat(cropped_images), encoding="passthrough")
 
-        self.publisher_crop.publish(msg_cropImage)
+        self.publisher_crop.publish(image_message)
 
-    def visualize_pose(self,image, poses3d, poses2d, edges, x):
-        # Matplotlib interprets the Z axis as vertical, but our poses have Y as the vertical axis.
-        # Therefore we do a 90 degree rotation around the horizontal (X) axis
-        poses3d[..., 1], poses3d[..., 2] = poses3d[..., 2], -poses3d[..., 1]
-
-        fig = plt.figure(figsize=(10, 5.2))
-        image_ax = fig.add_subplot(1, 2, 1)
-        image_ax.set_title('Input')
-        image_ax.imshow(image)
-
-        for pose2d in poses2d:
-            for i_start, i_end in edges:
-                image_ax.plot(*zip(pose2d[i_start], pose2d[i_end]), marker='o', markersize=2)
-            image_ax.scatter(pose2d[:, 0], pose2d[:, 1], s=2)
-
-        pose_ax = fig.add_subplot(1, 2, 2, projection='3d')
-        pose_ax.set_title('Prediction')
-        range_ = 3000
-        pose_ax.view_init(5, -85)
-        pose_ax.set_xlim3d(-range_, range_)
-        pose_ax.set_ylim3d(0, 2 * range_)
-        pose_ax.set_zlim3d(-range_, range_)
-        pose_ax.set_box_aspect((1, 1, 1))
-
-        for pose3d in poses3d:
-            for i_start, i_end in edges:
-                pose_ax.plot(*zip(pose3d[i_start], pose3d[i_end]), marker='o', markersize=2)
-            pose_ax.scatter(pose3d[:, 0], pose3d[:, 1], pose3d[:, 2], s=2)
-
-        fig.tight_layout()
-        #plt.show()
-        plt.savefig('/home/trainerai/trainerai-core/src/AI/metrabs/rosSave/Ted_intrin' + str(x)+'.png')
 
 if __name__ == '__main__':
-    rospy.init_node('metrabs', anonymous=True)
-    # instantiate the Comparator class
-    run_spin_obj = run_metrabs()
+    logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
+
+    rp.init_node('metrabs', anonymous=True)
+    run_spin_obj = PoseEstimator()
+    logy.info("Pose Estimator is listening")
+    rp.spin()

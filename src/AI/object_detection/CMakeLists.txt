@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(backend)
+project(object_detection)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -11,7 +11,6 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   message_generation
   std_msgs
-  sensor_msgs
   geometry_msgs
 )
 
@@ -49,26 +48,14 @@ catkin_python_setup()
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-  FILES
-  Pixel.msg
-  Bodypart.msg
-  Person.msg
-  Persons.msg
-  Commands.msg
-  Bboxes.msg
-  StationUsage.msg
-  Images.msg
-  LabelsCameraID.msg
-  WeightColor.msg
-  ImageData.msg
-)
+
 
 ## Generate services in the 'srv' folder
-add_service_files(
-  FILES
-  WeightDetection.srv
-)
+# add_service_files(
+#   FILES
+#   Service1.srv
+#   Service2.srv
+# )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -78,12 +65,6 @@ add_service_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-generate_messages(
-   DEPENDENCIES
-   std_msgs
-   sensor_msgs
-   geometry_msgs
-)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -131,6 +112,7 @@ CATKIN_DEPENDS message_runtime
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  src/spin/
 )
 
 ## Declare a C++ library
@@ -166,6 +148,7 @@ include_directories(
 #############
 ## Install ##
 #############
+
 
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html

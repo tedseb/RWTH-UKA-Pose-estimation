@@ -1,18 +1,21 @@
 #!/usr/bin/python3
 from pathlib import Path
+import time
 import glob
 import rospy
 import cv2
+import logy
 from sensor_msgs.msg import Image
+from backend.msg import ImageData
 import numpy as np
-import pafy
 import argparse
-import pylint
 import sys
 from pytube import YouTube
 from enum import Enum
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here.
 VIDEO_DIR_PATH = "/home/trainerai/trainerai-core/data/videos/"
+
+from std_msgs.msg import Int32
 
 class VideoMode(Enum):
     INVALID = 0
@@ -35,15 +38,16 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose = False, dev_id = 0, check_cameras = False, camera_mode = VideoMode.INVALID, video_info = None):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
         self._dev_id = "dev" + str(dev_id)
         self._youtube_mode = False
+        self._debug_repetition_ms = debug_repetition_ms
 
         rospy.init_node('camera', anonymous=True)
-        self._pub = rospy.Publisher('image', Image, queue_size=1)
+        self._pub = rospy.Publisher('image', ImageData, queue_size=1)
 
         if self._camera_mode is VideoMode.INVALID:
             raise RuntimeError("Invalid video mode")
@@ -64,7 +68,13 @@ class CameraNode():
             self._youtube_mode = True
 
     def start_camera_publisher(self):
-        rate = rospy.Rate(25)  #ToDO: Aufnahme ist in 25FPS
+        rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
+
+        logy.info("Camera node started")
+        if self._debug_repetition_ms > 0:
+            time_past = time.time() * 1000
+            debug_id = 0
+
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
             if not ret:
@@ -78,16 +88,71 @@ class CameraNode():
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
 
+            frame = cv2.resize(frame, (1280, 720))
+            img = Image()
+            img.header.stamp = rospy.Time.now()
+            img.header.frame_id = self._dev_id
+            img.encoding = "bgr8"
+            img.data = np.array(frame, dtype=np.uint8).tobytes()
+            img.height, img.width = frame.shape[:-1]
+            img.step = frame.shape[-1]*frame.shape[0]
+            msg = ImageData()
+            msg.image = img
+            msg.is_debug = False
+            if self._debug_repetition_ms > 0:
+                time_now = time.time() * 1000
+                if time_now - time_past > self._debug_repetition_ms:
+                    msg.is_debug = True
+                    msg.debug_id = debug_id
+                    logy.debug(f"#### Start Debug Frame {debug_id} ####", tag="debug_frame")
+                    time_past = time_now
+                    debug_id += 1
+            self._pub.publish(msg)
+            rate.sleep()
+
+    def start_video_publisher(self, calculate_timestamps=True):
+        self._timecode_pub = rospy.Publisher('ma_validation_video_timing', Int32, queue_size=100)
+        # Get the original FPS of the video
+        fps = self._cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_no = 0
+        # Our rate reflects the fps at which we WANT the video to play to match the normal rate of our AI
+        publish_fps = 25
+        rate = rospy.Rate(publish_fps)  # TODO: Aufnahme ist in 25FPS
+        duration = frame_count/publish_fps
+        while not rospy.is_shutdown() and self._cap.isOpened():
+            ret, frame = self._cap.read()
+            if not ret:
+                if self._disk_mode:
+                    self._cap.open(self._disk_path)
+                    continue
+
+                rospy.logerr('Could not get image')
+                raise IOError('[CameraNode] Could not get image')
+
+            if calculate_timestamps:
+                timestamp = int(frame_no / fps)
+            else:
+                timestamp = int(self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
+            frame_no += 1
+            # If there is a timestamp, we use it. Otherwise we use our own calculation
+            time_message = Int32()
+            time_message.data = timestamp
+            self._timecode_pub.publish(time_message)
+            if self._verbose:
+                rospy.logerr_throttle(10, "\nData Set Recording is running...\nTime in original video: " + str(timestamp) + " seconds.\nFrame no. is " + str(frame_no) + "/ " + str(frame_count) + "\nVideo has " + str(fps) + "fps. \nPublishing at " + str(publish_fps) + " fps.\nEta: " + str(duration - (frame_no/publish_fps)) + " seconds.")
+
             frame = cv2.resize(frame, (1280,720))
-            msg = Image()
-            msg.header.stamp = rospy.Time.now()
-            msg.header.frame_id = self._dev_id
-            #if self._youtube_mode:
-                #msg.header.frame_id = 'dev1'
-            msg.encoding = "bgr8"
-            msg.data = np.array(frame, dtype=np.uint8).tobytes()
-            msg.height, msg.width = frame.shape[:-1]
-            msg.step = frame.shape[-1]*frame.shape[0]
+            img = Image()
+            img.header.stamp = rospy.Time.now()
+            img.header.frame_id = self._dev_id
+            img.encoding = "bgr8"
+            img.data = np.array(frame, dtype=np.uint8).tobytes()
+            img.height, img.width = frame.shape[:-1]
+            img.step = frame.shape[-1]*frame.shape[0]
+            msg = ImageData()
+            msg.image = img
+            msg.is_debug = False
             self._pub.publish(msg)
             rate.sleep()
 
@@ -168,10 +233,9 @@ class CameraNode():
         print(f"START IP: {camera_ip}")
 
     def set_disk_video(self, path = "/home/trainerai/trainerai-core/data/video.avi"):
-        print("TEEST", path)
+        print("CAMERA PATH: ", path)
         self._disk_path = path
         self._cap = cv2.VideoCapture(path)
-        print("ALLES GUT")
 
 if __name__ == '__main__':
     print(sys.argv)
@@ -181,19 +245,17 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--check-cameras", help="Check all camera input id's from 0 to 10. Takes the first working match.", action="store_true")
     parser.add_argument("-i", "--camera-index", type=int, help="Open camera on opencv camera index")
     parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
-    parser.add_argument("--disk", type=str, help="Start video from disk path. Relative to root")
+    parser.add_argument("-k", "--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
+    parser.add_argument("--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
+
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
 
     if last_arg[:2] == "__":
-        #print("1")
         valid_args = sys.argv[1:arg_count - 2]
         args = parser.parse_args(valid_args)
     else:
-        # arg_count > 1:
-        #     print(sys.argv[1])
-        #     if str(sys.argv[1]).contains(" "):
         args = parser.parse_args()
 
     #Todo: In Ros Logger
@@ -210,7 +272,7 @@ if __name__ == '__main__':
         rospy.loginfo(f"Send on dev{args.dev_id}")
 
     mode = VideoMode.INVALID
-    info = ""
+
     if args.youtube_id is not None:
         mode = VideoMode.YOUTUBE
         info = args.youtube_id
@@ -224,9 +286,15 @@ if __name__ == '__main__':
         mode = VideoMode.DISK_VIDEO
         info = args.disk
 
+    logy.basic_config(debug_level=logy.DEBUG, module_name="CAMERA")
+
     try:
-        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
-        node.start_camera_publisher()
+        print("INFO:", info)
+        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames)
+        if args.disk:
+            node.start_video_publisher()
+        else:
+            node.start_camera_publisher()
     except rospy.ROSInterruptException:
         pass
 

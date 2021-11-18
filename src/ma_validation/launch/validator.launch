@@ -1,0 +1,5 @@
+<launch>
+  <arg name="bagfile" default=""/>
+  <include file="$(find motion_analysis)/launch/motion_analysis.launch" />
+  <node name="AnalysisValidator" pkg="motion_analysis" type="AnalysisValidator.py"/>
+</launch> 

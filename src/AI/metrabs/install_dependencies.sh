@@ -37,7 +37,6 @@ make OS=linux ENV=gnu CURSES=yes FORTRAN=no UCOPTIONS=-O2 SHARED=yes -j4 all
 # `cdf37_1-dist/src/lib` to the `LD_LIBRARY_PATH` environment variable (add to ~/.bashrc for permanent effect), or use GNU Stow.
 # The following will work temporarily:
 export LD_LIBRARY_PATH=$PWD/src/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-# export LD_LIBRARY_PATH=/home/optimus/trainerai-core/src/AI/metrabs/cdf37_1-dist/src/lib
 # export DATA_ROOT=~/Data
 # Optional:
 # Install libjpeg-turbo for faster JPEG decoding.

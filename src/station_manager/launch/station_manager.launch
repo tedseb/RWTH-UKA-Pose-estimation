@@ -1,0 +1,6 @@
+<launch>
+  <arg name="args" default=" "/>
+  <arg name="smo" default="log" />
+  <arg name="debug_frames" default="0" doc=" "/>
+  <node name="station_manager" pkg="station_manager" output="$(arg smo)" type="station_manager.py" args="$(eval '--debug-frames ' + str(arg('debug_frames')) + ' ' + str(arg('args')))"/>
+</launch>

@@ -387,4 +387,4 @@ if __name__ == '__main__':
     if args.tag is not None and args.tag != "msg":
         tags = str(args.tag).split()
 
-    main(args.neptune, tags=tags)
+    main(args.neptune, tags=tags, log_level_terminal=args.log_level)

@@ -99,7 +99,6 @@ class StationSelection(StationSelectionUi, QObject):
 
     def client_callback(self, callback):
         #logy.debug("Register Message Callback", self._verbose)
-        logy.warn("register callback")
         self._send_message = callback
 
     def show(self):

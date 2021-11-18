@@ -139,21 +139,39 @@ class LogyBackend:
     def __del__(self):
         if self._avg_data or self._mean_data:
             self._log_message("### Print all Logy meta data ###", INFO)
-            for name, value in self._avg_data.items():
-                info_str = f"# Average '{name}'={value.last_avg}, N={value.num}"
-                self._log_message(info_str, INFO)
-
-            for name, value in self._mean_data.items():
-                num = len(value.values)
-                mean_id = int(num / 2.0) + 1
-                info_str = f"# Mean '{name}'={value.values[mean_id]}, N={num}"
-                self._log_message(info_str, INFO)
+            self._log_avg_result()
+            self._log_mean_result()
 
         self._log_message("### Clean Shutdown of Logy Backend ###", INFO)
         if self._pipe is not None:
             self._pipe.close()
         if self._log_file is not None:
             self._log_file.close()
+
+    def _log_avg_result(self):
+        avg_logs = {}
+        for name, value in self._avg_data.items():
+            info_str = f"# Average '{name}'={value.last_avg}, N={value.num}"
+            self._log_message(info_str, INFO)
+            avg_logs[name] = value.last_avg
+            avg_logs[name + "_N"] = value.num
+
+        if self._use_neptune and avg_logs:
+            self._neptune_run["average"] = avg_logs
+
+    def _log_mean_result(self):
+        mean_logs = {}
+        for name, value in self._mean_data.items():
+            num = len(value.values)
+            mean_id = int(num / 2.0)
+            value.values.sort()
+            info_str = f"# Mean '{name}'={value.values[mean_id]}, N={num}"
+            self._log_message(info_str, INFO)
+            mean_logs[name] = value.values[mean_id]
+            mean_logs[name + "_N"] = num
+
+        if self._use_neptune and mean_logs:
+            self._neptune_run["mean"] = mean_logs
 
     def _open_pipe(self) -> bool:
         try:

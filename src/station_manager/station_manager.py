@@ -90,7 +90,6 @@ class StationManager():
         rospy.spin()
 
     def set_client_callback(self, client_id, callback):
-        logy.debug("Register Message Callback")
         self._client_callbacks[client_id] = callback
 
     def start_camera(self, camera_id: int, debug_station = False):

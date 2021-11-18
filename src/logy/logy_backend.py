@@ -62,6 +62,15 @@ class AverageData:
 class MeanData:
     values : List[float]
 
+_name_to_level = {
+    'critical': CRITICAL,
+    'error': ERROR,
+    'warning': WARNING,
+    'info': INFO,
+    'debug': DEBUG,
+    'notset': NOTSET,
+}
+
 class LogyBackend:
     _level_to_name = {
         CRITICAL: 'CRITICAL',
@@ -238,32 +247,32 @@ class LogyBackend:
         values_before.values.append(value)
 
     def _log_data_message(self, data: Dict):
-        debug_level = data["level"]
+        log_level = data["level"]
         log_message = self._format_message(data, self._message_output_level_terminal)
 
         if self._use_neptune:
-            if debug_level == ERROR and self._error_occured <= ERROR:
+            if log_level == ERROR and self._error_occured <= ERROR:
                 self._neptune_run["Info"] = {"State": "ERROR"}
                 self._error_occured = ERROR
-            if debug_level == CRITICAL:
+            if log_level == CRITICAL:
                 self._neptune_run["Info"] = {"State": "CRITICAL"}
                 self._error_occured = CRITICAL
 
-        if debug_level >= self._log_to_terminal_level:
+        if log_level >= self._log_to_terminal_level:
             if data["tag"] == "msg" or data["tag"] in self._print_tags:
-                self._log_msg_to_terminal(log_message, debug_level)
+                self._log_msg_to_terminal(log_message, log_level)
 
         if self._message_output_level_terminal != self._message_output_level_file:
             log_message = self._format_message(data, self._message_output_level_file)
 
-        if debug_level >= self._log_to_file_level:
-            self._log_msg_to_file(log_message, debug_level)
+        if log_level >= self._log_to_file_level:
+            self._log_msg_to_file(log_message, log_level)
 
-    def _log_message(self, msg, debug_level):
-        if debug_level >= self._log_to_terminal_level:
-            self._log_msg_to_terminal(msg, debug_level)
-        if debug_level >= self._log_to_file_level:
-            self._log_msg_to_file(msg, debug_level)
+    def _log_message(self, msg, log_level):
+        if log_level >= self._log_to_terminal_level:
+            self._log_msg_to_terminal(msg, log_level)
+        if log_level >= self._log_to_file_level:
+            self._log_msg_to_file(msg, log_level)
 
     def _format_message(self, data: Dict, format: int):
         msg = data["msg"]
@@ -280,17 +289,17 @@ class LogyBackend:
         msg = format_str.format(module, file, function, lineno, date, msg)
         return msg
 
-    def _log_msg_to_terminal(self, msg: str, debug_level: int):
+    def _log_msg_to_terminal(self, msg: str, log_level: int):
         if self._log_to_terminal:
-            color_level_str = f"{self._format_colors[debug_level]}[{self._level_to_name[debug_level]}]{self._format_colors[999]}"
-            if debug_level < ERROR:
+            color_level_str = f"{self._format_colors[log_level]}[{self._level_to_name[log_level]}]{self._format_colors[999]}"
+            if log_level < ERROR:
                 print(color_level_str + msg)
             else:
                 sys.stderr.write(color_level_str + msg + "\n")
 
-    def _log_msg_to_file(self, msg: str, debug_level: int):
+    def _log_msg_to_file(self, msg: str, log_level: int):
         if self._log_to_file and self._log_file is not None:
-            level_str = f"[{self._level_to_name[debug_level]}]"
+            level_str = f"[{self._level_to_name[log_level]}]"
             self._log_file.write(level_str + msg + "\n")
 
     def pipe_loop(self):
@@ -349,14 +358,15 @@ class LogyBackend:
                 self._neptune_run["Info"] = {"State": "SUCCESS"}
             self._neptune_run.stop()
 
-def main(start_neptune=False, tags=[]):
+def main(start_neptune=False, tags=[], log_level_terminal="warning"):
     try:
         os.mkfifo(FIFO)
     except OSError as oe:
         if oe.errno != errno.EEXIST:
             raise
 
-    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags)
+    level = _name_to_level[log_level_terminal]
+    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags, log_to_terminal_level=level)
     logger_backend.start_reading()
 
 if __name__ == '__main__':

@@ -50,21 +50,14 @@ class Validator():
         data = json.loads(msg.data)['data']
         station_usage_hash = str(data['station_usage_hash'])
         if station_usage_hash == str(self.last_set.station_usage_hash):
-            rp.logerr(msg)
-            rp.logerr(self.last_set)
             self.last_set_reps = data["repetitions"]
         elif station_usage_hash == str(self.active_set.station_usage_hash):
-            rp.logerr(msg)
-            rp.logerr(self.active_set)
             self.active_set_reps = data["repetitions"]
         else:
             rp.logerr("Could not match current station_usage_hash with the one that we got from the motion analysis.")
 
     def ma_validation_set_callback(self, msg):
         self.semaphore.acquire()
-        rp.logerr(msg)
-        rp.logerr(self.last_set)
-        rp.logerr(self.active_set)
         if msg.start:
             self.last_set = self.active_set
             self.last_set_reps = self.active_set_reps

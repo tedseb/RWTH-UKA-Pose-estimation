@@ -143,6 +143,7 @@ class Worker(Thread):
 
         while(self.running):
             try:
+                self.spot_info_dict.update(self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "station_usage_hash"]))
                 self.spot_info_dict.update(self.get_exercise_data(spot_info_key, self.spot_info_dict["exercise_data_hash"]))
 
                 # As long as there are skelletons available for this spot, continue
@@ -169,7 +170,7 @@ class Worker(Thread):
                         pos_median = abs(np.median(positive_progresses_differences))
                     else:
                         pos_median = 0
-                    if  neg_mean > pos_median * JUMPY_PROGRESS_ALPHA and JUMPY_PROGRESS_BETA * len(negative_progress_differences) > len(positive_progresses_differences):
+                    if  neg_mean > pos_median * JUMPY_PROGRESS_ALPHA and JUMPY_PROGRESS_BETA * len(negative_progress_differences) > len(positive_progresses_differences) and not ROBUST_COUNTING_MODE:
                         log("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                         self.bad_repetition = True
                         increase_reps = False

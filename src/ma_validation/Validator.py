@@ -15,6 +15,7 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import threading
 
 import datetime
 
@@ -34,9 +35,11 @@ class Validator():
         self.ma_validation_done_subscriber = rp.Subscriber('ma_validation_done', Int32, self.create_report)
 
         self.active_set = MAValidationSetInfo()
-        self.active_set_reps = None
+        self.active_set_reps = 0
         self.last_set = MAValidationSetInfo()
-        self.last_set_reps = None
+        self.last_set_reps = 0
+
+        self.semaphore = threading.Semaphore()
 
         self.total_reps = 0
         self.positive_errors = 0
@@ -47,13 +50,21 @@ class Validator():
         data = json.loads(msg.data)['data']
         station_usage_hash = str(data['station_usage_hash'])
         if station_usage_hash == str(self.last_set.station_usage_hash):
+            rp.logerr(msg)
+            rp.logerr(self.last_set)
             self.last_set_reps = data["repetitions"]
         elif station_usage_hash == str(self.active_set.station_usage_hash):
+            rp.logerr(msg)
+            rp.logerr(self.active_set)
             self.active_set_reps = data["repetitions"]
         else:
             rp.logerr("Could not match current station_usage_hash with the one that we got from the motion analysis.")
 
     def ma_validation_set_callback(self, msg):
+        self.semaphore.acquire()
+        rp.logerr(msg)
+        rp.logerr(self.last_set)
+        rp.logerr(self.active_set)
         if msg.start:
             self.last_set = self.active_set
             self.last_set_reps = self.active_set_reps
@@ -61,11 +72,19 @@ class Validator():
             self.active_set_reps = 0
             rp.logerr("Started set")
         else:
-            finished_set = self.active_set
+            if msg.t_from_s == self.active_set.t_from_s:
+                finished_set = self.active_set
+                reps = self.active_set_reps
+            elif msg.t_from_s == self.last_set.t_from_s:
+                finished_set = self.last_set
+                reps = self.last_set_reps
+            else:
+                rp.logerr("Could not match current station_usage_hash with the one that we got from the motion analysis.")
+                return
             rp.logerr("Finished set")
 
-            positive_error = np.clip(self.active_set_reps - msg.reps, 0, None)
-            negative_error = np.clip(msg.reps - self.active_set_reps, 0, None)
+            positive_error = np.clip(reps - msg.reps, 0, None)
+            negative_error = np.clip(msg.reps - reps, 0, None)
             rp.logerr("Positive Error: " + str(positive_error)) 
             rp.logerr("Negative Error: " + str(negative_error)) 
             self.positive_errors += positive_error
@@ -79,6 +98,8 @@ class Validator():
                 self.done_exercises[finished_set.exercise_id] = np.array([0, 0, 0, 0, 0])
 
             self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
+        
+        self.semaphore.release()
             
     def create_report(self, msg):
         rows = list(self.done_exercises.keys())
@@ -121,6 +142,3 @@ if __name__ == '__main__':
     validator = Validator()
 
     rp.spin()
-
-    
-

@@ -47,7 +47,8 @@ class ServerSocket(WebSocketServerProtocol):
             result : ResponseAnswer = function(self._id, pyaload)
         except Exception as exception:
             self.send_error_ts(str(exception))
-            self.factory._logger.error("Could not handle client request")
+            trace = traceback.format_exc()
+            self.factory._logger.error(f"Could not handle client request: \n {trace}")
             return
 
         #traceback.print_exc()

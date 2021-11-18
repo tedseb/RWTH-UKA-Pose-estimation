@@ -100,7 +100,7 @@ class PoseEstimator():
 
 
     def callback_setImage(self, msg: ImageData):
-        logy.info_throttle("GET IMAGE", 2000)
+        logy.debug_throttle("GET IMAGE", 5000)
         if msg.is_debug:
             logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
             time_ms = time.time() * 1000

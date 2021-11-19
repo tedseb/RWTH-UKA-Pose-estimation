@@ -37,6 +37,7 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Algorithm import *
     from motion_analysis.src.algorithm.logging import log
+    from motion_analysis.src.algorithm.SkelletonUtility import *
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -50,6 +51,7 @@ except ImportError:
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Algorithm import *
     from src.algorithm.logging import log
+    from src.algorithm.SkelletonUtility import *
 
 
 class NoJointsAvailable(Exception):
@@ -126,7 +128,7 @@ class Worker(Thread):
         msg.stationID = self.spot_key
         msg.sensorID = -1
         msg.bodyParts = ros_pose
-        self.predicted_skelleton_publisher.publish(msg)
+        publisher.publish(msg)
 
     def run(self) -> NoReturn:
         _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key)
@@ -151,6 +153,8 @@ class Worker(Thread):
 
                 # Extract feature states
                 pose = present_joints_with_timestamp['used_joint_ndarray']
+
+                pose = normalize_skelleton(pose)
 
                 for f in self.features.values():
                     f.update(pose, self.pose_definition_adapter)
@@ -202,6 +206,7 @@ class Worker(Thread):
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
                 # Publish poses on ROS
+                reference_pose = normalize_skelleton(reference_pose)
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
                 self.publish_pose(pose, self.user_skelleton_publisher)
 

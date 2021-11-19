@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
-This file contains the WorkerHandler Node.
+This file contains the Skelleton Utility.
 It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
-Based on https://github.com/Basti110/skeleton-normalization/blob/main/convert.py
+Based on Ted's https://github.com/Basti110/skeleton-normalization/blob/main/convert.py
 """
 
 from typing import Set
@@ -27,7 +27,12 @@ ORIENTATION_VECTOR_JOINT_IDXS_1 = (0, 1)
 ORIENTATION_VECTOR_JOINT_IDXS_2 = (0, 2)
 
 
-def calculate_orientation_matrix(input_skelleton):
+def calculate_orientation_vector(input_skelleton):
+    """Returns the orientation of the skelleton's pelvis.
+
+    Calculateas the orientation of the pelvis joint connections of the skelleton.
+    The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
+    """
     # Roate skelleton, such that skelletons pelvises overlap
     x = np.array(input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_1[1]] - input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_1[0]])
     y = np.array(input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_2[1]] - input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_2[0]])
@@ -39,7 +44,7 @@ def calculate_orientation_matrix(input_skelleton):
     _y = cross__z_x / np.linalg.norm(cross__z_x)
     return  np.stack([_x, _y, _z])
 
-normal_orientation_matrix_transpose = np.matrix.transpose(calculate_orientation_matrix(normal_skelleton))
+normal_orientation_matrix_transpose = np.matrix.transpose(calculate_orientation_vector(normal_skelleton))
 
 
 def resize_len_vec1_to_vec2(vec1, vec2):
@@ -49,12 +54,12 @@ def resize_len_vec1_to_vec2(vec1, vec2):
 
 
 def normalize_skelleton_size(input_skelleton):
-    '''Stretch all vectors of person to the same length as the vectors in normal_skelleton
+    """Stretch all vectors of person to the same length as the vectors in normal_skelleton
 
     BODY_BUILD_ORDER: The order to build a completly new skeleton with the old vectors. The first Index in the first tuple
     is the start point. It is the only point with the same coordinates as before. For the new skeleton, the algorithm
     takes the vector direction of person and the vecttor length of person2.
-    '''
+    """
     resized_skelleton = np.copy(input_skelleton)
 
     first_joint_idx = BODY_BUILD_ORDER[0][0]
@@ -83,6 +88,7 @@ def normalize_skelleton_size(input_skelleton):
 
 
 def normalize_skelleton_position(input_skelleton):
+    """Returns a skelleton with the pelvis at (0, 0, 0)."""
     reoriented_skelleton = np.copy(input_skelleton)
     # Move skelleton to 0/0/0 by substracting coordinates of central joint from all joints
     for joint_idx in range(len(reoriented_skelleton)):
@@ -93,17 +99,18 @@ def normalize_skelleton_position(input_skelleton):
     return reoriented_skelleton
 
 def normalize_skelleton_orientation(input_skelleton):
+    """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
     reoriented_skelleton = np.copy(input_skelleton)
-    reoriented_skelleton_rotation_matrix = calculate_orientation_matrix(reoriented_skelleton)
-    rotation_matrix_to_normal_orientation = np.matmul(reoriented_skelleton_rotation_matrix, normal_orientation_matrix_transpose)
+    reoriented_skelleton_rotation_matrix = calculate_orientation_vector(reoriented_skelleton)
+    rotation_matrix_to_normal_orientation = np.matmul(normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
 
     for joint_idx in range(len(reoriented_skelleton)):
         reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix_to_normal_orientation)
 
     return reoriented_skelleton
 
-
-def skelleton_coherency_check():
+def skelleton_coherency_test():
+    """Check whether all joints are connected."""
     already_added_nodes : Set[int] = set({})
     already_added_nodes.add(BODY_BUILD_ORDER[0][0])
     for joint in BODY_BUILD_ORDER:
@@ -115,10 +122,9 @@ def skelleton_coherency_check():
     rp.logerr(f"Total number of joints: {len(already_added_nodes)}")
     rp.logerr(already_added_nodes)
 
-
-if __name__ == '__main__':
-    x = normalize_skelleton_size(normal_skelleton)
-    x = normalize_skelleton_position(normal_skelleton)
-    x = normalize_skelleton_orientation(normal_skelleton)
-
-    # You can log differences between the normalized versions of the normal skelleton to see if everything is fine
+def normalize_skelleton(input_skelleton):
+    """Utility method to normalize size, position and orientation of skelleton."""
+    skelleton = normalize_skelleton_size(input_skelleton)
+    skelleton = normalize_skelleton_position(skelleton)
+    skelleton = normalize_skelleton_orientation(skelleton)
+    return skelleton

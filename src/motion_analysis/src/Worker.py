@@ -206,7 +206,6 @@ class Worker(Thread):
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
                 # Publish poses on ROS
-                reference_pose = normalize_skelleton(reference_pose)
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
                 self.publish_pose(pose, self.user_skelleton_publisher)
 

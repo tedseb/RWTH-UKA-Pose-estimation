@@ -14,11 +14,13 @@ try:
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.algorithm.AlgoConfig import X, Y, Z
     from motion_analysis.src.algorithm.AlgoUtils import PoseDefinitionAdapter
+    from motion_analysis.src.algorithm.SkelletonUtility import *
 except ImportError:
     from src.DataConfig import *
     from src.DataUtils import *
     from src.algorithm.AlgoConfig import X, Y, Z
     from src.algorithm.AlgoUtils import PoseDefinitionAdapter
+    from src.algorithm.SkelletonUtility import *
 
 try:
     from backend.msg import Bodypart
@@ -170,6 +172,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
         return array
 
+
     def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
         # We need some dummy body parts that we do not actually use but are still part of the Person defined by SPIN
         body_parts = [Bodypart()] * len(self.joint_labels)
@@ -182,4 +185,3 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
             body_parts[used_index] = b
         
         return body_parts
-

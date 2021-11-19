@@ -41,11 +41,13 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.ROSAdapters import *
+    from motion_analysis.src.algorithm.SkelletonUtility import *
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Features import *
     from src.ROSAdapters import *
+    from src.algorithm.SkelletonUtility import *
 
 
 class FeatureExtractorException(Exception):

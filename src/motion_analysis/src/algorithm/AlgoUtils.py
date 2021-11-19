@@ -5,6 +5,11 @@
 This file contains a code snippets that have nowhere else to go.
 """
 
+try:
+    from motion_analysis.src.algorithm.SkelletonUtility import *
+except ImportError:
+    from src.algorithm.SkelletonUtility import *
+
 from typing import Any
 import numpy as np
 from abc import abstractmethod
@@ -58,6 +63,14 @@ class PoseDefinitionAdapter():
         """ Take a list of Bodyparts objects and turn them into an array of pose_arrays."""
         raise NotImplementedError("Work in progress.")
 
+    def normalize_skelletons(self, recording: np.ndarray) -> np.ndarray:
+        new_recording = list()
+        for pose_array in recording:
+            new_recording.append(normalize_skelleton(pose_array))
+        
+        return np.array(new_recording)
+
+
 
 def map_progress_to_vector(progress: float):
     """ Calculate the cartesian represenation of a progress as a unit vector.
@@ -74,6 +87,7 @@ def map_progress_to_vector(progress: float):
     """
     return complex(np.cos(progress*2*np.pi), np.sin(progress*2*np.pi))
 
+    
 
 def map_vectors_to_progress_and_alignment(vectors: list):
     """ Sum a list of 2D vectors up to a single vector, representing the overall, averaged progress.

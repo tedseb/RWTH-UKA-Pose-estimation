@@ -101,6 +101,7 @@ class WorkerHandler(QThread):
 
             # TODO: In the future: Possibly use multiple recordings
             recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+            recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
             recordings = [recording]
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)

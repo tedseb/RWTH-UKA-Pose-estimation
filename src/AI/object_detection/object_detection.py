@@ -67,6 +67,8 @@ class ObjectDetectionPipeline:
             return
 
         fps = int(1/(time.time()-tmpTime))
+        logy.log_var("yolo_fps", fps, period=25, smoothing=0.9)
+        logy.log_fps("img_loop_fps")
         # print("FPS: ",fps)
         if self.renderer==True:
             msg_renderImage = Image()

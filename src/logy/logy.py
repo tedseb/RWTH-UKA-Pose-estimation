@@ -60,23 +60,23 @@ def get_message_type(level: int, msg: str, tag: str, module: str, file: str, lin
     }
     return message
 
-def get_avg_type(name: str, value: float, caller_hash: hash) :
+def get_value_type(name: str, value: float, caller_hash: hash, type: LogType) :
     message =  {
-        "type": LogType.AVG,
+        "type": type,
         "name": name,
         "value": value,
         "hash": caller_hash
     }
     return message
 
+def get_avg_type(name: str, value: float, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, LogType.AVG)
+
 def get_mean_type(name: str, value: float, caller_hash: hash) :
-    message =  {
-        "type": LogType.MEAN,
-        "name": name,
-        "value": value,
-        "hash": caller_hash
-    }
-    return message
+    return get_value_type(name, value, caller_hash, LogType.MEAN)
+
+def get_var_type(name: str, value: float, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, LogType.VARIABLE)
 
 class Singleton(type):
     _instance = None
@@ -95,6 +95,8 @@ class LogyHandler:
         self._logger = logger
         self._module = module
         self._throttle_timings = {}
+        self._variables = {}
+        self._fps_timings = {}
 
     def _send_msg(self, msg, tag, debug_level, trace_level):
         if debug_level < self._debug_level:
@@ -113,6 +115,37 @@ class LogyHandler:
         if throttle_timing is None or timstamp_now - throttle_timing >= throttel_time:
             self._logger.send_msg(debug_level, msg, tag, self._module, file_name, line_no, function_name)
             self._throttle_timings[throttle_hash] = timstamp_now
+
+    def _log_var(self, name: str, value: float, period, smoothing, trace_level=4):
+        if period == 0 and smoothing == 0.0:
+            self._logger.send_var(name, value, trace_level)
+
+        var_list = self._variables.get(name)
+        if var_list is None:
+            self._variables[name] = [0, value]
+            return
+
+        per = var_list[0] + 1
+        last_val = var_list[1]
+        last_val = last_val * smoothing + value * (1.0 - smoothing)
+        var_list[1] = last_val
+
+        if per >= period:
+             var_list[0] = 0
+             self._logger.send_var(name, last_val, trace_level)
+        else:
+            var_list[0] = per
+
+    def _log_fps(self, name, period, smoothing):
+        fps_last_time = self._fps_timings.get(name)
+        if fps_last_time is None:
+            self._fps_timings[name] = time.time()
+            return
+
+        time_s = time.time()
+        fps = 1 / (time_s - fps_last_time)
+        self._fps_timings[name] = time_s
+        self._log_var(name, fps, period, smoothing, 5)
 
     def debug(self, msg: str, tag="msg"):
         self._send_msg(msg, tag, DEBUG, 3)
@@ -156,11 +189,17 @@ class LogyHandler:
     def fatal_throttle(self, msg: str, throttel_time_ms, tag="msg"):
         self._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
 
-    def log_avg(self, msg: str, value: float):
-        self._logger.send_avg(msg, value)
+    def log_avg(self, name: str, value: float):
+        self._logger.send_avg(name, value)
 
-    def log_mean(self, msg: str, value: float):
-        self._logger.send_mean(msg, value)
+    def log_mean(self, name: str, value: float):
+        self._logger.send_mean(name, value)
+
+    def log_var(self, name: str, value: float, period=0, smoothing=0.0):
+        self._log_var(name, value, period, smoothing)
+
+    def log_fps(self, name: str, period=50, smoothing=0.9):
+        self._log_fps(name, period, smoothing)
 
 class Logy(metaclass=Singleton):
     def __init__(self):
@@ -207,18 +246,25 @@ class Logy(metaclass=Singleton):
             data = get_message_type(level, msg, tag, module, file, lineno, function)
             self._pipe_send(data)
 
-    def send_avg(self, msg: str, value: float):
-        file_name, line_no, function_name = findCaller(3)
+    def send_avg(self, name: str, value: float, trace_level = 3):
+        file_name, line_no, function_name = findCaller(trace_level)
         caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_avg_type(msg, value, caller_hash)
+            data = get_avg_type(name, value, caller_hash)
             self._pipe_send(data)
 
-    def send_mean(self, msg: str, value: float):
-        file_name, line_no, function_name = findCaller(3)
+    def send_mean(self, name: str, value: float, trace_level = 3):
+        file_name, line_no, function_name = findCaller(trace_level)
         caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_mean_type(msg, value, caller_hash)
+            data = get_mean_type(name, value, caller_hash)
+            self._pipe_send(data)
+
+    def send_var(self, name: str, value: float, trace_level = 3):
+        file_name, line_no, function_name = findCaller(trace_level)
+        caller_hash = hash(file_name + str(line_no) + function_name)
+        with self._lock:
+            data = get_var_type(name, value, caller_hash)
             self._pipe_send(data)
 
     def set_root_debug_level(self, debug_level: int):
@@ -304,12 +350,21 @@ def fatal_throttle(msg: str, throttel_time_ms, tag="msg"):
     logger = Logy()
     logger._root._send_msg_throttle(msg, throttel_time_ms, tag, CRITICAL, 3)
 
-def log_avg(msg: str, value: float):
+def log_avg(name: str, value: float):
     logger = Logy()
-    logger.send_avg(msg, value)
+    logger.send_avg(name, value)
 
-def log_mean(msg: str, value: float):
+def log_mean(name: str, value: float):
     logger = Logy()
-    logger.send_mean(msg, value)
+    logger.send_mean(name, value)
+
+def log_var(name: str, value: float, period=0, smoothing=0.0):
+    '''smoothing: value = (last_value * smoothing) + (value * (1.0-smoothing))'''
+    logger = Logy()
+    logger._root._log_var(name, value, period, smoothing)
+
+def log_fps(name: str, period=50, smoothing=0.9):
+    logger = Logy()
+    logger._root._log_fps(name, period, smoothing)
 
 sys.excepthook = exception_hook

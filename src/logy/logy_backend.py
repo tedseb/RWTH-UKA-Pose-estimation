@@ -166,6 +166,9 @@ class LogyBackend:
         if self._log_file is not None:
             self._log_file.close()
 
+        if self._use_neptune:
+            self._neptune_run.stop()
+
     def _log_avg_result(self):
         avg_logs = {}
         for name, value in self._avg_data.items():
@@ -225,6 +228,8 @@ class LogyBackend:
             self._log_avg(data)
         elif message_type == LogType.MEAN:
             self._log_mean(data)
+        elif message_type == LogType.VARIABLE:
+            self._log_var(data)
         else:
             self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
@@ -245,7 +250,7 @@ class LogyBackend:
         values_before.num += 1
 
         if values_before.caller_hash != caller_hash:
-            self._log_message(" Logy: The avg log with name '{name}' is called from another location", WARNING)
+            self._log_message(f" Logy: The avg log with name '{name}' is called from another location", WARNING)
 
     def _log_mean(self, data: Dict):
         caller_hash = data["hash"]
@@ -260,7 +265,7 @@ class LogyBackend:
         values_before.values.append(value)
 
         if values_before.caller_hash != caller_hash:
-            self._log_message(" Logy: The Mean log with name '{name}' is called from another location", WARNING)
+            self._log_message(f" Logy: The Mean log with name '{name}' is called from another location", WARNING)
 
     def _log_var(self, data: Dict):
         caller_hash = data["hash"]
@@ -278,7 +283,7 @@ class LogyBackend:
         values_before.time_stamps.append(time.time())
         values_before.values.append(value)
         if values_before.caller_hash != caller_hash:
-            self._log_message(" Logy: The Mean log with name '{name}' is called from another location", WARNING)
+            self._log_message(f" Logy: The Mean log with name '{name}' is called from another location", WARNING)
 
     def _log_data_message(self, data: Dict):
         log_level = data["level"]
@@ -390,7 +395,6 @@ class LogyBackend:
                 self._neptune_run["log_file"].upload(self._log_file_path)
             if self._error_occured < ERROR:
                 self._neptune_run["Info"] = {"State": "SUCCESS"}
-            self._neptune_run.stop()
 
 def main(start_neptune=False, tags=[], log_level_terminal="warning"):
     try:

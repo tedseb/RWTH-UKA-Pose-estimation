@@ -275,6 +275,9 @@ class LogyBackend:
         if self._use_neptune:
             self._neptune_run[f"variable/{name}"].log(value)
 
+        if "var" in self._print_tags:
+            self._log_msg_to_terminal(f"VARIABLE:{name}: {value}", DEBUG)
+
         values_before: VariableData = self._var_data.get(name)
         if values_before is None:
             self._var_data[name] = VariableData(caller_hash, [value], [time.time()])

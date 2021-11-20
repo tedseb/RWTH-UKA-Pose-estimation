@@ -50,8 +50,6 @@ def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarra
     return normed_errors
 
 
-
-
 def total_joint_difference(pose: np.ndarray, reference_pose: np.ndarray):
     return np.average(pose - reference_pose)
 

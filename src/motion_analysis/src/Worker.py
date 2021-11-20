@@ -21,6 +21,7 @@ import numpy as np
 import rospy as rp
 from std_msgs.msg import String
 from unittest import mock
+from scipy import signal
 
 from backend.msg import Person
 
@@ -111,6 +112,8 @@ class Worker(Thread):
 
         self.spot_info_dict = None
 
+        self.skelleton_deltas_since_rep_start = []
+
         self.start()
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
@@ -184,14 +187,17 @@ class Worker(Thread):
                     log("Feature missalignment during this repetition. Repetition falsified.")
                     increase_reps = False
                     self.alignments_this_rep = np.array([])
-
+                
                 # Calculate a new reference pose mapping
                 reference_pose = self.calculate_reference_pose_mapping()
 
-                # TODO: Put code here that compares skelletons and tells us how good a repetition was
+                delta = (pose - reference_pose).sum()
+                self.skelleton_deltas_since_rep_start.append(delta)
+                score = self.calculate_repetition_score()
 
                 # Send info back to REST API
                 if increase_reps:
+                    score = self.calculate_repetition_score()
                     self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
                     user_state_data = {
                         'station_id': self.spot_key,
@@ -199,7 +205,7 @@ class Worker(Thread):
                         'repetitions': self.spot_info_dict['repetitions'],
                         'miliseconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time', 0))) / 1e+6,
                         'milliseconds_since_last_repetition': 0,
-                        'repetition_score': 100,
+                        'repetition_score': int(score),
                         'exercise_score': 100,
                         'station_usage_hash': self.spot_info_dict.get('station_usage_hash', "")
                     }
@@ -259,6 +265,7 @@ class Worker(Thread):
         predicted_indices = []
         median_resampled_values_reference_trajectory_fractions = []
         progress_vectors = []
+
 
         for h, f in self.features.items():
             # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
@@ -359,6 +366,7 @@ class Worker(Thread):
         # increase_reps_ratio = increase_reps_yes/increase_reps_no
         # in_beginning_state_ratio = in_beginning_state_yes/in_beginning_state_no
 
+
         if in_beginning_state and self.bad_repetition:
             log("Bad repetition aborted. Resetting feature progressions and repetition data...")
             for f in features.values():
@@ -379,6 +387,7 @@ class Worker(Thread):
 
         if not in_beginning_state and self.beginning_of_next_repetition_detected:
             log("Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+            self.skelleton_deltas_since_rep_start = []
             self.beginning_of_next_repetition_detected = False
             self.alignments_this_rep = np.array([])
             self.progress_differences_this_rep = np.array([])
@@ -386,3 +395,15 @@ class Worker(Thread):
 
 
         return increase_reps
+
+    def calculate_repetition_score(self):
+        x = self.skelleton_deltas_since_rep_start
+        alpha = 1/20 # This has to be heuristically determined, as is depends on the size of the normal skelleton
+        critical_freq = 0.01 # TODO: Choose heuristically!!
+        # Filter scores in order to minimize impact of faulty reference skelleton predictions
+        b, a = signal.butter(4, critical_freq, analog=False)
+        x = signal.filtfilt(b, a, x)
+        average_delta = np.average(x) # Try average and median here, see which one works better
+        delta_score = average_delta * alpha
+        score = 100 * np.clip(1 - delta_score, 0, 1)
+        return score

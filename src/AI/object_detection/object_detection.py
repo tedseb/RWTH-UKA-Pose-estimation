@@ -59,16 +59,16 @@ class ObjectDetectionPipeline:
         img = np.frombuffer(img_msg.data, dtype=np.uint8)
         img_original_bgr = img.reshape(shape)
         self.frame_id=int(img_msg.header.frame_id[3:])
-        tmpTime = time.time()
+
 
         img = self.obj_detectYolo(img_original_bgr)
 
         if img is None:
             return
 
-        fps = int(1/(time.time()-tmpTime))
-        logy.log_var("yolo_fps", fps, period=25, smoothing=0.9)
-        logy.log_fps("img_loop_fps")
+
+        logy.log_fps("object_detection_fps")
+        #logy.info_throttle(f"fps = {fps}", 1000)
         # print("FPS: ",fps)
         if self.renderer==True:
             msg_renderImage = Image()
@@ -108,8 +108,12 @@ class ObjectDetectionPipeline:
         The labels are analyzed to see if they are human, then they are examined to see if their BBOX are within a station.
         If yes, then FrameID, StationID and BBOX are published. The getBoxesInStation class in scheduler is used for the examination.
         """
-        img_tens =img
+        img_tens = img
+        tmpTime = time.time()
         results = self.model(img_tens, size=640)
+        fps = int(1/(time.time()-tmpTime))
+        logy.log_var("yolo_fps", fps, period=25, smoothing=0.9)
+
         if self.renderer==True:
             results.render()  # updates results.imgs with boxes and labels
 
@@ -131,10 +135,10 @@ class ObjectDetectionPipeline:
             rospy.logerr_throttle(5, "Ojbect detection is currently failing. If you see this message repeatedly, there is something wrong...")
             return None
 
-        self._get_Person_boxes(labels,resul_np,self.frame_id)
+        self._get_Person_boxes(labels,resul_np, self.frame_id)
         return results.imgs[0]
 
-    def _get_Person_boxes(self, labels, resul_np,frame_id):
+    def _get_Person_boxes(self, labels, resul_np, frame_id):
         """Function for checking labels and assigning stations and BBOX"""
         tmp_conf=0
         self.labels.append(labels)
@@ -142,14 +146,14 @@ class ObjectDetectionPipeline:
             box=resul_np[count,:4]
             if label==0:
                 if self.stationChk:
-                    chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box,frame_id , self.stationChk)
+                    chkIsstation,stationID = self.stationBoxesChk.run_BoxStationChk(box, frame_id, self.stationChk)
                     if chkIsstation and (stationID not in self.info_station): #ToDo: SensorID to check the correct yaml file
                         #Change it to x,y,w,h for the PoseAI
-                        extraWidth=(box[2]-box[0])*0.0
-                        x=box[0]-extraWidth
-                        y=box[1]-extraWidth
-                        w=box[2]+extraWidth-x
-                        h=box[3]+extraWidth-y
+                        extraWidth=(box[2]-box[0])*0.1
+                        x=box[0] - extraWidth
+                        y=box[1] - extraWidth
+                        w=box[2] + extraWidth-x
+                        h=box[3] + 2 * extraWidth-y
                         self.body_bbox.append([x,y,w,h])
                         self.info_station.append(stationID)
                         self.info_frameID.append(frame_id)

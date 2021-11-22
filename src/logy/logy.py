@@ -145,6 +145,7 @@ class LogyHandler:
         time_s = time.time()
         fps = 1 / (time_s - fps_last_time)
         self._fps_timings[name] = time_s
+        #print("logy fps=", fps)
         self._log_var(name, fps, period, smoothing, 5)
 
     def debug(self, msg: str, tag="msg"):

@@ -2,5 +2,5 @@
   <arg name="log_level" default="info"/>
   <arg name="logger_tags" default="msg" />
   <arg name="neptune" default="False" />
-  <node name="logy_backend" pkg="logy_backend" output="screen" type="logy_backend.py" args="$(eval '--log-level ' + str(arg('log_level')) + ' -t \'' + arg('logger_tags') + '\'' + ' -n' if arg('neptune') else '')"/>
+  <node name="logy_backend" pkg="logy_backend" output="screen" type="logy_backend.py" args="$(eval '--log-level ' + str(arg('log_level')) + ' -t \'' + arg('logger_tags') + '\'' + (' -n' if arg('neptune') else ''))"/>
 </launch>

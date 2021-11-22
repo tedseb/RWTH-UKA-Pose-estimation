@@ -8,6 +8,7 @@ from geometry_msgs.msg import Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray
 import argparse
 import sys
+import logy
 
 metrabs_pose = [
     (1,4),(1,0),(2,5),(2,0),(3,6),(3,0),(4,7),(5,8),(6,9),(7,10),(8,11),(9,12),(12,13),(12,14),(12,15),(13,16),(14,17),(16,18),(17,19),
@@ -90,7 +91,7 @@ class RealtimeVisualization():
                 m.pose.position.x, m.pose.position.y, m.pose.position.z = bodypart.point.x, (bodypart.point.y), bodypart.point.z
                 m.type = 2
                 m.action = 0
-                m.lifetime = rospy.Duration(0.2) 
+                m.lifetime = rospy.Duration(0.2)
                 marker_array.markers.append(m)
 
             for pair in self.ownpose:
@@ -107,7 +108,7 @@ class RealtimeVisualization():
                 m.points = [person.bodyParts[pair[0]].point, person.bodyParts[pair[1]].point]
                 m.type = 4
                 m.action = 0
-                m.lifetime = rospy.Duration(0.5) 
+                m.lifetime = rospy.Duration(0.5)
                 marker_array.markers.append(m)
 
         # publish the markers
@@ -117,6 +118,7 @@ class RealtimeVisualization():
 
 if __name__ == '__main__':
     # define some constants
+    logy.basic_config(logy.DEBUG, module_name="VIS")
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
     parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')

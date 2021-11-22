@@ -286,7 +286,7 @@ class LogyBackend:
         values_before.time_stamps.append(time.time())
         values_before.values.append(value)
         if values_before.caller_hash != caller_hash:
-            self._log_message(f" Logy: The Mean log with name '{name}' is called from another location", WARNING)
+            self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
 
     def _log_data_message(self, data: Dict):
         log_level = data["level"]
@@ -417,6 +417,7 @@ if __name__ == '__main__':
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
 
     arg_count = len(sys.argv)
+    print(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]

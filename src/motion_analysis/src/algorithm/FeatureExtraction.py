@@ -128,7 +128,6 @@ def extract_distance(pose_array: np.ndarray, joint_a: int, joint_b: int) -> floa
     Returns:
         A float value corresponding to the euclidean distance between joint_a and joint_b.
     """
-    raise NotImplementedError("see extract angle!")
     vector = create_vector_from_two_points(pose_array[joint_a], pose_array[joint_b])
 
     return length_of_vector(vector)
@@ -212,6 +211,8 @@ def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pos
     for f in hmi_features:
         if f['type'] == "angle":
             features_of_interest.update(extract_angles_of_interest(f['value'], pose_definition_adapter))
+        elif f['type'] == "distance":
+            features_of_interest.update({"type": FeatureType.JOINT_DISTANCE, "joints": f['value']})
         else:
             log("Unhandled feature type:" + str(f['type']))
 
@@ -219,59 +220,15 @@ def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pos
 
 
 def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
-    """A triplet of three joints has three angles. This method finds the inner and outer joints for an angle.
-
-    The inner and outer joints dictionary returned by this method has the following form:
-
-    {
-        <frozenset of joint name strings>: {
-            "inner_joint": <inner joint>
-            "outer_joints": <set of outer joints>
-        },
-        (...)
-    }
-
-    Args:
-        exercise_data: The exercise data that hold information on what angles the expert chose.
-
-    Returns:
-        A dictionary of inner joints and sets of outer joints.
-    """
-    def find_inner_and_outer_joints(joint_names: Tuple[str, str, str]) -> Tuple[str, Tuple[str, str]]:
-        """Take 3 joints and look their connections up in pose_definition_adapter.joint_connection_labels to see if there is an inner joint.
-        
-        Args:
-            joint_names: 
-        """
-        if not len(joint_names) == 3:
-            raise FeatureExtractorException("Can not calculate angle between other than 3 points.")
-        
-        joint_connection_combinations = combinations(joint_names, 2)
-
-        # We must find two connections between our three joints, such that there is a usefull angle between them
-        combinations_found = 0
-
-        for joint_connection_combination in joint_connection_combinations:
-            if frozenset(joint_connection_combination) not in pose_definition_adapter.joint_connections_labels:
-                outer_joints = joint_connection_combination
-                inner_joint, *_ = joint_names.difference(joint_connection_combination)
-            else:
-                combinations_found += 1
-
-        if combinations_found == 2:
-            return inner_joint, outer_joints
-        else:
-            raise UnknownAngleException("Specified angle between joints that are not connected")
-
-    
     frozen_joint_names = frozenset(joint_names)
     
     exceptions = dict()
     features_of_interest = {}
     try:
-        inner_joint, outer_joints = find_inner_and_outer_joints(frozen_joint_names)
-    except UnknownAngleException as e:
-        exceptions['UnknownAngleException'] = e
+        inner_joint = find_inner_joint(joint_names)
+        outer_joints = set(joint_names).remove(inner_joint)
+    except IllegalAngleException as e:
+        exceptions['IllegalAngleException'] = e
     except FeatureExtractorException as e:
         exceptions['FeatureExtractorException'] = e
     # TODO: possibly find prettier solution to this
@@ -284,4 +241,4 @@ def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseD
     return features_of_interest
 
 
-feature_extraction_methods = {FeatureType.ANGLE: extract_angle}
+feature_extraction_methods = {FeatureType.ANGLE: extract_angle, FeatureType.JOINT_DISTANCE: extract_distance}

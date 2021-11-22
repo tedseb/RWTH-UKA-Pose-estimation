@@ -26,6 +26,9 @@ CENTRAL_JOINT_IDX = 0 # Choose this to be something like the pelvis and a joint 
 ORIENTATION_VECTOR_JOINT_IDXS_1 = (0, 1)
 ORIENTATION_VECTOR_JOINT_IDXS_2 = (0, 2)
 
+class IllegalAngleException(Exception):
+    pass
+
 
 def calculate_orientation_vector(input_skelleton):
     """Returns the orientation of the skelleton's pelvis.
@@ -128,3 +131,61 @@ def normalize_skelleton(input_skelleton):
     skelleton = normalize_skelleton_position(skelleton)
     skelleton = normalize_skelleton_orientation(skelleton)
     return skelleton
+
+def find_inner_joint(joint_a_idx, joint_b_idx, joint_c_idx):
+    """A triplet of three joints has three angles. This method finds the inner joint for an angle.
+
+    The inner and outer joints dictionary returned by this method has the following form:
+    Args:
+        joint_a_idx, joint_b_idx, joint_c_idx
+
+    Returns:
+        Name of the inner joint
+    """
+    # TODO: Optimize this if it has to be done more often
+    joints = joint_a_idx, joint_b_idx, joint_c_idx
+
+    def go_deeper(leaf, other_joints, building_blocks_left, found_joints):
+        if found_joints == other_joints:
+            return found_joints
+        new_leafs = []
+        for i, j in building_blocks:
+            if i in leaf:
+                building_blocks_left.remove((i, j))
+                new_leafs.append(j)
+            if j in leaf:
+                building_blocks_left.remove((i, j))
+                new_leafs.append(i)
+
+        for j in other_joints:
+            if j in new_leafs:
+                found_joints.update(j)
+
+        for l in new_leafs:
+            found_joints.update(go_deeper(l, other_joints, building_blocks_left, found_joints))
+
+        return found_joints
+
+
+    for joint in joints:
+        leafs = set()
+        for i, j in BODY_BUILD_ORDER:
+            if i in BODY_BUILD_ORDER:
+                leafs.update(j)
+            elif j in BODY_BUILD_ORDER:
+                leafs.update(i)
+        
+        initial_building_blocks = BODY_BUILD_ORDER
+        
+        total_found_leafs_no = 0
+        for l in leafs:
+            found_leafs = go_deeper(l, other_joints, initial_building_blocks, set())
+            found_leafs_no = len(found_leafs)
+            if total_found_leafs_no == 1 and len(found_leafs) == 1:
+                return joint
+            total_found_leafs_no += found_leafs_no
+
+    raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")
+            
+
+

@@ -320,18 +320,27 @@ class Worker(Thread):
         """
         increase_reps = True
         in_beginning_state = True
+        num_features_in_beginning_state = 0
+        num_features_progressed = 0
 
         for f in features.values():
             beginning_state = f.reference_feature_collection.median_beginning_state
             number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
             if f.state != beginning_state:
-                in_beginning_state = False
+                num_features_progressed += 1
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
             elif f.progression > number_of_dicided_state_changes_for_repetition and not ROBUST_COUNTING_MODE:
                 log("A feature has progressed through too many states. Marking this repetition as bad...")
                 log("Feature specification: " + str(f.specification_dict))
                 self.bad_repetition = True
+                num_features_progressed += 1
+            elif f.progression == number_of_dicided_state_changes_for_repetition:
+                num_features_progressed += 1
+
+        if num_features_progressed < num_features_in_beginning_state: # TODO: This is a parameter to be tuned!!
+            increase_reps = False
+
 
         # Look at every reference feature separately
         # bad_repetition_yes = 0
@@ -404,6 +413,6 @@ class Worker(Thread):
         b, a = signal.butter(4, critical_freq, analog=False)
         x = signal.filtfilt(b, a, x)
         average_delta = np.average(x) # Try average and median here, see which one works better
-        delta_score = average_delta * alpha
+        delta_score = np.absolute(average_delta * alpha)
         score = 100 * np.clip(1 - delta_score, 0, 1)
         return score

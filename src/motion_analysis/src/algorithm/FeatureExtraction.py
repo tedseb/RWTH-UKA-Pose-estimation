@@ -224,19 +224,23 @@ def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseD
     
     exceptions = dict()
     features_of_interest = {}
+
     try:
-        inner_joint = find_inner_joint(joint_names)
-        outer_joints = set(joint_names).remove(inner_joint)
+        inner_joint = find_inner_joint(joint_names, pose_definition_adapter)
+        outer_joints = set(joint_names)
+        outer_joints.remove(inner_joint)
     except IllegalAngleException as e:
         exceptions['IllegalAngleException'] = e
     except FeatureExtractorException as e:
         exceptions['FeatureExtractorException'] = e
     # TODO: possibly find prettier solution to this
-    joint_hash = hashlib.md5(sorted(frozen_joint_names).__repr__().encode()).digest()
-    features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}
+    
     
     if exceptions:
-        log("Errors occured while parsing the provided exercise:" + str(exceptions))
+        rp.logerr("Errors occured while parsing the provided exercise:" + str(exceptions))
+    
+    joint_hash = hashlib.md5(sorted(frozen_joint_names).__repr__().encode()).digest()
+    features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}
 
     return features_of_interest
 

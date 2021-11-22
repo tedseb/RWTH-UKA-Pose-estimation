@@ -59,6 +59,8 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
     def get_joint_index(self, joint_name: str):
         return self.joints_used_labels.index(joint_name)
 
+    def get_joint_name(self, joint_idx: int):
+        return self.joints_used_labels[joint_idx]
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)

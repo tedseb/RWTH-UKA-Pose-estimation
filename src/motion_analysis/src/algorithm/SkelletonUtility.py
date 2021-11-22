@@ -132,57 +132,63 @@ def normalize_skelleton(input_skelleton):
     skelleton = normalize_skelleton_orientation(skelleton)
     return skelleton
 
-def find_inner_joint(joint_a_idx, joint_b_idx, joint_c_idx):
+def find_inner_joint(joint_names, pose_definition_adapter):
     """A triplet of three joints has three angles. This method finds the inner joint for an angle.
 
     The inner and outer joints dictionary returned by this method has the following form:
     Args:
-        joint_a_idx, joint_b_idx, joint_c_idx
+        joint_names
+        pose_definition_adapter
 
     Returns:
         Name of the inner joint
     """
     # TODO: Optimize this if it has to be done more often
-    joints = joint_a_idx, joint_b_idx, joint_c_idx
+    joint_idxs = set(pose_definition_adapter.get_joint_index(j) for j in joint_names)
 
     def go_deeper(leaf, other_joints, building_blocks_left, found_joints):
         if found_joints == other_joints:
             return found_joints
         new_leafs = []
-        for i, j in building_blocks:
-            if i in leaf:
+        for i, j in building_blocks_left:
+            if i == leaf:
                 building_blocks_left.remove((i, j))
                 new_leafs.append(j)
-            if j in leaf:
+            if j == leaf:
                 building_blocks_left.remove((i, j))
                 new_leafs.append(i)
 
         for j in other_joints:
             if j in new_leafs:
-                found_joints.update(j)
+                found_joints.add(j)
 
         for l in new_leafs:
             found_joints.update(go_deeper(l, other_joints, building_blocks_left, found_joints))
 
         return found_joints
 
-
-    for joint in joints:
-        leafs = set()
-        for i, j in BODY_BUILD_ORDER:
-            if i in BODY_BUILD_ORDER:
-                leafs.update(j)
-            elif j in BODY_BUILD_ORDER:
-                leafs.update(i)
-        
-        initial_building_blocks = BODY_BUILD_ORDER
-        
+    for joint in joint_idxs:
         total_found_leafs_no = 0
+        other_joints = joint_idxs.copy()
+        other_joints.remove(joint)
+        leafs = set()
+        initial_building_blocks = BODY_BUILD_ORDER.copy()
+        for i, j in BODY_BUILD_ORDER:
+            if joint == i:
+                initial_building_blocks.remove((i, j))
+                leafs.add(j)
+            elif joint == j:
+                initial_building_blocks.remove((i, j))
+                leafs.add(i)
+       
         for l in leafs:
-            found_leafs = go_deeper(l, other_joints, initial_building_blocks, set())
+            found_leafs = set()
+            if l in other_joints:
+                found_leafs.add(l)
+            found_leafs = go_deeper(l, other_joints, initial_building_blocks.copy(), found_leafs)
             found_leafs_no = len(found_leafs)
-            if total_found_leafs_no == 1 and len(found_leafs) == 1:
-                return joint
+            if total_found_leafs_no == 1 and found_leafs_no == 1:
+                return pose_definition_adapter.get_joint_name(joint)
             total_found_leafs_no += found_leafs_no
 
     raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")

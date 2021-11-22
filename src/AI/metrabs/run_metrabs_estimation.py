@@ -2,13 +2,17 @@
 import numpy as np
 import cv2
 import os
+from multiprocessing import Lock
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices there actually are and manage them
 
 import tensorflow as tf
 import time
 import rospy as rp
+from collections import deque
 from sensor_msgs.msg import Image
+from backend.msg import ImageData
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
@@ -30,15 +34,51 @@ import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')
 from mpl_toolkits.mplot3d import Axes3D
 
+from inspect import getmembers, isfunction
+
 CONFIG = {
     'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
     'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
 }
 
+class Queue:
+    def __init__(self, queue_len = 10):
+        self._elements = deque([])
+        self._mutex = Lock()
+        self._queue_len = queue_len
+
+    def put(self, item):
+        with self._mutex:
+            self._elements.append(item)
+            if len(self._elements) > self._queue_len:
+                self._elements.popleft()
+
+    def get(self):
+        with self._mutex:
+            item = self._elements.popleft()
+        return item
+
+    def empty(self):
+        if self._elements:
+            return False
+        return True
+
+    def __getitem__(self, key):
+        with self._mutex:
+            item = self._elements[key]
+        return item
+
 class PoseEstimator():
     def __init__(self):
         self.model = tf.saved_model.load(CONFIG["model_path"])
+
         self.intrinsics = tf.constant(CONFIG.get("intrinsics"), dtype=tf.float32)
+        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        person_boxes = tf.constant([ [1000, 350, 500, 650]], tf.float32)
+
+        self.model.predict_single_image(image, self.intrinsics, person_boxes)
+
+
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
 
@@ -50,38 +90,88 @@ class PoseEstimator():
         self.opencv_bridge = CvBridge()
 
         # define a subscriber to retrive tracked bodies
-        rp.Subscriber('bboxes', Bboxes, self.callback_regress)
+        rp.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=1)
         #rp.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
-        rp.Subscriber('image', Image, self.callback_setImage)
+        rp.Subscriber('image', ImageData, self.callback_setImage)
+        self._image_queue = Queue(3)
+        self._debug_time_queue = Queue(20)
         #srp.Subscriber('image1', Image, self.callback_setImage)
 
 
-    def callback_setImage(self, msg):
-        #logy.info_throttle("GET IMAGE", 2000)
+    def callback_setImage(self, msg: ImageData):
         logy.info_throttle("GET IMAGE", 2000)
-        self.last_image_message = msg
+        if msg.is_debug:
+            logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
+            time_ms = time.time() * 1000
+            self._debug_time_queue.put((time_ms, msg.debug_id))
 
-    def callback_regress(self, body_bbox_list_station):
-        body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
-        tmpTime = time.time()
-        # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
+        self._image_queue.put(msg)
 
-        if not hasattr(self, "last_image_message"):
-            rp.logerr_throttle(5, "Pose Estimator has no image input. If you see this message multiple times there is something wrong.")
+    def get_next_image_in_queue(self, box_frame_number: int):
+        if self._image_queue.empty():
+            return None
+
+        bbox_num = box_frame_number
+        next_img_num = self._image_queue[0].frame_num
+
+        while next_img_num <= bbox_num:
+            img_data = self._image_queue.get()
+            if self._image_queue.empty():
+                break
+            next_img_num = self._image_queue[0].frame_num
+
+        if next_img_num != bbox_num:
+            return None
+        return img_data
+
+    def get_next_debug_frame(self, box_debug_id: int):
+        if self._debug_time_queue.empty():
+            return None
+
+        bbox_num = box_debug_id
+        next_img_num = self._debug_time_queue[0][1]
+        while next_img_num <= bbox_num:
+            debug_data = self._debug_time_queue.get()
+            if self._debug_time_queue.empty():
+                break
+            next_img_num = self._debug_time_queue[0][1]
+
+        if next_img_num != bbox_num:
+            return None
+        return debug_data
+
+    def callback_regress(self, body_bbox_list_station: Bboxes):
+        img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num)
+        if img_data is None:
+            #logy.warn_throttle("The next image is missing")
             return
+        last_image = img_data.image
 
-        height = self.last_image_message.height
-        width = self.last_image_message.width
+        if body_bbox_list_station.is_debug:
+            debug_info = self.get_next_debug_frame(body_bbox_list_station.debug_id)
+            if debug_info is None:
+                logy.warn("The next Debug image is missing.")
+                logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
+            else:
+                logy.debug(f"Received bboxes. Debug frame {body_bbox_list_station.debug_id}", tag="debug_frame")
+                time_ms = time.time() * 1000
+                time_ms = time_ms - debug_info[0]
+                logy.log_avg("debug_frame_delay", time_ms)
+                logy.log_mean("debug_frame_delay", time_ms)
 
-        image = np.frombuffer(self.last_image_message.data, dtype=np.uint8)
+        body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
+
+        # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
+        height = last_image.height
+        width = last_image.width
+        image = np.frombuffer(last_image.data, dtype=np.uint8)
         image = image.reshape([height, width, 3])    #(480, 640, 3) --> (y,x,3) = (h,w,3)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # Body Pose Regression
         pred_output_list = self.model.predict_single_image(image, self.intrinsics, body_bbox_list_station_reshaped)
         poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-
         stationID = body_bbox_list_station.stationID
         sensorID = body_bbox_list_station.sensorID
         boxes = body_bbox_list_station_reshaped
@@ -92,9 +182,8 @@ class PoseEstimator():
 
         inc = 0
         msg = Persons()
-        msg.header = self.last_image_message.header
+        msg.header = last_image.header
         msg.persons = list()
-
         cropped_images = []
         for idx,detection in enumerate(pred_output_list.numpy()):
             joints=detection
@@ -120,7 +209,6 @@ class PoseEstimator():
             inc=inc+1
             msg.persons.append(person_msg)
         self.publisher.publish(msg)
-
         # Concatenate images and convert them to ROS image format to display them later in rviz
         image_message = self.opencv_bridge.cv2_to_imgmsg(cv2.vconcat(cropped_images), encoding="passthrough")
 

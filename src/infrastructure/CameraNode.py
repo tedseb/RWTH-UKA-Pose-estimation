@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 from pathlib import Path
+import time
 import glob
 import rospy
 import cv2
+import logy
 from sensor_msgs.msg import Image
+from backend.msg import ImageData
 import numpy as np
-import pafy
 import argparse
-import pylint
 import sys
 from pytube import YouTube
 from enum import Enum
@@ -37,15 +38,16 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose = False, dev_id = 0, check_cameras = False, camera_mode = VideoMode.INVALID, video_info = None):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
         self._dev_id = "dev" + str(dev_id)
         self._youtube_mode = False
+        self._debug_repetition_ms = debug_repetition_ms
 
         rospy.init_node('camera', anonymous=True)
-        self._pub = rospy.Publisher('image', Image, queue_size=1)
+        self._pub = rospy.Publisher('image', ImageData, queue_size=1)
 
         if self._camera_mode is VideoMode.INVALID:
             raise RuntimeError("Invalid video mode")
@@ -67,6 +69,12 @@ class CameraNode():
 
     def start_camera_publisher(self):
         rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
+
+        logy.info("Camera node started")
+        if self._debug_repetition_ms > 0:
+            time_past = time.time() * 1000
+            debug_id = 0
+
         while not rospy.is_shutdown():
             ret, frame = self._cap.read()
             if not ret:
@@ -80,14 +88,25 @@ class CameraNode():
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
 
-            frame = cv2.resize(frame, (1280,720))
-            msg = Image()
-            msg.header.stamp = rospy.Time.now()
-            msg.header.frame_id = self._dev_id
-            msg.encoding = "bgr8"
-            msg.data = np.array(frame, dtype=np.uint8).tobytes()
-            msg.height, msg.width = frame.shape[:-1]
-            msg.step = frame.shape[-1]*frame.shape[0]
+            frame = cv2.resize(frame, (1280, 720))
+            img = Image()
+            img.header.stamp = rospy.Time.now()
+            img.header.frame_id = self._dev_id
+            img.encoding = "bgr8"
+            img.data = np.array(frame, dtype=np.uint8).tobytes()
+            img.height, img.width = frame.shape[:-1]
+            img.step = frame.shape[-1]*frame.shape[0]
+            msg = ImageData()
+            msg.image = img
+            msg.is_debug = False
+            if self._debug_repetition_ms > 0:
+                time_now = time.time() * 1000
+                if time_now - time_past > self._debug_repetition_ms:
+                    msg.is_debug = True
+                    msg.debug_id = debug_id
+                    logy.debug(f"#### Start Debug Frame {debug_id} ####", tag="debug_frame")
+                    time_past = time_now
+                    debug_id += 1
             self._pub.publish(msg)
             rate.sleep()
 
@@ -241,6 +260,8 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
     parser.add_argument("-k", "--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
+    parser.add_argument("--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
+
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
 
@@ -278,9 +299,11 @@ if __name__ == '__main__':
         mode = VideoMode.DISK_VIDEO
         info = args.disk
 
+    logy.basic_config(debug_level=logy.DEBUG, module_name="CAMERA")
+
     try:
         print("INFO:", info)
-        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info)
+        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames)
         if args.disk:
             node.start_video_publisher()
         else:

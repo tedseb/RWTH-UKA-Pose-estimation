@@ -1,11 +1,18 @@
 <launch>
-  <arg name="args" default=" " doc="Parameters of Station Manager e.g: args:='-d'"/>
-  <arg name="smo" default="log" doc="Output of station manager, smo:=screen"/>
-  <arg name="ai" default="metrabs" doc="Choose AI out of the following: (metrabs, spin)"/>
-  <include file="$(find logy_backend)/launch/logy_backend.launch" />
+  <arg name="args" default=" " doc="            Parameters of Station Manager e.g: args:='-d'"/>
+  <arg name="smo" default="log" doc="           Output of Station Manager, smo:=screen"/>
+  <arg name="ai" default="metrabs" doc="        Choose AI out of the following: (metrabs, spin)"/>
+  <arg name="debug_frames" default="3000" doc=" Debug Frame time in ms. At 0 there are no debug frames."/>
+  <arg name="log_level" default="info" doc="    Choose from debug, info, warning, error, critical."/>
+  <arg name="logger_tags" default="msg" doc="   Logger tags which should be printed on the terminal."/>
+  <include file="$(find logy_backend)/launch/logy_backend.launch">
+    <arg name="log_level" value="$(arg log_level)"/>
+    <arg name="logger_tags" value="$(arg logger_tags)"/>
+  </include>
   <include file="$(find station_manager)/launch/station_manager.launch">
     <arg name="args" value="$(arg args)"/>
     <arg name="smo" value="$(arg smo)"/>
+    <arg name="debug_frames" value="$(arg debug_frames)"/>
   </include>
   <include file="$(find infrastructure)/launch/mobile_server.launch" />
   <include file="$(find metrabs)/launch/metrabs.launch"/>

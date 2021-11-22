@@ -117,7 +117,7 @@ def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter:
     return np.average([pose_array[neck_idx][Z], pose_array[pelvis_idx][Z]])
     
 
-def extract_distance(pose_array: np.ndarray, joint_a: int, joint_b: int) -> float:
+def extract_distance(pose_array: np.ndarray, specification_dict, pose_definition_adapter) -> float:
     """Compute the distance between two joints.
 
     Args:
@@ -128,7 +128,11 @@ def extract_distance(pose_array: np.ndarray, joint_a: int, joint_b: int) -> floa
     Returns:
         A float value corresponding to the euclidean distance between joint_a and joint_b.
     """
-    vector = create_vector_from_two_points(pose_array[joint_a], pose_array[joint_b])
+    joint_a = specification_dict['joints'][0]
+    joint_b = specification_dict['joints'][1]
+    joint_a_idx = pose_definition_adapter.get_joint_index(joint_a)
+    joint_b_idx = pose_definition_adapter.get_joint_index(joint_b)
+    vector = create_vector_from_two_points(pose_array[joint_a_idx], pose_array[joint_b_idx])
 
     return length_of_vector(vector)
 
@@ -212,7 +216,9 @@ def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pos
         if f['type'] == "angle":
             features_of_interest.update(extract_angles_of_interest(f['value'], pose_definition_adapter))
         elif f['type'] == "distance":
-            features_of_interest.update({"type": FeatureType.JOINT_DISTANCE, "joints": f['value']})
+            feature_strings = f['value']
+            feature_hash = hashlib.md5(sorted(feature_strings).__repr__().encode()).digest()
+            features_of_interest.update({feature_hash: {"type": FeatureType.JOINT_DISTANCE, "joints": f['value']}})
         else:
             log("Unhandled feature type:" + str(f['type']))
 

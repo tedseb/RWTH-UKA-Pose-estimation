@@ -368,4 +368,31 @@ def log_fps(name: str, period=50, smoothing=0.9):
     logger = Logy()
     logger._root._log_fps(name, period, smoothing)
 
+def trace_time(name, period=50, smoothing=0.9):
+    def trace_time_decorator(func):
+        def _trace_time(*args, **kwargs):
+            time_elapsed = time.time()
+            val = func(*args, **kwargs)
+            time_elapsed = (time.time() - time_elapsed) * 1000
+            logger = Logy()
+            logger._root._log_var(name, time_elapsed, period, smoothing, 6)
+            return val
+        return _trace_time
+    return trace_time_decorator
+
+class TraceTime:
+    def __init__(self, name, period=50, smoothing=0.9):
+        self._name = name
+        self._period = 50
+        self._smoothing = smoothing
+        self._time_stamp = 0
+
+    def __enter__(self):
+        self._time_stamp = time.time()
+
+    def __exit__(self, type, value, traceback):
+        time_elapsed = (time.time() - self._time_stamp) * 1000
+        logger = Logy()
+        logger._root._log_var(self._name, time_elapsed, self._period, self._smoothing, 5)
+
 sys.excepthook = exception_hook

@@ -1,13 +1,7 @@
 #!/usr/bin/python3
 from dataclasses import dataclass
-from os import confstr
 import numpy as np
-from typing import List, Dict
-import cv2
-import pafy
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from PIL import Image as ImagePil
+from typing import List
 from backend.msg import ImageData
 from backend.msg import Bboxes
 from backend.msg import LabelsCameraID

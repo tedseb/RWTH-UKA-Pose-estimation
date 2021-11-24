@@ -159,13 +159,16 @@ class CameraNode():
                 rospy.logerr_throttle(10, "\nData Set Recording is running...\nTime in original video: " + str(timestamp) + " seconds.\nFrame no. is " + str(frame_no) + "/ " + str(frame_count) + "\nVideo has " + str(fps) + "fps. \nPublishing at " + str(publish_fps) + " fps.\nEta: " + str(duration - (frame_no/publish_fps)) + " seconds.")
 
             frame = cv2.resize(frame, (1280,720))
-            msg = Image()
-            msg.header.stamp = rospy.Time.now()
-            msg.header.frame_id = self._dev_id
-            msg.encoding = "bgr8"
-            msg.data = np.array(frame, dtype=np.uint8).tobytes()
-            msg.height, msg.width = frame.shape[:-1]
-            msg.step = frame.shape[-1]*frame.shape[0]
+            img = Image()
+            img.header.stamp = rospy.Time.now()
+            img.header.frame_id = self._dev_id
+            img.encoding = "bgr8"
+            img.data = np.array(frame, dtype=np.uint8).tobytes()
+            img.height, img.width = frame.shape[:-1]
+            img.step = frame.shape[-1]*frame.shape[0]
+            msg = ImageData()
+            msg.image = img
+            msg.is_debug = False
             self._pub.publish(msg)
             rate.sleep()
 

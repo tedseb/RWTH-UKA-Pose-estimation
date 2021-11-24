@@ -23,6 +23,7 @@ class LogType:
     AVG = 1
     MEAN = 2
     VARIABLE = 3
+    TRACING = 4
 
 if hasattr(sys, '_getframe'):
     currentframe = lambda depth: sys._getframe(depth)
@@ -78,6 +79,9 @@ def get_mean_type(name: str, value: float, caller_hash: hash) :
 def get_var_type(name: str, value: float, caller_hash: hash) :
     return get_value_type(name, value, caller_hash, LogType.VARIABLE)
 
+def get_tracing_type(name: str, value: float, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, LogType.TRACING)
+
 class Singleton(type):
     _instance = None
     _lock = threading.Lock()
@@ -96,6 +100,7 @@ class LogyHandler:
         self._module = module
         self._throttle_timings = {}
         self._variables = {}
+        self._tracings = {}
         self._fps_timings = {}
 
     def _send_msg(self, msg, tag, debug_level, trace_level):
@@ -125,16 +130,34 @@ class LogyHandler:
             self._variables[name] = [0, value]
             return
 
+        last_val = self._smooth_var(var_list, value, period, smoothing)
+        if last_val is not None:
+             self._logger.send_var(name, last_val, trace_level)
+
+    def _log_tracing(self, name: str, value: float, period, smoothing, trace_level=4):
+        if period == 0 and smoothing == 0.0:
+            self._logger.send_tracing(name, value, trace_level)
+
+        var_list = self._tracings.get(name)
+        if var_list is None:
+            self._tracings[name] = [0, value]
+            return
+
+        last_val = self._smooth_var(var_list, value, period, smoothing)
+        if last_val is not None:
+             self._logger.send_tracing(name, last_val, trace_level)
+
+    def _smooth_var(self, var_list, value, period, smoothing):
         per = var_list[0] + 1
         last_val = var_list[1]
         last_val = last_val * smoothing + value * (1.0 - smoothing)
         var_list[1] = last_val
-
         if per >= period:
              var_list[0] = 0
-             self._logger.send_var(name, last_val, trace_level)
+             return last_val
         else:
             var_list[0] = per
+            return None
 
     def _log_fps(self, name, period, smoothing):
         fps_last_time = self._fps_timings.get(name)
@@ -146,7 +169,7 @@ class LogyHandler:
         fps = 1 / (time_s - fps_last_time)
         self._fps_timings[name] = time_s
         #print("logy fps=", fps)
-        self._log_var(name, fps, period, smoothing, 5)
+        self._log_tracing(name, fps, period, smoothing, 5)
 
     def debug(self, msg: str, tag="msg"):
         self._send_msg(msg, tag, DEBUG, 3)
@@ -268,6 +291,13 @@ class Logy(metaclass=Singleton):
             data = get_var_type(name, value, caller_hash)
             self._pipe_send(data)
 
+    def send_tracing(self, name: str, value: float, trace_level = 3):
+        file_name, line_no, function_name = findCaller(trace_level)
+        caller_hash = hash(file_name + str(line_no) + function_name)
+        with self._lock:
+            data = get_tracing_type(name, value, caller_hash)
+            self._pipe_send(data)
+
     def set_root_debug_level(self, debug_level: int):
         self._root.set_debug_level(debug_level)
 
@@ -375,7 +405,7 @@ def trace_time(name, period=50, smoothing=0.9):
             val = func(*args, **kwargs)
             time_elapsed = (time.time() - time_elapsed) * 1000
             logger = Logy()
-            logger._root._log_var(name, time_elapsed, period, smoothing, 6)
+            logger._root._log_tracing(name, time_elapsed, period, smoothing, 6)
             return val
         return _trace_time
     return trace_time_decorator
@@ -393,6 +423,6 @@ class TraceTime:
     def __exit__(self, type, value, traceback):
         time_elapsed = (time.time() - self._time_stamp) * 1000
         logger = Logy()
-        logger._root._log_var(self._name, time_elapsed, self._period, self._smoothing, 5)
+        logger._root._log_tracing(self._name, time_elapsed, self._period, self._smoothing, 5)
 
 sys.excepthook = exception_hook

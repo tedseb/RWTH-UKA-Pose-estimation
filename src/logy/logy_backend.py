@@ -52,6 +52,7 @@ class LogType:
     AVG = 1
     MEAN = 2
     VARIABLE = 3
+    TRACING = 4
 
 @dataclass
 class AverageData:
@@ -145,6 +146,7 @@ class LogyBackend:
         self._avg_data: Dict[AverageData] = {}
         self._mean_data: Dict[MeanData] = {}
         self._var_data: Dict[VariableData] = {}
+        self._tracing_data: Dict[VariableData] = {}
         if self._log_to_file:
             self._open_log_file(file_prefix)
 
@@ -230,6 +232,8 @@ class LogyBackend:
             self._log_mean(data)
         elif message_type == LogType.VARIABLE:
             self._log_var(data)
+        elif message_type == LogType.TRACING:
+            self._log_tracing(data)
         else:
             self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
@@ -281,6 +285,27 @@ class LogyBackend:
         values_before: VariableData = self._var_data.get(name)
         if values_before is None:
             self._var_data[name] = VariableData(caller_hash, [value], [time.time()])
+            return
+
+        values_before.time_stamps.append(time.time())
+        values_before.values.append(value)
+        if values_before.caller_hash != caller_hash:
+            self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
+
+    def _log_tracing(self, data: Dict):
+        caller_hash = data["hash"]
+        name = data["name"]
+        value = data["value"]
+
+        if self._use_neptune:
+            self._neptune_run[f"tracing/{name}"].log(value)
+
+        if "tracing" in self._print_tags:
+            self._log_msg_to_terminal(f"TRACING:{name}: {value}", DEBUG)
+
+        values_before: VariableData = self._tracing_data.get(name)
+        if values_before is None:
+            self._tracing_data[name] = VariableData(caller_hash, [value], [time.time()])
             return
 
         values_before.time_stamps.append(time.time())

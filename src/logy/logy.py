@@ -425,4 +425,13 @@ class TraceTime:
         logger = Logy()
         logger._root._log_tracing(self._name, time_elapsed, self._period, self._smoothing, 5)
 
+def catch_ros(func):
+    def _catch_ros(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except Exception:
+            traceback_string = traceback.format_exc()
+            critical("Logy Traceback Hook (ROS CALLBACK): \n" + traceback_string)
+    return _catch_ros
+
 sys.excepthook = exception_hook

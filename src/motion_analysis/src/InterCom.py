@@ -22,6 +22,8 @@ import yaml
 import rospy as rp
 import pickle
 
+from std_msgs.msg import Int32
+
 try:
     from motion_analysis.src.DataConfig import *
     from motion_analysis.src.algorithm.logging import log, log_throttle
@@ -306,6 +308,7 @@ class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
 class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
     def __init__(self):
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
+        self.ma_validation_rate_control = rp.Publisher("ma_validation_rosbag_rate_control", Int32, queue_size=10)
         # Dequeueing consists of several operations. Until we move to a distribuetd system, we can use a semaphore to guarantee correct queuing.
         # Redis has distributed locks: https://redis.io/topics/distlock
 
@@ -344,6 +347,8 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
                 self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
             else:
                 log_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
+        else:
+            self.ma_validation_rate_control.publish(Int32(0))
         return 1
 
     def size(self, spot_key: str):

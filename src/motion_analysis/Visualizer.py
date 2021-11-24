@@ -31,8 +31,8 @@ class Visualizer():
     def __init__(self,
     feature_extractor_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter):
         # define a publisher to publish the 3D skeleton of multiple people
-        self.input_pub = rp.Publisher('motion_analysis_input_marker', MarkerArray, queue_size=100)
-        self.reference_pub = rp.Publisher('motion_analysis_reference_prediction_marker', MarkerArray, queue_size=100)
+        self.input_pub = rp.Publisher('motion_analysis_input_markers', MarkerArray, queue_size=100)
+        self.reference_pub = rp.Publisher('motion_analysis_reference_markers', MarkerArray, queue_size=100)
         self.markerid = 0
         self.feature_extractor = feature_extractor_class()
 

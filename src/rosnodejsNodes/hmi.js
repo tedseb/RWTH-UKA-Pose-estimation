@@ -21,12 +21,18 @@ if (args['ai'] == 'spin') {
   ownpose_labels = config.matrabs_labels;
   ownpose_used = config.matrabs_used;
   ownpose = config.matrabs;
+  exercises_db_string = "metrabs_exercises"
+  recordings_db_string = "metrabs_recordings"
+  hmiExercises_db_string = "metrabs_hmiExercises"
 } else {
   // Parameters and Constants:
   PORT = config.PORT;
   ownpose_labels = config.ownpose_labels_spin;
   ownpose_used = config.ownpose_used_spin;
   ownpose = config.ownpose_spin;
+  exercises_db_string = "spin_exercises"
+  recordings_db_string = "spin_recordings"
+  hmiExercises_db_string = "spin_hmiExercises"
 }
 
 // Web App Code:
@@ -54,9 +60,9 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
 
   //get trainerai DB and exercises collection
   const db = client.db("trainerai");
-  const exercises = db.collection("exercises");
-  const recordings = db.collection("recordings");
-  const hmiExercises = db.collection("hmiExercises");
+  const exercises = db.collection(exercises_db_string);
+  const recordings = db.collection(recordings_db_string);
+  const hmiExercises = db.collection(hmiExercises_db_string);
 
     app.post('/expert/exercise/recordings', (req, res) => {
     console.log(req.body);

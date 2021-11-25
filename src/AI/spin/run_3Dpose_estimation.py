@@ -38,7 +38,7 @@ class run_spin():
 
         checkpoint_body_smplx='/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/pretrained_weights/smplx-03-28-46060-w_spin_mlc3d_46582-2089_2020_03_28-21_56_16.pt'
         checkpoint_body_smpl= '/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/pretrained_weights/2020_05_31-00_50_43-best-51.749683916568756.pt'
-        smpl_dir='/home/trainerai/trainerai-core/src/AI/spin/extra_data/smpl/'
+        smpl_dir='/home/trainerai/trainerai-core/src/AI/spin/extra_data/smpl'
 
         checkpoint_path = checkpoint_body_smplx if use_smplx else checkpoint_body_smpl
         print("use_smplx", use_smplx)

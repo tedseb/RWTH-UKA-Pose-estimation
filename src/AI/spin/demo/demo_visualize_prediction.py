@@ -29,7 +29,7 @@ def __get_data_type(pkl_files):
 
 def __get_smpl_model(demo_type, smpl_type):
     smplx_model_path = './extra_data/smpl/SMPLX_NEUTRAL.pkl'
-    smpl_model_path = './extra_data/smpl//basicModel_neutral_lbs_10_207_0_v1.0.0.pkl'
+    smpl_model_path = './extra_data/smpl/basicModel_neutral_lbs_10_207_0_v1.0.0.pkl'
 
     if demo_type == 'hand':
         # use original smpl-x

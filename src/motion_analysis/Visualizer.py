@@ -3,6 +3,7 @@
 
 
 import rospy as rp
+import argparse
 
 try:
     from motion_analysis.src.Worker import *
@@ -87,5 +88,25 @@ class Visualizer():
 
 if __name__ == '__main__':
     rp.init_node('Motion_Analysis_Visualizer', anonymous=False)
-    visualization = Visualizer(MetrabsPoseDefinitionAdapter)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
+    parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+    
+    if args.ai == 'spin':
+        pose_definition_adapter_class = SpinPoseDefinitionAdapter
+    elif args.ai == 'metrabs':
+        pose_definition_adapter_class = MetrabsPoseDefinitionAdapter
+    else:
+        rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
+
+
+    visualization = Visualizer(pose_definition_adapter_class)
     rp.spin()

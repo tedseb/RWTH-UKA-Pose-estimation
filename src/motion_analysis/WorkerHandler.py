@@ -39,6 +39,7 @@ from typing import NoReturn
 import rospy as rp
 from std_msgs.msg import String
 import random
+import argparse
 
 mongo_client = pymongo.MongoClient(MONGO_DB_URI)
 
@@ -145,6 +146,24 @@ if __name__ == '__main__':
     # initialize ros node
     rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
 
-    spot_info_handler = WorkerHandler()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
+    parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+    
+    if args.ai == 'spin':
+        pose_definition_adapter_class = SpinPoseDefinitionAdapter
+    elif args.ai == 'metrabs':
+        pose_definition_adapter_class = MetrabsPoseDefinitionAdapter
+    else:
+        rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
+
+    spot_info_handler = WorkerHandler(pose_definition_adapter_class=pose_definition_adapter_class)
 
     rp.spin()

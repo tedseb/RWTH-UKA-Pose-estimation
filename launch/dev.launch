@@ -21,6 +21,7 @@
   
   <include file="$(find object_detection)/launch/object_detection.launch" />
   <include file="$(find motion_analysis)/launch/motion_analysis_dev.launch">
+    <arg name="ai" value="$(arg ai)"/>
   </include>
   <!-- <include file="$(find weight_detection)/launch/weight_detection.launch"/> -->
   <include file="$(find backend)/launch/SkeletonVisualizationHelper.launch">

@@ -4,6 +4,7 @@ const express = require('express');
 const https = require('https');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
+const args = require('minimist')(process.argv.slice(2))
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const pose_estimation_messages = rosnodejs.require("backend");
 const motion_analysis_messages = rosnodejs.require("motion_analysis");
@@ -14,12 +15,19 @@ var MongoClient = require('mongodb').MongoClient;
 const { stringify } = require('querystring');
 const { features } = require('process');
 
-
-// Parameters and Constants:
-const PORT = config.PORT;
-const ownpose_labels = config.matrabs_labels;
-const ownpose_used = config.matrabs_used;
-const ownpose = config.matrabs;
+if (args['ai'] == 'spin') {
+  // Parameters and Constants:
+  PORT = config.PORT;
+  ownpose_labels = config.matrabs_labels;
+  ownpose_used = config.matrabs_used;
+  ownpose = config.matrabs;
+} else {
+  // Parameters and Constants:
+  PORT = config.PORT;
+  ownpose_labels = config.ownpose_labels_spin;
+  ownpose_used = config.ownpose_used_spin;
+  ownpose = config.ownpose_spin;
+}
 
 // Web App Code:
 const app = express();

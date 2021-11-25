@@ -31,7 +31,6 @@ except ImportError:
     from src.algorithm.logging import log
     from backend.msg import StationUsage
 
-import pymongo
 import time
 from PyQt5.QtCore import QThread
 import yaml
@@ -41,13 +40,6 @@ from std_msgs.msg import String
 import random
 import argparse
 
-mongo_client = pymongo.MongoClient(MONGO_DB_URI)
-
-db = mongo_client.trainerai
-
-exercises = db.exercises
-recordings = db.recordings
-hmiExercises = db.hmiExercises
 
 class WorkerHandler(QThread):
     """Waits for updates on the usage of spots and communicates them through the a SpotMetaDataInterface.
@@ -94,7 +86,7 @@ class WorkerHandler(QThread):
         log("Updating info for spot with key: " + str(spot_info_key))
 
         if station_usage_data.isActive:
-            exercise_data = exercises.find_one({"name": station_usage_data.exerciseName})
+            exercise_data = self.pose_definition_adapter.exercises.find_one({"name": station_usage_data.exerciseName})
 
             if exercise_data is None:
                 log("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
@@ -131,7 +123,7 @@ class WorkerHandler(QThread):
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
-                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui)
+                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui, pose_definition_adapter=self.pose_definition_adapter.__class__)
 
         else:
             current_worker = self.workers.get(station_id, None)

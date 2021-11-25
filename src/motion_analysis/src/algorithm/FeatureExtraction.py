@@ -41,13 +41,11 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.ROSAdapters import *
-    from motion_analysis.src.algorithm.SkelletonUtility import *
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Features import *
     from src.ROSAdapters import *
-    from src.algorithm.SkelletonUtility import *
 
 
 class FeatureExtractorException(Exception):
@@ -232,7 +230,7 @@ def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseD
     features_of_interest = {}
 
     try:
-        inner_joint = find_inner_joint(joint_names, pose_definition_adapter)
+        inner_joint = pose_definition_adapter.find_inner_joint(joint_names, pose_definition_adapter)
         outer_joints = set(joint_names)
         outer_joints.remove(inner_joint)
     except IllegalAngleException as e:

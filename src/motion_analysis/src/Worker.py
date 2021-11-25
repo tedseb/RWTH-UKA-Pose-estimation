@@ -38,7 +38,6 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Algorithm import *
     from motion_analysis.src.algorithm.logging import log
-    from motion_analysis.src.algorithm.SkelletonUtility import *
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -52,7 +51,6 @@ except ImportError:
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Algorithm import *
     from src.algorithm.logging import log
-    from src.algorithm.SkelletonUtility import *
 
 
 class NoJointsAvailable(Exception):
@@ -157,7 +155,7 @@ class Worker(Thread):
                 # Extract feature states
                 pose = present_joints_with_timestamp['used_joint_ndarray']
 
-                pose = normalize_skelleton(pose)
+                pose = self.pose_definition_adapter.normalize_skelleton(pose)
 
                 for f in self.features.values():
                     f.update(pose, self.pose_definition_adapter)

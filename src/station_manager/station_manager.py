@@ -13,6 +13,7 @@ import logy
 from src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
 from src.server import ServerController, ServerSocket, ResponseAnswer
 import rospy
+import random
 
 from std_msgs.msg import String
 from rospy.exceptions import ROSException
@@ -235,7 +236,8 @@ class StationManager():
         logy.info(f"Start exercise {exercise_id} on Station {station_id}")
 
         set_id = int((payload["set_id"]))
-        return self.start_exercise(user_id, station_id, exercise_id, set_id)
+        answer, _ = self.start_exercise(user_id, station_id, exercise_id, set_id)
+        return answer
 
     def start_exercise(self, user_id: str, station_id: int, exercise_id: int, set_id = 1):
         with self._exercise_station_mutex:
@@ -245,16 +247,19 @@ class StationManager():
             if user_id in self.__active_exercises:
                 return ResponseAnswer(501, 11, {})
 
-        self._publisher_station_usage.publish(StationUsage(station_id, True , str(exercise_id)))
+
+        station_usage_hash = str(random.getrandbits(128))
+        self._publisher_station_usage.publish(StationUsage(station_id, True , str(exercise_id), station_usage_hash))
 
         with self._exercise_station_mutex:
             self.__active_exercises[user_id] = (exercise_id, set_id, 0)
 
-        return ResponseAnswer(503, 1, {"station": station_id, "exercise": exercise_id})
+        return ResponseAnswer(503, 1, {"station": station_id, "exercise": exercise_id}), station_usage_hash
 
-    def stop_exercise_payload(self, user_id: str, payload: Dict):
+    def stop_exercise_payload(self, user_id : str, payload : Dict):
         logy.debug(f"Stop exercise {user_id}, payload: {payload}")
-        return self.stop_exercise(user_id)
+        answer, _ = self.stop_exercise(user_id)
+        return answer
 
     def stop_exercise(self, user_id):
         # station_id = int(payload["station"])
@@ -268,13 +273,14 @@ class StationManager():
             exercise_id = exercise_data[0]
             set_id = exercise_data[1]
 
+        station_usage_hash = str(random.getrandbits(128))
+        self._publisher_station_usage.publish(StationUsage(station_id, False , str(exercise_id), station_usage_hash))
         logy.info(f"Stop exercise {exercise_id} on Station {station_id}")
-        self._publisher_station_usage.publish(StationUsage(station_id, False , str(exercise_id)))
 
         with self._exercise_station_mutex:
             self.__active_exercises.pop(user_id)
 
-        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id})
+        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id}), station_usage_hash
 
     def get_weight_detection(self, user_id: str, payload: Dict):
         logy.debug(f"weight detection {user_id}, payload: {payload}")

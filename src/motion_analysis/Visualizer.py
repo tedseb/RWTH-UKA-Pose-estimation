@@ -3,6 +3,7 @@
 
 
 import rospy as rp
+import argparse
 
 try:
     from motion_analysis.src.Worker import *
@@ -31,8 +32,8 @@ class Visualizer():
     def __init__(self,
     feature_extractor_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter):
         # define a publisher to publish the 3D skeleton of multiple people
-        self.input_pub = rp.Publisher('motion_analysis_input_marker', MarkerArray, queue_size=100)
-        self.reference_pub = rp.Publisher('motion_analysis_reference_prediction_marker', MarkerArray, queue_size=100)
+        self.input_pub = rp.Publisher('motion_analysis_input_markers', MarkerArray, queue_size=100)
+        self.reference_pub = rp.Publisher('motion_analysis_reference_markers', MarkerArray, queue_size=100)
         self.markerid = 0
         self.feature_extractor = feature_extractor_class()
 
@@ -87,5 +88,25 @@ class Visualizer():
 
 if __name__ == '__main__':
     rp.init_node('Motion_Analysis_Visualizer', anonymous=False)
-    visualization = Visualizer(MetrabsPoseDefinitionAdapter)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
+    parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+    
+    if args.ai == 'spin':
+        pose_definition_adapter_class = SpinPoseDefinitionAdapter
+    elif args.ai == 'metrabs':
+        pose_definition_adapter_class = MetrabsPoseDefinitionAdapter
+    else:
+        rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
+
+
+    visualization = Visualizer(pose_definition_adapter_class)
     rp.spin()

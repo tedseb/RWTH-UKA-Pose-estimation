@@ -1,5 +1,5 @@
 <launch>
+  <arg name="ai" default="metrabs" doc="Choose AI out of the following: (metrabs, spin)"/>
   <node name="MotionAnalysis_Receiver" pkg="motion_analysis" type="Receiver.py" />
-  <node name="MotionAnalysis_WorkerHandler" pkg="motion_analysis" type="WorkerHandler.py" />
-  <node name="MotionAnalysis_Worker" pkg="motion_analysis" type="Worker.py" />
+  <node name="MotionAnalysis_WorkerHandler" pkg="motion_analysis" type="WorkerHandler.py" args="-a $(arg ai)"/>
 </launch> 

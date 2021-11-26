@@ -38,6 +38,8 @@ import yaml
 from typing import NoReturn
 import rospy as rp
 from std_msgs.msg import String
+import random
+import argparse
 
 mongo_client = pymongo.MongoClient(MONGO_DB_URI)
 
@@ -94,8 +96,13 @@ class WorkerHandler(QThread):
         if station_usage_data.isActive:
             exercise_data = exercises.find_one({"name": station_usage_data.exerciseName})
 
+            if exercise_data is None:
+                log("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
+                return
+
             # TODO: In the future: Possibly use multiple recordings
             recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+            recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
             recordings = [recording]
             feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
@@ -113,8 +120,8 @@ class WorkerHandler(QThread):
             del exercise_data['features'] # We replace features with their specification dictionary
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
-            
-            spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0}
+
+            spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0, 'station_usage_hash': station_usage_data.stationUsageHash}
             
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
@@ -139,6 +146,24 @@ if __name__ == '__main__':
     # initialize ros node
     rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
 
-    spot_info_handler = WorkerHandler()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
+    parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
+    arg_count = len(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+    
+    if args.ai == 'spin':
+        pose_definition_adapter_class = SpinPoseDefinitionAdapter
+    elif args.ai == 'metrabs':
+        pose_definition_adapter_class = MetrabsPoseDefinitionAdapter
+    else:
+        rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
+
+    spot_info_handler = WorkerHandler(pose_definition_adapter_class=pose_definition_adapter_class)
 
     rp.spin()

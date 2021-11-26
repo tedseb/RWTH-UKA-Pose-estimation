@@ -6,7 +6,7 @@ This file contains some parameters to our data plane, such as ROS Topic names an
 
 MONGO_DB_URI = "mongodb://mongoadmin:secret@localhost:27888/?authSource=admin"
 
-DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.spin'
+DEFAULT_JOINT_ADAPTER = 'src.joint_adapters.metrabs'
 
 ROS_TOPIC_USER_EXERCISE_STATES = 'user_state'
 ROS_TOPIC_USER_CORRECTIONS = 'user_correction'
@@ -15,8 +15,12 @@ ROS_JOINTS_TOPIC = 'fused_skelleton' # Shawan's topic choice
 ROS_STATION_USAGE_UPDATE_TOPIC = 'station_usage'
 ROS_SKELLETON_DEFINITION = 'skelleton_name'
 
-REDIS_MAXIMUM_QUEUE_SIZE = 300
-REDIS_QUEUE_SIZE_PANIC_BOUNDARY = 100
+ROS_MOTION_ANALYSIS_INPUT_VISUALIZER_TOPIC = "motion_analysis_input_markers"
+ROS_MOTION_ANALYSIS_REFERENCE_POSE_VISUALIZER_TOPIC = "motion_analysis_reference_prediction_markers"
+
+
+REDIS_MAXIMUM_QUEUE_SIZE = 1000
+REDIS_QUEUE_SIZE_PANIC_BOUNDARY = 200
 REDIS_MAXIMUM_PAST_QUEUE_SIZE = 100
 REDIS_KEY_SEPARATOR = ":"
 

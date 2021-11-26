@@ -21,6 +21,7 @@ import numpy as np
 import rospy as rp
 from std_msgs.msg import String
 from unittest import mock
+from scipy import signal
 
 from backend.msg import Person
 
@@ -37,6 +38,7 @@ try:
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Algorithm import *
     from motion_analysis.src.algorithm.logging import log
+    from motion_analysis.src.algorithm.SkelletonUtility import *
 except ImportError:
     from src.Worker import *
     from src.DataConfig import *
@@ -50,6 +52,7 @@ except ImportError:
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Algorithm import *
     from src.algorithm.logging import log
+    from src.algorithm.SkelletonUtility import *
 
 
 class NoJointsAvailable(Exception):
@@ -109,6 +112,8 @@ class Worker(Thread):
 
         self.spot_info_dict = None
 
+        self.skelleton_deltas_since_rep_start = []
+
         self.start()
 
     @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
@@ -126,7 +131,7 @@ class Worker(Thread):
         msg.stationID = self.spot_key
         msg.sensorID = -1
         msg.bodyParts = ros_pose
-        self.predicted_skelleton_publisher.publish(msg)
+        publisher.publish(msg)
 
     def run(self) -> NoReturn:
         _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key)
@@ -139,10 +144,11 @@ class Worker(Thread):
         self.beginning_of_next_repetition_detected = False
 
         # The following lines fetch data that we need to analyse
-        self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions"])
+        self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions", "station_usage_hash"])
 
         while(self.running):
             try:
+                self.spot_info_dict.update(self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "station_usage_hash"]))
                 self.spot_info_dict.update(self.get_exercise_data(spot_info_key, self.spot_info_dict["exercise_data_hash"]))
 
                 # As long as there are skelletons available for this spot, continue
@@ -150,6 +156,8 @@ class Worker(Thread):
 
                 # Extract feature states
                 pose = present_joints_with_timestamp['used_joint_ndarray']
+
+                pose = normalize_skelleton(pose)
 
                 for f in self.features.values():
                     f.update(pose, self.pose_definition_adapter)
@@ -169,7 +177,7 @@ class Worker(Thread):
                         pos_median = abs(np.median(positive_progresses_differences))
                     else:
                         pos_median = 0
-                    if  neg_mean > pos_median * JUMPY_PROGRESS_ALPHA and JUMPY_PROGRESS_BETA * len(negative_progress_differences) > len(positive_progresses_differences):
+                    if  neg_mean > pos_median * JUMPY_PROGRESS_ALPHA and JUMPY_PROGRESS_BETA * len(negative_progress_differences) > len(positive_progresses_differences) and not ROBUST_COUNTING_MODE:
                         log("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                         self.bad_repetition = True
                         increase_reps = False
@@ -179,23 +187,27 @@ class Worker(Thread):
                     log("Feature missalignment during this repetition. Repetition falsified.")
                     increase_reps = False
                     self.alignments_this_rep = np.array([])
-
+                
                 # Calculate a new reference pose mapping
                 reference_pose = self.calculate_reference_pose_mapping()
 
-                # TODO: Put code here that compares skelletons and tells us how good a repetition was
+                delta = (pose - reference_pose).sum()
+                self.skelleton_deltas_since_rep_start.append(delta)
+                score = self.calculate_repetition_score()
 
                 # Send info back to REST API
                 if increase_reps:
+                    score = self.calculate_repetition_score()
                     self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
                     user_state_data = {
                         'station_id': self.spot_key,
                         'current_exercise_name': self.spot_info_dict.get('exercise_data').get('name'),
                         'repetitions': self.spot_info_dict['repetitions'],
-                        'seconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time'))) / 1e+9,
+                        'miliseconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time', 0))) / 1e+6,
                         'milliseconds_since_last_repetition': 0,
-                        'repetition_score': 100,
+                        'repetition_score': int(score),
                         'exercise_score': 100,
+                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', "")
                     }
                     publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
 
@@ -211,7 +223,8 @@ class Worker(Thread):
                         'user_id': 0,
                         'repetition': self.spot_info_dict['repetitions'],
                         'positive_correction': False,
-                        'display_text': correction
+                        'display_text': correction,
+                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
                     }
                     publish_message(self.user_correction_publisher, ROS_TOPIC_USER_CORRECTIONS, user_correction_message)
                     
@@ -252,6 +265,7 @@ class Worker(Thread):
         predicted_indices = []
         median_resampled_values_reference_trajectory_fractions = []
         progress_vectors = []
+
 
         for h, f in self.features.items():
             # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
@@ -306,18 +320,27 @@ class Worker(Thread):
         """
         increase_reps = True
         in_beginning_state = True
+        num_features_in_beginning_state = 0
+        num_features_progressed = 0
 
         for f in features.values():
             beginning_state = f.reference_feature_collection.median_beginning_state
             number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
             if f.state != beginning_state:
-                in_beginning_state = False
+                num_features_progressed += 1
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
             elif f.progression > number_of_dicided_state_changes_for_repetition and not ROBUST_COUNTING_MODE:
                 log("A feature has progressed through too many states. Marking this repetition as bad...")
                 log("Feature specification: " + str(f.specification_dict))
                 self.bad_repetition = True
+                num_features_progressed += 1
+            elif f.progression == number_of_dicided_state_changes_for_repetition:
+                num_features_progressed += 1
+
+        if num_features_progressed < num_features_in_beginning_state: # TODO: This is a parameter to be tuned!!
+            increase_reps = False
+
 
         # Look at every reference feature separately
         # bad_repetition_yes = 0
@@ -352,6 +375,7 @@ class Worker(Thread):
         # increase_reps_ratio = increase_reps_yes/increase_reps_no
         # in_beginning_state_ratio = in_beginning_state_yes/in_beginning_state_no
 
+
         if in_beginning_state and self.bad_repetition:
             log("Bad repetition aborted. Resetting feature progressions and repetition data...")
             for f in features.values():
@@ -372,6 +396,7 @@ class Worker(Thread):
 
         if not in_beginning_state and self.beginning_of_next_repetition_detected:
             log("Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+            self.skelleton_deltas_since_rep_start = []
             self.beginning_of_next_repetition_detected = False
             self.alignments_this_rep = np.array([])
             self.progress_differences_this_rep = np.array([])
@@ -379,3 +404,15 @@ class Worker(Thread):
 
 
         return increase_reps
+
+    def calculate_repetition_score(self):
+        x = self.skelleton_deltas_since_rep_start
+        alpha = 1/20 # This has to be heuristically determined, as is depends on the size of the normal skelleton
+        critical_freq = 0.01 # TODO: Choose heuristically!!
+        # Filter scores in order to minimize impact of faulty reference skelleton predictions
+        b, a = signal.butter(4, critical_freq, analog=False)
+        x = signal.filtfilt(b, a, x)
+        average_delta = np.average(x) # Try average and median here, see which one works better
+        delta_score = np.absolute(average_delta * alpha)
+        score = 100 * np.clip(1 - delta_score, 0, 1)
+        return score

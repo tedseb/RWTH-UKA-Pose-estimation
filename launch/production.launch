@@ -8,10 +8,13 @@
     <arg name="smo" value="$(arg smo)"/>
   </include>
   <include file="$(find infrastructure)/launch/mobile_server.launch" />
-  <include file="$(find metrabs)/launch/metrabs.launch"/>
+
+  <include file="$(find metrabs)/launch/metrabs.launch" if="$(eval arg('ai') == 'metrabs')"/>
+  <include file="$(find spin)/launch/spin.launch" if="$(eval arg('ai') == 'spin')"/>
+  
   <include file="$(find object_detection)/launch/object_detection.launch" />
   <include file="$(find motion_analysis)/launch/motion_analysis.launch">
-    <!-- <arg name="ai" value="$(arg ai)"/> -->
+    <arg name="ai" value="$(arg ai)"/>
   </include>
   <!-- <include file="$(find weight_detection)/launch/weight_detection.launch"/> -->
   <include file="$(find backend)/launch/SkeletonVisualizationHelper.launch">

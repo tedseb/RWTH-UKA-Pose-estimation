@@ -4,3 +4,4 @@
 int16 stationID
 bool isActive
 string exerciseName
+string stationUsageHash

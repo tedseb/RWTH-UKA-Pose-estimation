@@ -9,4 +9,5 @@
   <include file="$(find backend)/launch/SkeletonVisualizationHelper.launch">
     <arg name="ai" value="$(arg ai)"/>
   </include>
+  <node name="Bagfilerecorder" pkg="ma_validation" type="bagfilerecorder.sh" />
 </launch> 

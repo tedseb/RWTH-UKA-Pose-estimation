@@ -69,6 +69,20 @@ class WorkerHandler(QThread):
         self.features_interface = features_interface_class()
         self.workers = {} # A dictionary, with spot IDs as keys
 
+        mongo_client = pymongo.MongoClient(MONGO_DB_URI)
+        db = mongo_client.trainerai
+
+        if pose_definition_adapter_class == MetrabsPoseDefinitionAdapter:
+            self.exercises = db.exercises # TODO: Change this to metrabs_...
+            self.recordings = db.recordings
+            self.hmiExercises = db.hmiExercises
+        elif pose_definition_adapter_class == SpinPoseDefinitionAdapter:
+            self.exercises = db.spin_exercises
+            self.recordings = db.spin_recordings
+            self.hmiExercises = db.spin_hmiExercises
+        else: 
+            raise NotImplementedError("There is not database connection setup in the WorkerHandler for this PoseDefinitionAdapter type.")
+
         self.gui_handler = GUIHandler()
         self.gui = MotionAnaysisGUI()
         def kill_gui_hook():
@@ -86,7 +100,7 @@ class WorkerHandler(QThread):
         log("Updating info for spot with key: " + str(spot_info_key))
 
         if station_usage_data.isActive:
-            exercise_data = self.pose_definition_adapter.exercises.find_one({"name": station_usage_data.exerciseName})
+            exercise_data = self.exercises.find_one({"name": station_usage_data.exerciseName})
 
             if exercise_data is None:
                 log("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
@@ -123,7 +137,7 @@ class WorkerHandler(QThread):
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
-                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui, pose_definition_adapter=self.pose_definition_adapter.__class__)
+                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
 
         else:
             current_worker = self.workers.get(station_id, None)

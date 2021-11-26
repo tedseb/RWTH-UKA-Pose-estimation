@@ -13,19 +13,17 @@ import rospy as rp
 from sklearn.preprocessing import normalize
 import pymongo
 
-class IllegalAngleException(Exception):
-    pass
 
 try:
     from motion_analysis.src.DataConfig import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.algorithm.AlgoConfig import X, Y, Z
-    from motion_analysis.src.algorithm.AlgoUtils import PoseDefinitionAdapter
+    from motion_analysis.src.algorithm.AlgoUtils import *
 except ImportError:
     from src.DataConfig import *
     from src.DataUtils import *
     from src.algorithm.AlgoConfig import X, Y, Z
-    from src.algorithm.AlgoUtils import PoseDefinitionAdapter
+    from src.algorithm.AlgoUtils import *
 
 try:
     from backend.msg import Bodypart
@@ -74,20 +72,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         self.orientational_vector_joint_idxs_1 = (0, 1)
         self.orientational_vector_joint_idxs_2 = (0, 2)
 
-
-        mongo_client = pymongo.MongoClient(MONGO_DB_URI)
-
-        db = mongo_client.trainerai
-
-        self.exercises = db.exercises # TODO: Change this to metrabs_...
-        self.recordings = db.recordings
-        self.hmiExercises = db.hmiExercises
-
-    def get_joint_index(self, joint_name: str):
-        return self.joints_used_labels.index(joint_name)
-
-    def get_joint_name(self, joint_idx: int):
-        return self.joints_used_labels[joint_idx]
+        super().__init__()
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
@@ -161,34 +146,27 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
         self.center_of_body_label = 'Pelvis_MPII'
 
-         # Build order of the current Gymy skeleton
-        original_body_build_order = [(39, 8), (39, 27), (39, 28), (28, 12), (12, 9), (39, 41), (41, 1), (27, 2), (28, 5), (2, 3), (3, 4),
-        (5, 6), (6, 7), (27, 10), (10, 11), (11, 23), (11, 22), (28, 13), (13, 14), (14, 19), (14, 20), (1, 37),
-        (37, 43), (43, 38), (43, 17), (43, 18), (17, 42), (42, 0), (0, 15), (0, 16)]
+        # Build order of the current Gymy skeleton, by Ted
+        # original_body_build_order = [(39, 8), (39, 27), (39, 28), (28, 12), (12, 9), (39, 41), (41, 1), (27, 2), (28, 5), (2, 3), (3, 4),
+        # (5, 6), (6, 7), (27, 10), (10, 11), (11, 23), (11, 22), (28, 13), (13, 14), (14, 19), (14, 20), (1, 37),
+        # (37, 43), (43, 38), (43, 17), (43, 18), (17, 42), (42, 0), (0, 15), (0, 16)]
+
+        # Bew build order
+        modified_body_build_order = [(22, 23), (23, 24), (24, 11), (11, 10), (10, 9), (9, 27), (27, 39), (39, 41), (39, 28), (28, 12), (12, 13), (13, 14), (14, 21), (21, 19), (19, 20), (41, 1), (1, 2), (2, 3), (3, 4), (1, 5), (5, 6), (6, 7), (1, 37), (37, 43), (43, 42,), (42, 17), (17, 18)]
 
         # We need to transform this build order, because we leave out some joints of the spin skelleton
-        self.body_build_order = [(self.joints_used.index(idx_1), self.joints_used.index(idx_2)) for idx_1, idx2 in original_body_build_order]
+        self.body_build_order = [(self.joints_used.index(idx_1), self.joints_used.index(idx_2)) for idx_1, idx_2 in modified_body_build_order]
 
         # This is me, Artur, doing military press
         # All skelletons are normalized to my skelleton. :)
-        self.normal_skelleton = np.load('/home/trainerai/trainerai-core/src/motion_analysis/standard_skelleton_spin.npy') #, allow_pickle=True) # TODO: Change this to an actual spin skelleton
+        self.normal_skelleton = np.load('/home/trainerai/trainerai-core/src/motion_analysis/standard_skelleton_spin.npy') #, allow_pickle=True)
 
         self.central_joint_idx = 8 # Choose this to be something like the pelvis and a joint in the back, skelletons are rotatet sich that this bone always overlaps
         # We do not know the orientation of the ground, so we need to orient skelletons along each other and not to the ground
-        self.orientational_vector_joint_idxs_1 = (8, 9)
-        self.orientational_vector_joint_idxs_2 = (9, 12)
+        self.orientational_vector_joint_idxs_1 = (self.joints_used.index(39), self.joints_used.index(9))
+        self.orientational_vector_joint_idxs_2 = (self.joints_used.index(39), self.joints_used.index(12))
 
-        mongo_client = pymongo.MongoClient(MONGO_DB_URI)
-
-        db = mongo_client.trainerai
-
-        self.exercises = db.spin_exercises
-        self.recordings = db.spin_recordings
-        self.hmiExercises = db.spin_hmiExercises
-
-
-    def get_joint_index(self, joint_name: str):
-        return self.joints_used_labels.index(joint_name)
+        super().__init__()
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)

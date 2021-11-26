@@ -10,15 +10,14 @@ from typing import Any
 import numpy as np
 from abc import abstractmethod
 
+
+class IllegalAngleException(Exception):
+    pass
+
 class PoseDefinitionAdapter():
     @abstractmethod
     def __init__(self):
-        self.normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_orientation_vector(normal_skelleton))
-
-    @abstractmethod
-    def get_joint_index(self, joint_name: str) -> int:
-        """Get the index of a joint from its name"""
-        raise NotImplementedError("This is an interface, it should not be called directly.")
+        self.normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_orientation_vector(self.normal_skelleton))
 
     @abstractmethod
     def poses_to_ndarray(self, poses: object) -> np.ndarray:
@@ -66,6 +65,12 @@ class PoseDefinitionAdapter():
         
         return np.array(new_recording)
 
+    def get_joint_index(self, joint_name: str):
+        return self.joints_used_labels.index(joint_name)
+
+    def get_joint_name(self, joint_idx: int):
+        return self.joints_used_labels[joint_idx]
+
     def calculate_orientation_vector(self, input_skelleton):
         """Returns the orientation of the skelleton's pelvis.
 
@@ -73,8 +78,8 @@ class PoseDefinitionAdapter():
         The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
         """
         # Roate skelleton, such that skelletons pelvises overlap
-        x = np.array(input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_1[1]] - input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_1[0]])
-        y = np.array(input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_2[1]] - input_skelleton[ORIENTATION_VECTOR_JOINT_IDXS_2[0]])
+        x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
+        y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
         assert not np.array_equal(x, y)
         _x = x / np.linalg.norm(x)
         cross_x_y = np.cross(x,y)
@@ -99,8 +104,8 @@ class PoseDefinitionAdapter():
             joint1_p1 = input_skelleton[joint_idxs[0]]
             joint2_p1 = input_skelleton[joint_idxs[1]]
 
-            joint1_p2 = normal_skelleton[joint_idxs[0]]
-            joint2_p2 = normal_skelleton[joint_idxs[1]]
+            joint1_p2 = self.normal_skelleton[joint_idxs[0]]
+            joint2_p2 = self.normal_skelleton[joint_idxs[1]]
             point1_p2 = np.array([joint1_p2[0], joint1_p2[1], joint1_p2[2]])
             point2_p2 = np.array([joint2_p2[0], joint2_p2[1], joint2_p2[2]])
             vec_joints_person2 = np.array(point2_p2 - point1_p2)
@@ -122,9 +127,9 @@ class PoseDefinitionAdapter():
         reoriented_skelleton = np.copy(input_skelleton)
         # Move skelleton to 0/0/0 by substracting coordinates of central joint from all joints
         for joint_idx in range(len(reoriented_skelleton)):
-            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[CENTRAL_JOINT_IDX][0]
-            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[CENTRAL_JOINT_IDX][1]
-            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[CENTRAL_JOINT_IDX][2]
+            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[self.central_joint_idx][0]
+            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[self.central_joint_idx][1]
+            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[self.central_joint_idx][2]
 
         return reoriented_skelleton
 
@@ -169,10 +174,12 @@ class PoseDefinitionAdapter():
         Returns:
             Name of the inner joint
         """
+        import rospy as rp
         # TODO: Optimize this if it has to be done more often
-        joint_idxs = set(self.get_joint_index(j) for j in joint_names)
+        joint_idxs = set(self.joints_used[self.get_joint_index(j)] for j in joint_names)
 
         def go_deeper(leaf, other_joints, building_blocks_left, found_joints):
+            import rospy as rp
             if found_joints == other_joints:
                 return found_joints
             new_leafs = []
@@ -200,12 +207,16 @@ class PoseDefinitionAdapter():
             leafs = set()
             initial_building_blocks = self.body_build_order.copy()
             for i, j in self.body_build_order:
+                rp.logerr((i, j))
                 if joint == i:
                     initial_building_blocks.remove((i, j))
                     leafs.add(j)
                 elif joint == j:
                     initial_building_blocks.remove((i, j))
                     leafs.add(i)
+
+            rp.logerr(joint)
+            rp.logerr(leafs)
         
             for l in leafs:
                 found_leafs = set()
@@ -214,7 +225,7 @@ class PoseDefinitionAdapter():
                 found_leafs = go_deeper(l, other_joints, initial_building_blocks.copy(), found_leafs)
                 found_leafs_no = len(found_leafs)
                 if total_found_leafs_no == 1 and found_leafs_no == 1:
-                    return pose_definition_adapter.get_joint_name(joint)
+                    return self.get_joint_name(joint)
                 total_found_leafs_no += found_leafs_no
 
         raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")

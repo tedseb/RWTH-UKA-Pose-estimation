@@ -115,17 +115,16 @@ class StationSelection(StationSelectionUi, QObject):
 
     def load_exercises(self):
         exercises = self._data_manager.get_exercises()
-        print(exercises)
         for exercise_id, exercise_name in exercises.items():
             self.exercise_combobox.addItem(exercise_name, exercise_id)
 
     def set_station_state(self):
-        self.toggle_station()
+
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
         data = copy.deepcopy(REQUEST_DICT)
         station_active = station_id in self._stations_exercise_active
-        self.toggle_exercise(station_active)
+        self.toggle_station(station_active)
         if station_active:
             del self._stations_exercise_active[station_id]
         else:
@@ -150,18 +149,18 @@ class StationSelection(StationSelectionUi, QObject):
             return
         exercise_active = self._stations_exercise_active[station_id]
         self.toggle_exercise(exercise_active)
-        self._stations_exercise_active[station_id] = not exercise_active
         request = 4 if exercise_active else 3
         payload = {"station" : station_id, "exercise" : int(exercise_id), "set_id" : 1}
         payload_str = json.dumps(payload)
         self.print_info("[REQUEST]")
         self.print_info(f"request={request}, payload={payload_str}")
         self._send_message(request, payload)
+        self._stations_exercise_active[station_id] = not exercise_active
 
     def toggle_exercise(self, exercise_active, force_active = False):
         if exercise_active or force_active:
             self.activate_exercise_button.setText("Start Exercise")
-            if self.advanced_mode:
+            if not self.advanced_mode:
                 self.exercise_edit.setEnabled(True)
                 self.activate_station_button.setEnabled(True)
                 self.weight_detection_button.setEnabled(True)
@@ -219,6 +218,7 @@ class StationSelection(StationSelectionUi, QObject):
         if station_id in self._stations_exercise_active:
             self.activate_station_button.setText("Deactivate Station")
             if self._stations_exercise_active[station_id]:
+                logy.warn("jetzt")
                 self.activate_exercise_button.setText("Stop Exercise")
             else:
                 self.activate_exercise_button.setText("Start Exercise")

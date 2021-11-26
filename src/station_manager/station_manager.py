@@ -304,10 +304,8 @@ class StationManager():
 
     def user_state_callback(self, msg):
         data = str(msg.data)
-        print(data)
         data = json.loads(data)
         station_id = data["data"]["station_id"]
-        print(data["data"]["station_id"])
         with self._exercise_station_mutex:
             user_id = self.__active_stations[station_id]
             exercise_data = self.__active_exercises[user_id]

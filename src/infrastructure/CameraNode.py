@@ -88,7 +88,7 @@ class CameraNode():
                 rospy.logerr('Could not get image')
                 raise IOError('[CameraNode] Could not get image')
 
-            frame = cv2.resize(frame, (1280, 720))
+            #frame = cv2.resize(frame, (1280, 720))
             img = Image()
             img.header.stamp = rospy.Time.now()
             img.header.frame_id = self._dev_id

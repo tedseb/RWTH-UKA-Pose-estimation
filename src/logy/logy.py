@@ -428,7 +428,7 @@ class TraceTime:
 def catch_ros(func):
     def _catch_ros(*args, **kwargs):
         try:
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
         except Exception:
             traceback_string = traceback.format_exc()
             critical("Logy Traceback Hook (ROS CALLBACK): \n" + traceback_string)

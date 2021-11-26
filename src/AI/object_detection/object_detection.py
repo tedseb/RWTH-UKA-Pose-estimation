@@ -67,10 +67,8 @@ class ObjectDetectionPipeline:
             logy.log_fps("object_detection_fps")
 
     @logy.catch_ros
-    @logy.trace_time("time_trace_test1")
     def detect_objects(self, img) -> YoloData:
         '''This function uses the Yolo object detector. It predicts BBOX with label and confidence values.'''
-
         img_tens = img
         tmpTime = time.time()
         results = self._model(img_tens, size=640)

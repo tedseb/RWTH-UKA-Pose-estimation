@@ -171,22 +171,20 @@ class StationManager():
         return self.login_station(user_id, station_id)
 
     def login_station(self, user_id: str, station_id: int):
-
         with self._exercise_station_mutex:
             if station_id in self.__active_stations:
                 return ResponseAnswer(501, 4, {})
 
             if user_id in self.__active_stations:
                 return ResponseAnswer(501, 10, {})
-
         with self._param_updater_mutex:
             self.__param_updater.set_station(station_id, True)
             cameras = self.__param_updater.get_involved_cameras()
 
-        print("CAMERAS", cameras)
         with self._camera_process_mutex:
             turn_on = cameras - self.__camera_process.keys()
 
+        logy.debug(f"Turn on: {turn_on}")
         for cam_index in turn_on:
             self.start_camera(cam_index, station_id==DEBUG_STATION_ID)
 

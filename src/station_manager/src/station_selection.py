@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from logging import debug
+import subprocess
 import sys
 import os
 import inspect
@@ -10,6 +10,7 @@ import copy
 from typing import Callable, Dict
 from websocket import create_connection
 import autobahn.exception as aex
+import psutil
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QListWidgetItem, QDialog
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QObject
@@ -73,6 +74,7 @@ class StationSelection(StationSelectionUi, QObject):
         self._is_connected = False
         self.advanced_mode = False
         self._stations_exercise_active = {}
+        self._clients = []
         self._data_manager : DataManager = data_manager
         self.activate_exercise_button.setEnabled(False)
         time.sleep(1)
@@ -80,8 +82,10 @@ class StationSelection(StationSelectionUi, QObject):
         self.activate_station_button.clicked.connect(self.set_station_state)
         self.activate_exercise_button.clicked.connect(self.set_exercise_state)
         self.weight_detection_button.clicked.connect(self.start_weight_detection)
+        self.new_client_button.clicked.connect(self.create_new_client)
         self.advance_mode_check.stateChanged.connect(self.activate_advanced_mode)
         self.station_combobox.currentIndexChanged.connect(self.station_selected)
+
 
         signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -97,6 +101,20 @@ class StationSelection(StationSelectionUi, QObject):
 
         self.error_text.setTextColor(QColor(235, 64, 52))
         self._send_message = None
+
+    def __del__(self):
+        for client in self._clients:
+            client.terminate()
+            try:
+                client.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self.kill(client.pid)
+
+    def kill(self, proc_pid):
+        process = psutil.Process(proc_pid)
+        for proc in process.children(recursive=True):
+            proc.kill()
+        process.kill()
 
     def client_callback(self, callback):
         #logy.debug("Register Message Callback", self._verbose)
@@ -211,6 +229,11 @@ class StationSelection(StationSelectionUi, QObject):
         #     self.weight_edit.setText(str(value))
         # self.activate_exercise_button.setEnabled(True)
         # self.activate_station_button.setEnabled(True)
+
+    def create_new_client(self, msg):
+        #pathlib.Path(__file__).parent.resolve()
+        client = subprocess.Popen([__file__])
+        self._clients.append(client)
 
     #def wait_for_message(self):
     def station_selected(self, index : int):
@@ -354,6 +377,8 @@ class MyClientProtocol(WebSocketClientProtocol):
     def onClose(self, wasClean, code, reason):
         print("WebSocket connection closed: {0}".format(reason))
 
+
+
 class ClientController(WebSocketClientFactory):
 
     def __init__(self, uri, register_client_callback = None):
@@ -384,8 +409,5 @@ if __name__=="__main__":
     factory.register_callback(508, station_selection.error_message)
     factory.register_callback(509, station_selection.get_repetition)
     station_selection.show()
-    print("SHOW END")
-    #app.exec_()
-    print("EXEC END")
     reactor.connectTCP("127.0.0.1", 3030, factory)
     reactor.run()

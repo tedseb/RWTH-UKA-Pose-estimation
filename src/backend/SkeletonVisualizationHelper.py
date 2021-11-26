@@ -65,7 +65,7 @@ class RealtimeVisualization():
         marker.lifetime = rospy.Duration(1)  # 1 second
         return marker
 
-
+    @logy.catch_ros
     def frame_callback(self, data):
         '''
         This function will be called everytime whenever a message is received by the subscriber

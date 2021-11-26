@@ -431,7 +431,7 @@ def catch_ros(func):
             return func(*args, **kwargs)
         except Exception:
             traceback_string = traceback.format_exc()
-            critical("Logy Traceback Hook (ROS CALLBACK): \n" + traceback_string)
+            critical_throttle("Logy Traceback Hook (ROS CALLBACK): \n" + traceback_string, 1000)
     return _catch_ros
 
 sys.excepthook = exception_hook

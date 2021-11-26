@@ -141,6 +141,7 @@ class PoseEstimator():
             return None
         return debug_data
 
+    @logy.catch_ros
     def callback_regress(self, body_bbox_list_station: Bboxes):
         #logy.debug_throttle("Received Bbox", 2000)
         img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num)
@@ -190,8 +191,8 @@ class PoseEstimator():
         for idx,detection in enumerate(pred_output_list.numpy()):
             joints=detection
             bb=boxes[idx]
-            image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
-            cropped_images.append(image)
+            cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
+            cropped_images.append(cropped_image)
 
             lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
             person_msg = Person()
@@ -212,9 +213,20 @@ class PoseEstimator():
             msg.persons.append(person_msg)
 
         self.publisher.publish(msg)
-        # Concatenate images and convert them to ROS image format to display them later in rviz
-        image_message = self.opencv_bridge.cv2_to_imgmsg(cv2.vconcat(cropped_images), encoding="passthrough")
 
+        if len(cropped_images) > 1:
+            max_h = 0
+            for img in cropped_images:
+                max_h = max(max_h, img.shape[0])
+
+
+            for i, img in enumerate(cropped_images):
+                height_difference = max_h - img.shape[0]
+                cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
+
+        # Concatenate images and convert them to ROS image format to display them later in rviz
+        img = cv2.hconcat(cropped_images)
+        image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
         self.publisher_crop.publish(image_message)
 
 

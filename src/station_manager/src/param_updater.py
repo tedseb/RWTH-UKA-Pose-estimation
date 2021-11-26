@@ -45,7 +45,7 @@ class CameraStationController():
         if station_state:
             for camera_id, stations in frame_list.items():
                 if station_id in stations:
-                    if camera_id not in parameter_to_set:
+                    if str(camera_id) not in parameter_to_set:
                         parameter_to_set[str(camera_id)] = {}
                     parameter_to_set[str(camera_id)][str(station_id)] = stations[station_id]
         else:

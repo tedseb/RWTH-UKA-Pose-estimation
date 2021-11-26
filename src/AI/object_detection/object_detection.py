@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from dataclasses import dataclass
 import numpy as np
+import collections
 from typing import List
 from backend.msg import ImageData
 from backend.msg import Bboxes
@@ -39,6 +40,7 @@ class ObjectDetectionPipeline:
         rospy.Subscriber('image', ImageData, self._object_detector_loop)
         logy.info("Object Detection is listening")
 
+    @logy.catch_ros
     def _object_detector_loop(self, img_data: ImageData):
         '''
         This is a callback function which receives the message from the subscriber.
@@ -66,7 +68,6 @@ class ObjectDetectionPipeline:
             self._publish_labels(yolo_data.labels, img_data)
             logy.log_fps("object_detection_fps")
 
-    @logy.catch_ros
     def detect_objects(self, img) -> YoloData:
         '''This function uses the Yolo object detector. It predicts BBOX with label and confidence values.'''
         img_tens = img
@@ -137,6 +138,7 @@ class ObjectDetectionPipeline:
 
     def _publish_boxes(self, station_boxes, old_img_data, camera_id : int):
         box_list_1d = []
+        station_boxes = collections.OrderedDict(sorted(station_boxes.items()))
         for box in station_boxes.values():
             box_list_1d.extend(box)
         box_msg  = Bboxes()

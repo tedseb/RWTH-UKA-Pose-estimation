@@ -106,11 +106,11 @@ class StationManager():
             cam_info = self._data_manager.get_camera_type_info(camera_id)
 
         logy.debug(f"Start cam type {cam_type}, on {cam_info}")
-        new_channel = self.get_new_channel()
-        self._occupied_camera_channels[camera_id] = new_channel
-        new_channel = f"/image/channel_{new_channel}"
+        new_channel_id = self.get_new_channel()
+        self._occupied_camera_channels[camera_id] = new_channel_id
+        new_channel_name = f"/image/channel_{new_channel_id}"
 
-        self._publisher_channel_info.publish(ChannelInfo(new_channel, camera_id, True))
+        self._publisher_channel_info.publish(ChannelInfo(new_channel_name, new_channel_id, camera_id, True))
 
         if cam_type == 0:
             args = f"-y {cam_info} -d {camera_id}"
@@ -124,7 +124,7 @@ class StationManager():
             args += " -v"
 
 
-        args += f' --channel {new_channel}'
+        args += f' --channel {new_channel_name}'
         args +=  f" --debug-frames {self._debug_frames_ms}"
 
         with self._camera_process_mutex:

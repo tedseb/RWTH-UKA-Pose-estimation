@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import math
 import rospy
-from backend.msg import Persons
+from backend.msg import Persons, ChannelInfo
 from std_msgs.msg import ColorRGBA
 from geometry_msgs.msg import Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray
@@ -24,6 +24,11 @@ spinvis_pose = [
 
 class RealtimeVisualization():
     def __init__(self, ai):
+        rospy.Subscriber('personsJS', Persons, self.frame_callback)
+        rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
+        self.fused_skeleton_pub = rospy.Publisher('fused_skelleton', Persons, queue_size=100)
+        self.visualization_skeleton_pubs = {}
+
         if ai == "metrabs":
             self.ownpose = metrabs_pose
             self.skeleton_scale = Vector3(0.1,0.1,0.1)
@@ -42,11 +47,21 @@ class RealtimeVisualization():
                        ColorRGBA(0.59, 0.00, 0.56, 1.00)]
 
         # define a publisher to publish the 3D skeleton of multiple people
-        self.visualization_skeleton_pub = rospy.Publisher('visualization', MarkerArray, queue_size=100)
-        self.fused_skeleton_pub = rospy.Publisher('fused_skelleton', Persons, queue_size=100)
+
 
         # define a subscriber to retrive tracked bodies
-        rospy.Subscriber('personsJS', Persons, self.frame_callback)
+
+    @logy.catch_ros
+    def handle_new_channel(self, channel_info: ChannelInfo):
+        if channel_info.is_active:
+            logy.debug(f"New Channel: {channel_info.channel_name}")
+            if channel_info.cam_id not in self.visualization_skeleton_pubs:
+                pub = rospy.Publisher(f'/visualization/skeleton_{channel_info.channel_id}', MarkerArray, queue_size=100)
+                self.visualization_skeleton_pubs[channel_info.cam_id] = pub
+        else:
+            if channel_info.cam_id in self.visualization_skeleton_pubs:
+                self.visualization_skeleton_pubs[channel_info.cam_id].unregister()
+                del self.visualization_skeleton_pubs[channel_info.cam_id]
 
 
     def create_marker(self, index, color, marker_type, size, time):
@@ -72,7 +87,7 @@ class RealtimeVisualization():
         '''
         person_counter = 0
         idx = 0
-
+        camera_id = int(data.header.frame_id[3:])
         marker_array = MarkerArray()
 
         for person in data.persons:
@@ -112,7 +127,8 @@ class RealtimeVisualization():
                 marker_array.markers.append(m)
 
         # publish the markers
-        self.visualization_skeleton_pub.publish(marker_array)
+        #self.visualization_skeleton_pub.publish(marker_array)
+        self.visualization_skeleton_pubs[camera_id].publish(marker_array)
         self.fused_skeleton_pub.publish(data)  # TODO: Fusion and normalization is missing here
 
 

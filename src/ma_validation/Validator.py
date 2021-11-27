@@ -15,8 +15,8 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from sklearn.metrics import roc_curve, auc
 import threading
-
 import datetime
 
 from backend.msg import Persons
@@ -96,7 +96,9 @@ class Validator():
             
     def create_report(self, msg):
         rows = list(self.done_exercises.keys())
-        columns = ["Total Repetitions", "Percent Counted", "Total Error", "Positive Error", " Negative Error"]
+        columns = ["Total Repetitions", "Percent Counted Correctly", "Total Error", "Positive Error", " Negative Error"]
+        for k in self.done_exercises.keys():
+            self.done_exercises[k][1] = 100 * ((self.done_exercises[k][0] - self.done_exercises[k][2]) / self.done_exercises[k][0])
         df = pd.DataFrame.from_dict(self.done_exercises, orient='index', columns=columns) # (np.random.randn(10, 4), columns=list('ABCD'))
         with PdfPages('/home/trainerai/trainerai-core/data/ma_validation_report.pdf') as pdf:
             fig, ax = plt.subplots()
@@ -115,7 +117,6 @@ class Validator():
             d['Subject'] = 'Motion Analysis Validation Report'
             d['CreationDate'] = datetime.datetime.today()
             d['ModDate'] = datetime.datetime.today()
-
 
 
 if __name__ == '__main__':

@@ -508,9 +508,9 @@
             <enum>QLayout::SetMinimumSize</enum>
            </property>
            <item row="0" column="0">
-            <widget class="QCheckBox" name="checkBox">
+            <widget class="QCheckBox" name="advance_mode_check">
              <property name="enabled">
-              <bool>false</bool>
+              <bool>true</bool>
              </property>
              <property name="text">
               <string>Advanced Mode</string>

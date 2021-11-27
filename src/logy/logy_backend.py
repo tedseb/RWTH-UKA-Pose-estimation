@@ -52,15 +52,24 @@ class LogType:
     AVG = 1
     MEAN = 2
     VARIABLE = 3
+    TRACING = 4
 
 @dataclass
 class AverageData:
-    num : int
-    last_avg : float
+    caller_hash: hash
+    num: int
+    last_avg: float
 
 @dataclass
 class MeanData:
-    values : List[float]
+    caller_hash: hash
+    values: List[float]
+
+@dataclass
+class VariableData:
+    caller_hash: hash
+    values: List[float]
+    time_stamps: List[float]
 
 _name_to_level = {
     'critical': CRITICAL,
@@ -136,6 +145,8 @@ class LogyBackend:
         self._print_tags = print_tags
         self._avg_data: Dict[AverageData] = {}
         self._mean_data: Dict[MeanData] = {}
+        self._var_data: Dict[VariableData] = {}
+        self._tracing_data: Dict[VariableData] = {}
         if self._log_to_file:
             self._open_log_file(file_prefix)
 
@@ -156,6 +167,9 @@ class LogyBackend:
             self._pipe.close()
         if self._log_file is not None:
             self._log_file.close()
+
+        if self._use_neptune:
+            self._neptune_run.stop()
 
     def _log_avg_result(self):
         avg_logs = {}
@@ -216,17 +230,21 @@ class LogyBackend:
             self._log_avg(data)
         elif message_type == LogType.MEAN:
             self._log_mean(data)
+        elif message_type == LogType.VARIABLE:
+            self._log_var(data)
+        elif message_type == LogType.TRACING:
+            self._log_tracing(data)
         else:
             self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
-
     def _log_avg(self, data: Dict):
+        caller_hash = data["hash"]
         name = data["name"]
         value = data["value"]
 
         values_before: AverageData = self._avg_data.get(name)
         if values_before is None:
-            self._avg_data[name] = AverageData(1, value)
+            self._avg_data[name] = AverageData(caller_hash, 1, value)
             return
 
         n = values_before.num
@@ -235,16 +253,65 @@ class LogyBackend:
         values_before.last_avg = avg
         values_before.num += 1
 
+        if values_before.caller_hash != caller_hash:
+            self._log_message(f" Logy: The avg log with name '{name}' is called from another location", WARNING)
+
     def _log_mean(self, data: Dict):
+        caller_hash = data["hash"]
         name = data["name"]
         value = data["value"]
 
         values_before: MeanData = self._mean_data.get(name)
         if values_before is None:
-            self._mean_data[name] = MeanData([value])
+            self._mean_data[name] = MeanData(caller_hash, [value])
             return
 
         values_before.values.append(value)
+
+        if values_before.caller_hash != caller_hash:
+            self._log_message(f" Logy: The Mean log with name '{name}' is called from another location", WARNING)
+
+    def _log_var(self, data: Dict):
+        caller_hash = data["hash"]
+        name = data["name"]
+        value = data["value"]
+
+        if self._use_neptune:
+            self._neptune_run[f"variable/{name}"].log(value)
+
+        if "var" in self._print_tags:
+            self._log_msg_to_terminal(f"VARIABLE:{name}: {value}", DEBUG)
+
+        values_before: VariableData = self._var_data.get(name)
+        if values_before is None:
+            self._var_data[name] = VariableData(caller_hash, [value], [time.time()])
+            return
+
+        values_before.time_stamps.append(time.time())
+        values_before.values.append(value)
+        if values_before.caller_hash != caller_hash:
+            self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
+
+    def _log_tracing(self, data: Dict):
+        caller_hash = data["hash"]
+        name = data["name"]
+        value = data["value"]
+
+        if self._use_neptune:
+            self._neptune_run[f"tracing/{name}"].log(value)
+
+        if "tracing" in self._print_tags:
+            self._log_msg_to_terminal(f"TRACING:{name}: {value}", DEBUG)
+
+        values_before: VariableData = self._tracing_data.get(name)
+        if values_before is None:
+            self._tracing_data[name] = VariableData(caller_hash, [value], [time.time()])
+            return
+
+        values_before.time_stamps.append(time.time())
+        values_before.values.append(value)
+        if values_before.caller_hash != caller_hash:
+            self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
 
     def _log_data_message(self, data: Dict):
         log_level = data["level"]
@@ -356,7 +423,6 @@ class LogyBackend:
                 self._neptune_run["log_file"].upload(self._log_file_path)
             if self._error_occured < ERROR:
                 self._neptune_run["Info"] = {"State": "SUCCESS"}
-            self._neptune_run.stop()
 
 def main(start_neptune=False, tags=[], log_level_terminal="warning"):
     try:
@@ -376,6 +442,7 @@ if __name__ == '__main__':
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
 
     arg_count = len(sys.argv)
+    print(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]

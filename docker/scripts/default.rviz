@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /MarkerArray1/Status1
         - /MarkerArray3
       Splitter Ratio: 0.5
     Tree Height: 275
@@ -82,7 +81,7 @@ Visualization Manager:
       Marker Topic: /visualization
       Name: MarkerArray
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -129,7 +128,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 17.784292221069336
+      Distance: 9.154675483703613
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -137,17 +136,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.6114410161972046
-        Y: 1.0103590488433838
-        Z: 3.0837996006011963
+        X: -4.7238993644714355
+        Y: 0.23963260650634766
+        Z: 3.675731897354126
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3653985857963562
+      Pitch: -0.2846009135246277
       Target Frame: <Fixed Frame>
-      Yaw: 4.123574256896973
+      Yaw: 3.1735377311706543
     Saved: ~
 Window Geometry:
   Displays:
@@ -167,5 +166,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1206
-  X: 386
-  Y: 416
+  X: 516
+  Y: 16

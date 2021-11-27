@@ -100,12 +100,12 @@ class PoseEstimator():
 
 
     def callback_setImage(self, msg: ImageData):
-        logy.debug_throttle("GET IMAGE", 5000)
+        #logy.debug_throttle("Received Image", 2000)
         if msg.is_debug:
             logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
             time_ms = time.time() * 1000
             self._debug_time_queue.put((time_ms, msg.debug_id))
-
+        logy.log_fps("metraps_image_fps")
         self._image_queue.put(msg)
 
     def get_next_image_in_queue(self, box_frame_number: int):
@@ -142,6 +142,7 @@ class PoseEstimator():
         return debug_data
 
     def callback_regress(self, body_bbox_list_station: Bboxes):
+        #logy.debug_throttle("Received Bbox", 2000)
         img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num)
         if img_data is None:
             #logy.warn_throttle("The next image is missing")
@@ -161,6 +162,7 @@ class PoseEstimator():
                 logy.log_mean("debug_frame_delay", time_ms)
 
         body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
+        logy.log_fps("metraps_bbox_fps")
 
         # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
         height = last_image.height
@@ -208,6 +210,7 @@ class PoseEstimator():
                 person_msg.bodyParts[idx].point.z = -joints[idx, 1] / 400
             inc=inc+1
             msg.persons.append(person_msg)
+
         self.publisher.publish(msg)
         # Concatenate images and convert them to ROS image format to display them later in rviz
         image_message = self.opencv_bridge.cv2_to_imgmsg(cv2.vconcat(cropped_images), encoding="passthrough")

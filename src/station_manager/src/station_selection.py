@@ -71,6 +71,8 @@ class StationSelection(StationSelectionUi, QObject):
         self._gui.setupUi(self._main_window)
         self.setupUi(self._main_window)
         self._is_connected = False
+        self.advanced_mode = False
+        self._stations_exercise_active = {}
         self._data_manager : DataManager = data_manager
         self.activate_exercise_button.setEnabled(False)
         time.sleep(1)
@@ -78,14 +80,13 @@ class StationSelection(StationSelectionUi, QObject):
         self.activate_station_button.clicked.connect(self.set_station_state)
         self.activate_exercise_button.clicked.connect(self.set_exercise_state)
         self.weight_detection_button.clicked.connect(self.start_weight_detection)
+        self.advance_mode_check.stateChanged.connect(self.activate_advanced_mode)
+        self.station_combobox.currentIndexChanged.connect(self.station_selected)
 
         signal.signal(signal.SIGINT, signal.SIG_DFL)
 
         only_int = QIntValidator()
         self.exercise_edit.setValidator(only_int)
-
-        self.station_active = False
-        self.exercise_active = False
 
         self._use_exercise_names = self._data_manager.is_mongo_on()
         if self._use_exercise_names:
@@ -114,16 +115,21 @@ class StationSelection(StationSelectionUi, QObject):
 
     def load_exercises(self):
         exercises = self._data_manager.get_exercises()
-        print(exercises)
         for exercise_id, exercise_name in exercises.items():
             self.exercise_combobox.addItem(exercise_name, exercise_id)
 
     def set_station_state(self):
-        self.toggle_station()
+
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
         data = copy.deepcopy(REQUEST_DICT)
-        request = 1 if self.station_active else 2
+        station_active = station_id in self._stations_exercise_active
+        self.toggle_station(station_active)
+        if station_active:
+            del self._stations_exercise_active[station_id]
+        else:
+            self._stations_exercise_active[station_id] = False
+        request = 2 if station_active else 1
         payload = {"station" : station_id, "exercise" : int(-1)}
         payload_str = json.dumps(payload)
         self.print_info("[REQUEST]")
@@ -131,7 +137,6 @@ class StationSelection(StationSelectionUi, QObject):
         self._send_message(request, payload)
 
     def set_exercise_state(self):
-        self.toggle_exercise()
         if self._use_exercise_names:
             index = self.exercise_combobox.currentIndex()
             exercise_id = self.exercise_combobox.itemData(index, Qt.UserRole)
@@ -140,40 +145,45 @@ class StationSelection(StationSelectionUi, QObject):
         data = copy.deepcopy(REQUEST_DICT)
         index = self.station_combobox.currentIndex()
         station_id = self.station_combobox.itemData(index, Qt.UserRole)
-        request = 3 if self.exercise_active else 4
+        if station_id not in self._stations_exercise_active:
+            return
+        exercise_active = self._stations_exercise_active[station_id]
+        self.toggle_exercise(exercise_active)
+        request = 4 if exercise_active else 3
         payload = {"station" : station_id, "exercise" : int(exercise_id), "set_id" : 1}
         payload_str = json.dumps(payload)
         self.print_info("[REQUEST]")
         self.print_info(f"request={request}, payload={payload_str}")
         self._send_message(request, payload)
+        self._stations_exercise_active[station_id] = not exercise_active
 
-    def toggle_exercise(self):
-        if self.exercise_active:
-            self.exercise_edit.setEnabled(True)
+    def toggle_exercise(self, exercise_active, force_active = False):
+        if exercise_active or force_active:
             self.activate_exercise_button.setText("Start Exercise")
-            self.activate_station_button.setEnabled(True)
-            self.weight_detection_button.setEnabled(True)
+            if not self.advanced_mode:
+                self.exercise_edit.setEnabled(True)
+                self.activate_station_button.setEnabled(True)
+                self.weight_detection_button.setEnabled(True)
         else:
-            self.exercise_edit.setEnabled(False)
             self.activate_exercise_button.setText("Stop Exercise")
-            self.activate_station_button.setEnabled(False)
-            self.weight_detection_button.setEnabled(False)
+            if not self.advanced_mode:
+                self.exercise_edit.setEnabled(False)
+                self.activate_station_button.setEnabled(False)
+                self.weight_detection_button.setEnabled(False)
 
-        self.exercise_active = not self.exercise_active
-
-    def toggle_station(self):
-        if self.station_active:
-            self.station_combobox.setEnabled(True)
+    def toggle_station(self, station_active, force_active = False):
+        if station_active or force_active:
             self.activate_station_button.setText("Activate Station")
-            self.activate_exercise_button.setEnabled(False)
-            self.weight_detection_button.setEnabled(False)
+            if not self.advanced_mode:
+                self.station_combobox.setEnabled(True)
+                self.activate_exercise_button.setEnabled(False)
+                self.weight_detection_button.setEnabled(False)
         else:
-            self.station_combobox.setEnabled(False)
             self.activate_station_button.setText("Deactivate Station")
-            self.activate_exercise_button.setEnabled(True)
-            self.weight_detection_button.setEnabled(True)
-
-        self.station_active = not self.station_active
+            if not self.advanced_mode:
+                self.station_combobox.setEnabled(False)
+                self.activate_exercise_button.setEnabled(True)
+                self.weight_detection_button.setEnabled(True)
 
     def start_weight_detection(self):
         #time.sleep(1000)
@@ -203,6 +213,28 @@ class StationSelection(StationSelectionUi, QObject):
         # self.activate_station_button.setEnabled(True)
 
     #def wait_for_message(self):
+    def station_selected(self, index : int):
+        station_id = self.station_combobox.itemData(index, Qt.UserRole)
+        if station_id in self._stations_exercise_active:
+            self.activate_station_button.setText("Deactivate Station")
+            if self._stations_exercise_active[station_id]:
+                logy.warn("jetzt")
+                self.activate_exercise_button.setText("Stop Exercise")
+            else:
+                self.activate_exercise_button.setText("Start Exercise")
+        else:
+            self.activate_station_button.setText("Activate Station")
+            self.activate_exercise_button.setText("Start Exercise")
+
+    def activate_advanced_mode(self):
+        self.advance_mode_check.setEnabled(False)
+        self.advanced_mode = True
+        self.exercise_edit.setEnabled(True)
+        self.activate_station_button.setEnabled(True)
+        self.weight_detection_button.setEnabled(True)
+        self.activate_exercise_button.setEnabled(True)
+        self.station_combobox.setEnabled(True)
+
 
     def parse_message(self, msg : str):
         data = json.loads(msg)

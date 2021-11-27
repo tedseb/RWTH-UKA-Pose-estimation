@@ -152,7 +152,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
         # (37, 43), (43, 38), (43, 17), (43, 18), (17, 42), (42, 0), (0, 15), (0, 16)]
 
         # Bew build order
-        modified_body_build_order = [(22, 23), (23, 24), (24, 11), (11, 10), (10, 9), (9, 27), (27, 39), (39, 41), (39, 28), (28, 12), (12, 13), (13, 14), (14, 21), (21, 19), (19, 20), (41, 1), (1, 2), (2, 3), (3, 4), (1, 5), (5, 6), (6, 7), (1, 37), (37, 43), (43, 42,), (42, 17), (17, 18)]
+        modified_body_build_order = [(22, 23), (23, 24), (24, 11), (11, 10), (10, 9), (9, 27), (27, 39), (39, 41), (39, 28), (28, 12), (12, 13), (13, 14), (14, 21), (21, 19), (19, 20), (41, 1), (1, 2), (2, 3), (3, 4), (1, 5), (5, 6), (6, 7), (1, 37), (37, 43), (43, 42), (42, 17), (17, 18), (18, 0)]
 
         # We need to transform this build order, because we leave out some joints of the spin skelleton
         self.body_build_order = [(self.joints_used.index(idx_1), self.joints_used.index(idx_2)) for idx_1, idx_2 in modified_body_build_order]

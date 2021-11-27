@@ -174,22 +174,21 @@ class PoseDefinitionAdapter():
         Returns:
             Name of the inner joint
         """
-        import rospy as rp
         # TODO: Optimize this if it has to be done more often
         joint_idxs = set(self.joints_used[self.get_joint_index(j)] for j in joint_names)
 
         def go_deeper(leaf, other_joints, building_blocks_left, found_joints):
-            import rospy as rp
             if found_joints == other_joints:
                 return found_joints
             new_leafs = []
             for i, j in building_blocks_left:
                 if i == leaf:
-                    building_blocks_left.remove((i, j))
+                    building_blocks_left = list(filter(lambda x: (x[0], x[1]) != (i, j), building_blocks_left))
                     new_leafs.append(j)
                 if j == leaf:
-                    building_blocks_left.remove((i, j))
+                    building_blocks_left = list(filter(lambda x: (x[0], x[1]) != (i, j), building_blocks_left))
                     new_leafs.append(i)
+                   
 
             for j in other_joints:
                 if j in new_leafs:
@@ -200,14 +199,15 @@ class PoseDefinitionAdapter():
 
             return found_joints
 
+        body_build_order = [(self.joints_used[idx_1], self.joints_used[idx_2]) for idx_1, idx_2 in self.body_build_order]
+
         for joint in joint_idxs:
             total_found_leafs_no = 0
             other_joints = joint_idxs.copy()
             other_joints.remove(joint)
             leafs = set()
-            initial_building_blocks = self.body_build_order.copy()
-            for i, j in self.body_build_order:
-                rp.logerr((i, j))
+            initial_building_blocks = body_build_order.copy()
+            for i, j in body_build_order:
                 if joint == i:
                     initial_building_blocks.remove((i, j))
                     leafs.add(j)
@@ -215,8 +215,6 @@ class PoseDefinitionAdapter():
                     initial_building_blocks.remove((i, j))
                     leafs.add(i)
 
-            rp.logerr(joint)
-            rp.logerr(leafs)
         
             for l in leafs:
                 found_leafs = set()
@@ -225,8 +223,9 @@ class PoseDefinitionAdapter():
                 found_leafs = go_deeper(l, other_joints, initial_building_blocks.copy(), found_leafs)
                 found_leafs_no = len(found_leafs)
                 if total_found_leafs_no == 1 and found_leafs_no == 1:
-                    return self.get_joint_name(joint)
+                    return self.get_joint_name(self.joints_used.index(joint))
                 total_found_leafs_no += found_leafs_no
+
 
         raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")
                 

@@ -231,7 +231,9 @@ def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseD
 
     inner_joint = pose_definition_adapter.find_inner_joint(joint_names)
     outer_joints = set(joint_names)
+    
     outer_joints.remove(inner_joint)
+
     
     if exceptions:
         rp.logerr("Errors occured while parsing the provided exercise:" + str(exceptions))

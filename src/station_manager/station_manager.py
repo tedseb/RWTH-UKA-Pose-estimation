@@ -37,11 +37,6 @@ class ComputerWorkload:
 
 class StationManager():
     def __init__(self, camera_path, transform_node_path, station_selection_path, verbose=False, debug_frames_ms=0):
-        if verbose:
-            logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
-        else:
-            logy.Logy().basic_config(debug_level=logy.INFO, module_name="SM")
-
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
         try:
@@ -330,6 +325,10 @@ if __name__ == '__main__':
         args = parser.parse_args(valid_args)
     else:
         args = parser.parse_args()
+
+
+    logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
+
 
     camera_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/infrastructure/CameraNode.py"
     transform_node_path = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"

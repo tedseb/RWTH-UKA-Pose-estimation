@@ -97,8 +97,8 @@ class PoseEstimator():
         #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
         #rospy.Subscriber('image', ImageData, self.callback_setImage)
-        self._image_queue = Queue(3)
-        self._debug_time_queue = Queue(20)
+        self._image_queues = {}
+        self._debug_time_queues = {}
         #srospy.Subscriber('image1', Image, self.callback_setImage)
 
         image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
@@ -116,6 +116,10 @@ class PoseEstimator():
             if channel_info.cam_id not in self.publisher_crop and self._send_cropped:
                 pub = rospy.Publisher(f'{channel_info.channel_name}_cropped', Image , queue_size=2)
                 self.publisher_crop[channel_info.cam_id] = pub
+            if channel_info.cam_id not in self._image_queues:
+                self._image_queues[channel_info.cam_id] = Queue(5)
+            if channel_info.cam_id not in self._debug_time_queues:
+                self._debug_time_queues[channel_info.cam_id] = Queue(20)
         else:
             if channel_info.cam_id in self.subscriber_image:
                 self.subscriber_image[channel_info.cam_id].unregister()
@@ -123,60 +127,70 @@ class PoseEstimator():
             if channel_info.cam_id in self.publisher_crop and self._send_cropped:
                 self.publisher_crop[channel_info.cam_id].unregister()
                 del self.publisher_crop[channel_info.cam_id]
+            if channel_info.cam_id in self._image_queues:
+                del self._image_queues[channel_info.cam_id]
+            if channel_info.cam_id in self._debug_time_queues:
+                del self._debug_time_queues[channel_info.cam_id]
 
+    @logy.catch_ros
     def callback_setImage(self, msg: ImageData):
+        camera_id = int(msg.image.header.frame_id[3:])
         #logy.debug_throttle("Received Image", 2000)
         if msg.is_debug:
             logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
             time_ms = time.time() * 1000
-            self._debug_time_queue.put((time_ms, msg.debug_id))
-        logy.log_fps("metraps_image_fps")
-        self._image_queue.put(msg)
+            self._debug_time_queues[camera_id].put((time_ms, msg.debug_id))
 
-    def get_next_image_in_queue(self, box_frame_number: int):
-        if self._image_queue.empty():
+        if camera_id in self._image_queues:
+            self._image_queues[camera_id].put(msg)
+            logy.log_fps("metraps_image_fps")
+
+    def get_next_image_in_queue(self, box_frame_number: int, camera_id: int):
+        queue = self._image_queues.get(camera_id)
+        if queue is None or queue.empty():
             return None
 
         bbox_num = box_frame_number
-        next_img_num = self._image_queue[0].frame_num
+        next_img_num = queue[0].frame_num
 
         while next_img_num <= bbox_num:
-            img_data = self._image_queue.get()
-            if self._image_queue.empty():
+            img_data = queue.get()
+            if queue.empty():
                 break
-            next_img_num = self._image_queue[0].frame_num
+            next_img_num = queue[0].frame_num
 
         if next_img_num != bbox_num:
             return None
         return img_data
 
-    def get_next_debug_frame(self, box_debug_id: int):
-        if self._debug_time_queue.empty():
+    def get_next_debug_frame(self, box_debug_id: int, camera_id: int):
+        queue = self._debug_time_queues.get(camera_id)
+        if queue is None or queue.empty():
             return None
 
-        bbox_num = box_debug_id
-        next_img_num = self._debug_time_queue[0][1]
-        while next_img_num <= bbox_num:
-            debug_data = self._debug_time_queue.get()
-            if self._debug_time_queue.empty():
+        next_debug_id = queue[0][1]
+        while next_debug_id <= box_debug_id:
+            debug_data = queue.get()
+            if queue.empty():
                 break
-            next_img_num = self._debug_time_queue[0][1]
+            next_debug_id = queue[0][1]
 
-        if next_img_num != bbox_num:
+        if next_debug_id != box_debug_id:
             return None
         return debug_data
 
     @logy.catch_ros
     def callback_regress(self, body_bbox_list_station: Bboxes):
         #logy.debug_throttle("Received Bbox", 2000)
-        img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num)
+        camera_id = int(body_bbox_list_station.header.frame_id[3:])
+        img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num, camera_id)
         if img_data is None:
             #logy.warn_throttle("The next image is missing")
             return
         last_image = img_data.image
 
         if body_bbox_list_station.is_debug:
-            debug_info = self.get_next_debug_frame(body_bbox_list_station.debug_id)
+            debug_info = self.get_next_debug_frame(body_bbox_list_station.debug_id, camera_id)
             if debug_info is None:
                 logy.warn("The next Debug image is missing.")
                 logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
@@ -250,10 +264,10 @@ class PoseEstimator():
                 cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
 
         # Concatenate images and convert them to ROS image format to display them later in rviz
-        cam_id = int(body_bbox_list_station.header.frame_id[3:])
+
         img = cv2.hconcat(cropped_images)
         image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
-        self.publisher_crop[cam_id].publish(image_message)
+        self.publisher_crop[camera_id].publish(image_message)
 
 
 if __name__ == '__main__':

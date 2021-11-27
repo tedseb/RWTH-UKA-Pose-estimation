@@ -107,7 +107,9 @@ class StationManager():
 
         logy.debug(f"Start cam type {cam_type}, on {cam_info}")
         new_channel = self.get_new_channel()
+        self._occupied_camera_channels[camera_id] = new_channel
         new_channel = f"/image/channel_{new_channel}"
+
         self._publisher_channel_info.publish(ChannelInfo(new_channel, camera_id, True))
 
         if cam_type == 0:
@@ -147,6 +149,8 @@ class StationManager():
                 except subprocess.TimeoutExpired:
                     self.kill(self.__transform_process[camera_id].pid)
                 del self.__transform_process[camera_id]
+
+            del self._occupied_camera_channels[camera_id]
 
     def kill(self, proc_pid):
         process = psutil.Process(proc_pid)

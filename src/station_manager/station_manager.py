@@ -17,7 +17,7 @@ import random
 
 from std_msgs.msg import String
 from rospy.exceptions import ROSException
-from backend.msg import StationUsage, WeightColor
+from backend.msg import StationUsage, WeightColor, ChannelInfo
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from twisted.internet import reactor
 import time
@@ -43,6 +43,7 @@ class StationManager():
             logy.Logy().basic_config(debug_level=logy.INFO, module_name="SM")
 
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
+        self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo , queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
         try:
             rospy.wait_for_service('ai/weight_detection', 3)
@@ -52,6 +53,7 @@ class StationManager():
 
         self._debug_frames_ms = debug_frames_ms
         self._data_manager = DataManager()
+        self._occupied_camera_channels = {}
 
         self._verbose = verbose
         self._path_camera_node = camera_path
@@ -104,6 +106,9 @@ class StationManager():
             cam_info = self._data_manager.get_camera_type_info(camera_id)
 
         logy.debug(f"Start cam type {cam_type}, on {cam_info}")
+        new_channel = self.get_new_channel()
+        new_channel = f"/image/channel_{new_channel}"
+        self._publisher_channel_info.publish(ChannelInfo(new_channel, camera_id, True))
 
         if cam_type == 0:
             args = f"-y {cam_info} -d {camera_id}"
@@ -113,10 +118,11 @@ class StationManager():
             args = f"-p {cam_info} -d {camera_id}"
         if cam_type == 3:
             args = f"--disk {cam_info} -d {camera_id}"
-
         if self._verbose:
             args += " -v"
 
+
+        args += f' --channel {new_channel}'
         args +=  f" --debug-frames {self._debug_frames_ms}"
 
         with self._camera_process_mutex:
@@ -160,7 +166,19 @@ class StationManager():
         callback = self._client_callbacks[user_id]
         callback(response_code=509, satus_code=1, payload=payload)
 
-    ### Server Callback functions ###
+    def get_new_channel(self):
+        channel_list = sorted(list(self._occupied_camera_channels.values()))
+        new_channel = len(channel_list)
+        for i, channel in enumerate(channel_list):
+            if i < channel:
+                new_channel = i
+                break
+        return new_channel
+
+    ##################################################################################################################
+    #################################### Server Callback functions ###################################################
+    ##################################################################################################################
+
     def login_station_payload(self, user_id: str, payload: Dict):
 
         logy.debug(f"Login {user_id} payload: {payload}")

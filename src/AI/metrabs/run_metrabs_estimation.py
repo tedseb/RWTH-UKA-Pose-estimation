@@ -9,10 +9,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices
 
 import tensorflow as tf
 import time
-import rospy as rp
+import rospy
 from collections import deque
 from sensor_msgs.msg import Image
-from backend.msg import ImageData
+from backend.msg import ImageData, ChannelInfo
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
@@ -70,34 +70,59 @@ class Queue:
 
 class PoseEstimator():
     def __init__(self):
+        rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=1)
+        rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         self.model = tf.saved_model.load(CONFIG["model_path"])
 
         self.intrinsics = tf.constant(CONFIG.get("intrinsics"), dtype=tf.float32)
-        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
-        person_boxes = tf.constant([ [1000, 350, 500, 650]], tf.float32)
 
-        self.model.predict_single_image(image, self.intrinsics, person_boxes)
 
 
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
 
         # define a publisher to publish the 3D skeleton of multiple people
-        self.publisher = rp.Publisher('personsJS', Persons, queue_size=2)
-        self.publisher_crop = rp.Publisher('cropped_images', Image, queue_size=2)
+        self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
+        self.publisher_crop = {}
+
+        self.subscriber_image = {}
+
 
         # Define a CV bridge that handles images for us
         self.opencv_bridge = CvBridge()
-
+        self._send_cropped = True
         # define a subscriber to retrive tracked bodies
-        rp.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=1)
-        #rp.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
-        rp.Subscriber('image', ImageData, self.callback_setImage)
+
+        #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
+
+        #rospy.Subscriber('image', ImageData, self.callback_setImage)
         self._image_queue = Queue(3)
         self._debug_time_queue = Queue(20)
-        #srp.Subscriber('image1', Image, self.callback_setImage)
+        #srospy.Subscriber('image1', Image, self.callback_setImage)
 
+        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        person_boxes = tf.constant([ [1000, 350, 500, 650]], tf.float32)
+        self.model.predict_single_image(image, self.intrinsics, person_boxes)
+
+
+    @logy.catch_ros
+    def handle_new_channel(self, channel_info: ChannelInfo):
+        if channel_info.is_active:
+            logy.debug(f"New Channel: {channel_info.channel_name}")
+            if channel_info.cam_id not in self.subscriber_image:
+                sub = rospy.Subscriber(channel_info.channel_name, ImageData, self.callback_setImage)
+                self.subscriber_image[channel_info.cam_id] = sub
+            if channel_info.cam_id not in self.publisher_crop and self._send_cropped:
+                pub = rospy.Publisher(f'{channel_info.channel_name}_cropped', Image , queue_size=2)
+                self.publisher_crop[channel_info.cam_id] = pub
+        else:
+            if channel_info.cam_id in self.subscriber_image:
+                self.subscriber_image[channel_info.cam_id].unregister()
+                del self.subscriber_image[channel_info.cam_id]
+            if channel_info.cam_id in self.publisher_crop and self._send_cropped:
+                self.publisher_crop[channel_info.cam_id].unregister()
+                del self.publisher_crop[channel_info.cam_id]
 
     def callback_setImage(self, msg: ImageData):
         #logy.debug_throttle("Received Image", 2000)
@@ -180,7 +205,7 @@ class PoseEstimator():
         boxes = body_bbox_list_station_reshaped
 
         if len(pred_output_list.numpy()) == 0:
-            rp.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
+            rospy.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
             return
 
         inc = 0
@@ -225,15 +250,16 @@ class PoseEstimator():
                 cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
 
         # Concatenate images and convert them to ROS image format to display them later in rviz
+        cam_id = int(body_bbox_list_station.header.frame_id[3:])
         img = cv2.hconcat(cropped_images)
         image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
-        self.publisher_crop.publish(image_message)
+        self.publisher_crop[cam_id].publish(image_message)
 
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
 
-    rp.init_node('metrabs', anonymous=True)
+    rospy.init_node('metrabs', anonymous=True)
     run_spin_obj = PoseEstimator()
     logy.info("Pose Estimator is listening")
-    rp.spin()
+    rospy.spin()

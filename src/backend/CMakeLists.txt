@@ -62,6 +62,7 @@ add_message_files(
   LabelsCameraID.msg
   WeightColor.msg
   ImageData.msg
+  ChannelInfo.msg
 )
 
 ## Generate services in the 'srv' folder

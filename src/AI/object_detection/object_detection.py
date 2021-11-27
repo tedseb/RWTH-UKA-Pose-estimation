@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import collections
 from typing import List
-from backend.msg import ImageData
+from backend.msg import ImageData, ChannelInfo
 from backend.msg import Bboxes
 from backend.msg import LabelsCameraID
 from sensor_msgs.msg import Image
@@ -34,11 +34,30 @@ class ObjectDetectionPipeline:
         self._renderer = renderer
         self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
         self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
-        if self._renderer:
-            self.publisher_img = rospy.Publisher('imageYOLO', Image , queue_size=2)
+        self.subscriber_image = {}
+        self.publisher_img_yolo = {}
 
         rospy.Subscriber('image', ImageData, self._object_detector_loop)
+        rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         logy.info("Object Detection is listening")
+
+    @logy.catch_ros
+    def handle_new_channel(self, channel_info: ChannelInfo):
+        if channel_info.is_active:
+            logy.debug(f"New Channel: {channel_info.channel_name}")
+            if channel_info.cam_id not in self.subscriber_image:
+                sub = rospy.Subscriber(channel_info.channel_name, ImageData, self._object_detector_loop)
+                self.subscriber_image[channel_info.cam_id] = sub
+            if channel_info.cam_id not in self.publisher_img_yolo and self._renderer:
+                pub = rospy.Publisher(f'{channel_info.channel_name}_yolo', Image , queue_size=2)
+                self.publisher_img_yolo[channel_info.cam_id] = pub
+        else:
+            if channel_info.cam_id in self.subscriber_image:
+                self.subscriber_image[channel_info.cam_id].unregister()
+                del self.subscriber_image[channel_info.cam_id]
+            if channel_info.cam_id in self.publisher_img_yolo and self._renderer:
+                self.publisher_img_yolo[channel_info.cam_id].unregister()
+                del self.publisher_img_yolo[channel_info.cam_id]
 
     @logy.catch_ros
     def _object_detector_loop(self, img_data: ImageData):
@@ -64,7 +83,7 @@ class ObjectDetectionPipeline:
             station_boxes = self._get_person_boxes_in_station(yolo_data, camera_id)
 
             self._publish_boxes(station_boxes, img_data, camera_id)
-            self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id)
+            self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_id)
             self._publish_labels(yolo_data.labels, img_data)
             logy.log_fps("object_detection_fps")
 
@@ -123,7 +142,7 @@ class ObjectDetectionPipeline:
             station_boxes[station_id] = [x,y,w,h]
         return station_boxes
 
-    def _publish_render_image(self, img, frame_id : str):
+    def _publish_render_image(self, img, frame_id : str, camera_id : int):
         if not self._renderer or img is None:
             return
 
@@ -134,7 +153,7 @@ class ObjectDetectionPipeline:
         msg_render_image.data = np.array(img, dtype=np.uint8).tobytes()
         msg_render_image.height, msg_render_image.width = img.shape[:-1]
         msg_render_image.step = img.shape[-1]*img.shape[0]
-        self.publisher_img.publish(msg_render_image)
+        self.publisher_img_yolo[camera_id].publish(msg_render_image)
 
     def _publish_boxes(self, station_boxes, old_img_data, camera_id : int):
         box_list_1d = []

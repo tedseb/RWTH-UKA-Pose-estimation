@@ -38,7 +38,7 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000, channel="image"):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
@@ -47,7 +47,8 @@ class CameraNode():
         self._debug_repetition_ms = debug_repetition_ms
 
         rospy.init_node('camera', anonymous=True)
-        self._pub = rospy.Publisher('image', ImageData, queue_size=1)
+        logy.debug(f"New Channel: {channel}")
+        self._pub = rospy.Publisher(channel, ImageData, queue_size=1)
 
         if self._camera_mode is VideoMode.INVALID:
             raise RuntimeError("Invalid video mode")
@@ -263,6 +264,7 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
     parser.add_argument("-k", "--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
+    parser.add_argument("--channel", default="image", type=str, help="Image channel Name")
     parser.add_argument("--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
 
     arg_count = len(sys.argv)
@@ -306,7 +308,7 @@ if __name__ == '__main__':
 
     try:
         print("INFO:", info)
-        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames)
+        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames, channel=args.channel)
         if args.disk:
             node.start_video_publisher()
         else:

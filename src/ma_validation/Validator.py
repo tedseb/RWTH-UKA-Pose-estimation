@@ -17,6 +17,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 import threading
+import signal
+import yaml
+
 import datetime
 
 from backend.msg import Persons
@@ -92,6 +95,9 @@ class Validator():
 
             self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
         
+            with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
+                d = yaml.dump(self.done_exercises, outfile)
+
         self.semaphore.release()
             
     def create_report(self, msg):
@@ -131,6 +137,9 @@ class Validator():
             d['Subject'] = 'Motion Analysis Validation Report'
             d['CreationDate'] = datetime.datetime.today()
             d['ModDate'] = datetime.datetime.today()
+
+        with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
+            yaml.dump(self.done_exercises, outfile)
 
 
 if __name__ == '__main__':

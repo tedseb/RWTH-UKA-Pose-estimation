@@ -163,6 +163,7 @@ class ObjectDetectionPipeline:
         box_msg  = Bboxes()
         box_msg.header.stamp = old_img_data.image.header.stamp #Will be important for data fusion: Use current time or older stamp from CameraNode
         box_msg.header.frame_id = old_img_data.image.header.frame_id
+        box_msg.frame_num = old_img_data.frame_num
         box_msg.data = box_list_1d
         box_msg.stationID = list(station_boxes.keys())
         box_msg.sensorID = [camera_id for i in range(len(station_boxes))]

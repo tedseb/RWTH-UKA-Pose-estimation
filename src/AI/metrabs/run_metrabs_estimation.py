@@ -18,7 +18,7 @@ from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
 import logy
 import time
-
+import threading
 import logging
 logging.basicConfig(level='ERROR')
 
@@ -35,6 +35,10 @@ plt.switch_backend('TkAgg')
 from mpl_toolkits.mplot3d import Axes3D
 
 from inspect import getmembers, isfunction
+
+THREAD_WAIT_TIME_MS = 20 #40 ms are the time beween two images at 25fps
+AI_HEIGHT = 720
+AI_WIDTH = 1280
 
 CONFIG = {
     'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
@@ -99,12 +103,24 @@ class PoseEstimator():
         #rospy.Subscriber('image', ImageData, self.callback_setImage)
         self._image_queues = {}
         self._debug_time_queues = {}
+        self._box_queues = {}
         #srospy.Subscriber('image1', Image, self.callback_setImage)
 
-        image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
-        person_boxes = tf.constant([ [1000, 350, 500, 650]], tf.float32)
-        self.model.predict_single_image(image, self.intrinsics, person_boxes)
+        #image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
+        image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
+        logy.warn(f"image shape: {image.shape}")
+        logy.warn(f"type: {image.dtype}")
+        person_boxes = np.array([[[1000, 350, 500, 650]]], np.float32)
+        ragged_boxes = tf.RaggedTensor.from_tensor(person_boxes)
+        self.start_ai([], image[np.newaxis], self.intrinsics.numpy()[np.newaxis], person_boxes)
+        #self.model(image[np.newaxis], self.intrinsics[np.newaxis], ragged_boxes)
+        self._is_active = True
+        self._ai_thread = threading.Thread(target=self.thread_handler)
+        self._ai_thread.start()
 
+    def __del__(self):
+        self._is_active = False
+        self._ai_thread.join(timeout=1)
 
     @logy.catch_ros
     def handle_new_channel(self, channel_info: ChannelInfo):
@@ -120,6 +136,8 @@ class PoseEstimator():
                 self._image_queues[channel_info.cam_id] = Queue(5)
             if channel_info.cam_id not in self._debug_time_queues:
                 self._debug_time_queues[channel_info.cam_id] = Queue(20)
+            if channel_info.cam_id not in self._box_queues:
+                self._box_queues[channel_info.cam_id] = Queue(2)
         else:
             if channel_info.cam_id in self.subscriber_image:
                 self.subscriber_image[channel_info.cam_id].unregister()
@@ -131,6 +149,8 @@ class PoseEstimator():
                 del self._image_queues[channel_info.cam_id]
             if channel_info.cam_id in self._debug_time_queues:
                 del self._debug_time_queues[channel_info.cam_id]
+            if channel_info.cam_id in self._box_queues:
+                del self._box_queues[channel_info.cam_id]
 
     @logy.catch_ros
     def callback_setImage(self, msg: ImageData):
@@ -181,93 +201,182 @@ class PoseEstimator():
 
     @logy.catch_ros
     def callback_regress(self, body_bbox_list_station: Bboxes):
-        #logy.debug_throttle("Received Bbox", 2000)
         camera_id = int(body_bbox_list_station.header.frame_id[3:])
-        img_data = self.get_next_image_in_queue(body_bbox_list_station.frame_num, camera_id)
-        if img_data is None:
-            #logy.warn_throttle("The next image is missing")
-            return
-        last_image = img_data.image
+        if camera_id in self._box_queues:
+            self._box_queues[camera_id].put(body_bbox_list_station)
 
-        if body_bbox_list_station.is_debug:
-            debug_info = self.get_next_debug_frame(body_bbox_list_station.debug_id, camera_id)
-            if debug_info is None:
-                logy.warn("The next Debug image is missing.")
-                logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
-            else:
-                logy.debug(f"Received bboxes. Debug frame {body_bbox_list_station.debug_id}", tag="debug_frame")
-                time_ms = time.time() * 1000
-                time_ms = time_ms - debug_info[0]
-                logy.log_avg("debug_frame_delay", time_ms)
-                logy.log_mean("debug_frame_delay", time_ms)
+    def thread_handler(self):
+        logy.debug("Metrabs Thread is Active")
+        thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
+        while(self._is_active):
+            boxes = []
+            images = []
+            intrinsics = []
+            data = []
+            for camera_id, queue in self._box_queues.items():
+                if queue.empty():
+                    continue
 
-        body_bbox_list_station_reshaped = np.array(body_bbox_list_station.data).reshape(-1,4)
-        logy.log_fps("metraps_bbox_fps")
+                box = queue.get()
+                box_np = np.array(box.data).reshape(-1, 4)
+                if box_np.size == 0:
+                    continue
 
-        # TODO: Differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
-        height = last_image.height
-        width = last_image.width
-        image = np.frombuffer(last_image.data, dtype=np.uint8)
-        image = image.reshape([height, width, 3])    #(480, 640, 3) --> (y,x,3) = (h,w,3)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
+                if img_data is None:
+                    #logy.warn("The next image is missing")
+                    continue
 
-        # Body Pose Regression
-        pred_output_list = self.model.predict_single_image(image, self.intrinsics, body_bbox_list_station_reshaped)
-        poses2d = ((pred_output_list / pred_output_list[..., 2:]) @ tf.linalg.matrix_transpose(self.intrinsics))[..., :2]
-        stationID = body_bbox_list_station.stationID
-        sensorID = body_bbox_list_station.sensorID
-        boxes = body_bbox_list_station_reshaped
-
-        if len(pred_output_list.numpy()) == 0:
-            rospy.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
-            return
-
-        inc = 0
-        msg = Persons()
-        msg.header = last_image.header
-        msg.persons = list()
-        cropped_images = []
-        for idx,detection in enumerate(pred_output_list.numpy()):
-            joints=detection
-            bb=boxes[idx]
-            cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
-            cropped_images.append(cropped_image)
-
-            lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
-            person_msg = Person()
-            if len(stationID) > 0:
-                person_msg.stationID = int(stationID[inc])
-                person_msg.sensorID = sensorID[inc]
-            person_msg.bodyParts = [None]*lenPoints
-            for idx in range(lenPoints):
-                person_msg.bodyParts[idx] = Bodypart()
-            for idx in range(lenPoints):
-                person_msg.bodyParts[idx].score = 0.8
-                person_msg.bodyParts[idx].pixel.x = joints[idx, 0]
-                person_msg.bodyParts[idx].pixel.y = joints[idx, 1]
-                person_msg.bodyParts[idx].point.x =joints[idx, 0] / 400-6 # TODO: @sm Please describe what these number stand for
-                person_msg.bodyParts[idx].point.y =joints[idx, 2] / 400-25
-                person_msg.bodyParts[idx].point.z = -joints[idx, 1] / 400
-            inc=inc+1
-            msg.persons.append(person_msg)
-
-        self.publisher.publish(msg)
-
-        if len(cropped_images) > 1:
-            max_h = 0
-            for img in cropped_images:
-                max_h = max(max_h, img.shape[0])
+                if box.is_debug:
+                    debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
+                    if debug_info is None:
+                        logy.warn("The next Debug image is missing.")
+                        logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
+                    else:
+                        logy.debug(f"Received bboxes. Debug frame {box.debug_id}", tag="debug_frame")
+                        time_ms = time.time() * 1000
+                        time_ms = time_ms - debug_info[0]
+                        logy.log_avg("debug_frame_delay", time_ms)
+                        logy.log_mean("debug_frame_delay", time_ms)
 
 
-            for i, img in enumerate(cropped_images):
-                height_difference = max_h - img.shape[0]
-                cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
+                logy.warn(f"np_box = {box_np}")
+                last_image = img_data.image
+                height = last_image.height
+                width = last_image.width
+                image = np.frombuffer(last_image.data, dtype=np.uint8)
+                image = image.reshape([height, width, 3])
+                if width != AI_WIDTH or height != AI_HEIGHT:
+                    image = cv2.resize(image, (AI_WIDTH, AI_HEIGHT))
+                    w_factor = AI_WIDTH / width
+                    h_factor = AI_HEIGHT / height
+                    box_np[0, 0] *= w_factor
+                    box_np[0, 1] *= h_factor
+                    box_np[0, 2] *= w_factor
+                    box_np[0, 3] *= h_factor
 
-        # Concatenate images and convert them to ROS image format to display them later in rviz
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                # if images is None:
+                #     images.appen(image)
+                #     boxes = np.array(box.data).reshape(-1, -1, 4)
+                #     intrinsics = intrinsics[np.newaxis]
+                # else:
+                #     np.insert(test_img, -1, image[np.newaxis], axis=0)
+                #     np.insert(boxes, -1, np.array(box.data).reshape(-1, -1, 4), axis=0)
+                #     np.insert(intrinsics, -1, intrinsics[np.newaxis], axis=0)
+                images.append(image)
+                boxes.append(box_np)
+                intrinsics.append(self.intrinsics)
+                data.append((camera_id, box.stationID, last_image.header))
 
-        img = cv2.hconcat(cropped_images)
-        image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
-        self.publisher_crop[camera_id].publish(image_message)
+            if len(data) == 0:
+                time.sleep(thread_wait_time)
+                continue
+
+            images = np.stack(images)
+            boxes = np.stack(boxes)
+            intrinsics = np.stack(intrinsics)
+            if len(images.shape) != 4:
+                images = images[np.newaxis]
+                boxes = boxes[np.newaxis]
+                intrinsics = intrinsics[np.newaxis]
+            self.start_ai(data, images, intrinsics, boxes)
+
+    def start_ai(self, data, images, intrinsics, boxes):
+        logy.debug("try to start metrabs")
+
+        logy.warn(f"image shape: {images.shape}")
+        logy.warn(f"image type: {type(images)}")
+        logy.warn(f"image np type: {images.dtype}")
+        logy.warn(f"intrinsics shape: {intrinsics.shape}")
+        logy.warn(f"intrinsics type: {type(intrinsics)}")
+        logy.warn(f"intrinsics np type: {intrinsics.dtype}")
+        logy.warn(f"boxes shape: {boxes.shape}")
+        logy.warn(f"boxes type: {type(boxes)}")
+        logy.warn(f"boxes np type: {boxes.dtype}")
+        # logy.warn(f"{intrinsics.shape}")
+        # logy.warn(f"{boxes.shape}")
+        #logy.warn(f"{ragged_boxes.shape}")
+
+
+        boxes = boxes.astype(np.float32)
+        ragged_boxes = tf.RaggedTensor.from_tensor(boxes)
+        now = time.time()
+        pred_output_list = self.model(images, intrinsics, ragged_boxes)
+        elapsed = (time.time() - now) * 1000
+        logy.warn(f"elapsed = {elapsed}")
+
+
+        pred_output_list = pred_output_list.numpy()
+
+        #logy.warn(f"RESULT: {pred_output_list}")
+
+        for i, info in enumerate(data):
+            camera_id = info[0]
+            station_ids = info[1]
+            image_boxes = boxes[i]
+            image = images[i]
+
+            inc = 0
+            msg = Persons()
+            msg.header = info[2]
+            msg.persons = list()
+            cropped_images = []
+
+            if len(pred_output_list[i]) == 0:
+                rospy.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
+                continue
+
+            for prediction_index, detection in enumerate(pred_output_list[i]):
+
+                joints = detection
+                logy.warn(f"image_boxes = {image_boxes}")
+                bb = image_boxes[prediction_index]
+                logy.warn(f"bb = {bb}")
+                cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
+                cropped_images.append(cropped_image)
+
+                lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
+                person_msg = Person()
+                if len(station_ids) > 0:
+                    person_msg.stationID = int(station_ids[inc])
+                    person_msg.sensorID = station_ids[inc]
+                person_msg.bodyParts = [None]*lenPoints
+
+                for j in range(lenPoints):
+                    person_msg.bodyParts[j] = Bodypart()
+
+                for j in range(lenPoints):
+                    person_msg.bodyParts[j].score = 0.8
+                    person_msg.bodyParts[j].pixel.x = joints[j, 0]
+                    person_msg.bodyParts[j].pixel.y = joints[j, 1]
+                    person_msg.bodyParts[j].point.x =joints[j, 0] / 400-6 # TODO: @sm Please describe what these number stand for
+                    person_msg.bodyParts[j].point.y =joints[j, 2] / 400-25
+                    person_msg.bodyParts[j].point.z = -joints[j, 1] / 400
+                inc=inc+1
+                msg.persons.append(person_msg)
+                logy.warn(f"loop")
+
+            self.publisher.publish(msg)
+            logy.warn(f"lout")
+
+            if len(cropped_images) > 1:
+                max_h = 0
+                for img in cropped_images:
+                    max_h = max(max_h, img.shape[0])
+
+
+                for i, img in enumerate(cropped_images):
+                    height_difference = max_h - img.shape[0]
+                    cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
+
+            # Concatenate images and convert them to ROS image format to display them later in rviz
+
+            img = cv2.hconcat(cropped_images)
+            image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
+            self.publisher_crop[camera_id].publish(image_message)
+
+        logy.warn("Done")
 
 
 if __name__ == '__main__':

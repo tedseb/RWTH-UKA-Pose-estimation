@@ -79,13 +79,12 @@ class ObjectDetectionPipeline:
         if yolo_data is None:
             return
 
-        with logy.TraceTime("time_trace_test2"):
-            station_boxes = self._get_person_boxes_in_station(yolo_data, camera_id)
+        station_boxes = self._get_person_boxes_in_station(yolo_data, camera_id)
 
-            self._publish_boxes(station_boxes, img_data, camera_id)
-            self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_id)
-            self._publish_labels(yolo_data.labels, img_data)
-            logy.log_fps("object_detection_fps")
+        self._publish_boxes(station_boxes, img_data, camera_id)
+        self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_id)
+        self._publish_labels(yolo_data.labels, img_data)
+        logy.log_fps("object_detection_fps")
 
     def detect_objects(self, img) -> YoloData:
         '''This function uses the Yolo object detector. It predicts BBOX with label and confidence values.'''

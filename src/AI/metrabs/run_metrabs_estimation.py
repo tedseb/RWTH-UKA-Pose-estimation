@@ -20,6 +20,7 @@ import logy
 import time
 import threading
 import logging
+from multiprocessing import Lock
 logging.basicConfig(level='ERROR')
 
 from tensorflow.python.keras.backend import set_session
@@ -78,10 +79,7 @@ class PoseEstimator():
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         self.model = tf.saved_model.load(CONFIG["model_path"])
 
-        self.intrinsics = tf.constant(CONFIG.get("intrinsics"), dtype=tf.float32)
-
-
-
+        self.intrinsics = tf.constant([CONFIG.get("intrinsics")], dtype=tf.float32)
         # Use your detector of choice to obtain bounding boxes.
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
 
@@ -97,23 +95,15 @@ class PoseEstimator():
         self._send_cropped = True
         # define a subscriber to retrive tracked bodies
 
-
-        #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
-
-        #rospy.Subscriber('image', ImageData, self.callback_setImage)
         self._image_queues = {}
         self._debug_time_queues = {}
         self._box_queues = {}
-        #srospy.Subscriber('image1', Image, self.callback_setImage)
+        self._thread_lock = Lock()
 
-        #image = tf.image.decode_jpeg(tf.io.read_file('/home/trainerai/trainerai-core/src/AI/metrabs/test_image_3dpw.jpg'))
         image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-        logy.warn(f"image shape: {image.shape}")
-        logy.warn(f"type: {image.dtype}")
-        person_boxes = np.array([[[1000, 350, 500, 650]]], np.float32)
-        ragged_boxes = tf.RaggedTensor.from_tensor(person_boxes)
-        self.start_ai([], image[np.newaxis], self.intrinsics.numpy()[np.newaxis], person_boxes)
-        #self.model(image[np.newaxis], self.intrinsics[np.newaxis], ragged_boxes)
+        person_boxes = [np.array([100, 100, 100, 100], np.float32)]
+        self.start_ai([], np.stack([image]), [person_boxes])
+
         self._is_active = True
         self._ai_thread = threading.Thread(target=self.thread_handler)
         self._ai_thread.start()
@@ -124,33 +114,34 @@ class PoseEstimator():
 
     @logy.catch_ros
     def handle_new_channel(self, channel_info: ChannelInfo):
-        if channel_info.is_active:
-            logy.debug(f"New Channel: {channel_info.channel_name}")
-            if channel_info.cam_id not in self.subscriber_image:
-                sub = rospy.Subscriber(channel_info.channel_name, ImageData, self.callback_setImage)
-                self.subscriber_image[channel_info.cam_id] = sub
-            if channel_info.cam_id not in self.publisher_crop and self._send_cropped:
-                pub = rospy.Publisher(f'{channel_info.channel_name}_cropped', Image , queue_size=2)
-                self.publisher_crop[channel_info.cam_id] = pub
-            if channel_info.cam_id not in self._image_queues:
-                self._image_queues[channel_info.cam_id] = Queue(5)
-            if channel_info.cam_id not in self._debug_time_queues:
-                self._debug_time_queues[channel_info.cam_id] = Queue(20)
-            if channel_info.cam_id not in self._box_queues:
-                self._box_queues[channel_info.cam_id] = Queue(2)
-        else:
-            if channel_info.cam_id in self.subscriber_image:
-                self.subscriber_image[channel_info.cam_id].unregister()
-                del self.subscriber_image[channel_info.cam_id]
-            if channel_info.cam_id in self.publisher_crop and self._send_cropped:
-                self.publisher_crop[channel_info.cam_id].unregister()
-                del self.publisher_crop[channel_info.cam_id]
-            if channel_info.cam_id in self._image_queues:
-                del self._image_queues[channel_info.cam_id]
-            if channel_info.cam_id in self._debug_time_queues:
-                del self._debug_time_queues[channel_info.cam_id]
-            if channel_info.cam_id in self._box_queues:
-                del self._box_queues[channel_info.cam_id]
+        with self._thread_lock:
+            if channel_info.is_active:
+                logy.debug(f"New Channel: {channel_info.channel_name}")
+                if channel_info.cam_id not in self.subscriber_image:
+                    sub = rospy.Subscriber(channel_info.channel_name, ImageData, self.callback_setImage)
+                    self.subscriber_image[channel_info.cam_id] = sub
+                if channel_info.cam_id not in self.publisher_crop and self._send_cropped:
+                    pub = rospy.Publisher(f'{channel_info.channel_name}_cropped', Image , queue_size=2)
+                    self.publisher_crop[channel_info.cam_id] = pub
+                if channel_info.cam_id not in self._image_queues:
+                    self._image_queues[channel_info.cam_id] = Queue(5)
+                if channel_info.cam_id not in self._debug_time_queues:
+                    self._debug_time_queues[channel_info.cam_id] = Queue(20)
+                if channel_info.cam_id not in self._box_queues:
+                    self._box_queues[channel_info.cam_id] = Queue(2)
+            else:
+                if channel_info.cam_id in self.subscriber_image:
+                    self.subscriber_image[channel_info.cam_id].unregister()
+                    del self.subscriber_image[channel_info.cam_id]
+                if channel_info.cam_id in self.publisher_crop and self._send_cropped:
+                    self.publisher_crop[channel_info.cam_id].unregister()
+                    del self.publisher_crop[channel_info.cam_id]
+                if channel_info.cam_id in self._image_queues:
+                    del self._image_queues[channel_info.cam_id]
+                if channel_info.cam_id in self._debug_time_queues:
+                    del self._debug_time_queues[channel_info.cam_id]
+                if channel_info.cam_id in self._box_queues:
+                    del self._box_queues[channel_info.cam_id]
 
     @logy.catch_ros
     def callback_setImage(self, msg: ImageData):
@@ -163,7 +154,7 @@ class PoseEstimator():
 
         if camera_id in self._image_queues:
             self._image_queues[camera_id].put(msg)
-            logy.log_fps("metraps_image_fps")
+            logy.log_fps("metraps_image_fps", 50, 0)
 
     def get_next_image_in_queue(self, box_frame_number: int, camera_id: int):
         queue = self._image_queues.get(camera_id)
@@ -203,7 +194,7 @@ class PoseEstimator():
     def callback_regress(self, body_bbox_list_station: Bboxes):
         camera_id = int(body_bbox_list_station.header.frame_id[3:])
         if camera_id in self._box_queues:
-            self._box_queues[camera_id].put(body_bbox_list_station)
+                self._box_queues[camera_id].put(body_bbox_list_station)
 
     def thread_handler(self):
         logy.debug("Metrabs Thread is Active")
@@ -213,99 +204,64 @@ class PoseEstimator():
             images = []
             intrinsics = []
             data = []
-            for camera_id, queue in self._box_queues.items():
-                if queue.empty():
-                    continue
+            with self._thread_lock:
+                for camera_id, queue in self._box_queues.items():
+                    if queue.empty():
+                        continue
 
-                box = queue.get()
-                box_np = np.array(box.data).reshape(-1, 4)
-                if box_np.size == 0:
-                    continue
+                    box = queue.get()
+                    box_np = np.array(box.data).reshape(-1, 4)
+                    if box_np.size == 0:
+                        continue
 
-                img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
-                if img_data is None:
-                    #logy.warn("The next image is missing")
-                    continue
+                    img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
+                    if img_data is None:
+                        #logy.warn("The next image is missing")
+                        continue
 
-                if box.is_debug:
-                    debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
-                    if debug_info is None:
-                        logy.warn("The next Debug image is missing.")
-                        logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
-                    else:
-                        logy.debug(f"Received bboxes. Debug frame {box.debug_id}", tag="debug_frame")
-                        time_ms = time.time() * 1000
-                        time_ms = time_ms - debug_info[0]
-                        logy.log_avg("debug_frame_delay", time_ms)
-                        logy.log_mean("debug_frame_delay", time_ms)
+                    if box.is_debug:
+                        debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
+                        if debug_info is None:
+                            logy.warn("The next Debug image is missing.")
+                            logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
+                        else:
+                            logy.debug(f"Received bboxes. Debug frame {box.debug_id}", tag="debug_frame")
+                            time_ms = time.time() * 1000
+                            time_ms = time_ms - debug_info[0]
+                            logy.log_avg("debug_frame_delay", time_ms)
+                            logy.log_mean("debug_frame_delay", time_ms)
 
+                    last_image = img_data.image
+                    height = last_image.height
+                    width = last_image.width
+                    image = np.frombuffer(last_image.data, dtype=np.uint8)
+                    image = image.reshape([height, width, 3])
+                    if width != AI_WIDTH or height != AI_HEIGHT:
+                        image = cv2.resize(image, (AI_WIDTH, AI_HEIGHT))
+                        w_factor = AI_WIDTH / width
+                        h_factor = AI_HEIGHT / height
+                        box_np[0, 0] *= w_factor
+                        box_np[0, 1] *= h_factor
+                        box_np[0, 2] *= w_factor
+                        box_np[0, 3] *= h_factor
 
-                logy.warn(f"np_box = {box_np}")
-                last_image = img_data.image
-                height = last_image.height
-                width = last_image.width
-                image = np.frombuffer(last_image.data, dtype=np.uint8)
-                image = image.reshape([height, width, 3])
-                if width != AI_WIDTH or height != AI_HEIGHT:
-                    image = cv2.resize(image, (AI_WIDTH, AI_HEIGHT))
-                    w_factor = AI_WIDTH / width
-                    h_factor = AI_HEIGHT / height
-                    box_np[0, 0] *= w_factor
-                    box_np[0, 1] *= h_factor
-                    box_np[0, 2] *= w_factor
-                    box_np[0, 3] *= h_factor
-
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                # if images is None:
-                #     images.appen(image)
-                #     boxes = np.array(box.data).reshape(-1, -1, 4)
-                #     intrinsics = intrinsics[np.newaxis]
-                # else:
-                #     np.insert(test_img, -1, image[np.newaxis], axis=0)
-                #     np.insert(boxes, -1, np.array(box.data).reshape(-1, -1, 4), axis=0)
-                #     np.insert(intrinsics, -1, intrinsics[np.newaxis], axis=0)
-                images.append(image)
-                boxes.append(box_np)
-                intrinsics.append(self.intrinsics)
-                data.append((camera_id, box.stationID, last_image.header))
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    images.append(image)
+                    boxes.append(box_np.astype(np.float32))
+                    data.append((camera_id, box.stationID, last_image.header))
 
             if len(data) == 0:
                 time.sleep(thread_wait_time)
                 continue
 
             images = np.stack(images)
-            boxes = np.stack(boxes)
-            intrinsics = np.stack(intrinsics)
-            if len(images.shape) != 4:
-                images = images[np.newaxis]
-                boxes = boxes[np.newaxis]
-                intrinsics = intrinsics[np.newaxis]
-            self.start_ai(data, images, intrinsics, boxes)
+            self.start_ai(data, images, boxes)
 
-    def start_ai(self, data, images, intrinsics, boxes):
-        logy.debug("try to start metrabs")
+    def start_ai(self, data, images, boxes):
+        ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
 
-        logy.warn(f"image shape: {images.shape}")
-        logy.warn(f"image type: {type(images)}")
-        logy.warn(f"image np type: {images.dtype}")
-        logy.warn(f"intrinsics shape: {intrinsics.shape}")
-        logy.warn(f"intrinsics type: {type(intrinsics)}")
-        logy.warn(f"intrinsics np type: {intrinsics.dtype}")
-        logy.warn(f"boxes shape: {boxes.shape}")
-        logy.warn(f"boxes type: {type(boxes)}")
-        logy.warn(f"boxes np type: {boxes.dtype}")
-        # logy.warn(f"{intrinsics.shape}")
-        # logy.warn(f"{boxes.shape}")
-        #logy.warn(f"{ragged_boxes.shape}")
-
-
-        boxes = boxes.astype(np.float32)
-        ragged_boxes = tf.RaggedTensor.from_tensor(boxes)
-        now = time.time()
-        pred_output_list = self.model(images, intrinsics, ragged_boxes)
-        elapsed = (time.time() - now) * 1000
-        logy.warn(f"elapsed = {elapsed}")
-
+        with logy.TraceTime("matrabs_multi_image"):
+            pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)
 
         pred_output_list = pred_output_list.numpy()
 
@@ -330,9 +286,7 @@ class PoseEstimator():
             for prediction_index, detection in enumerate(pred_output_list[i]):
 
                 joints = detection
-                logy.warn(f"image_boxes = {image_boxes}")
                 bb = image_boxes[prediction_index]
-                logy.warn(f"bb = {bb}")
                 cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
                 cropped_images.append(cropped_image)
 
@@ -355,10 +309,8 @@ class PoseEstimator():
                     person_msg.bodyParts[j].point.z = -joints[j, 1] / 400
                 inc=inc+1
                 msg.persons.append(person_msg)
-                logy.warn(f"loop")
 
             self.publisher.publish(msg)
-            logy.warn(f"lout")
 
             if len(cropped_images) > 1:
                 max_h = 0
@@ -376,8 +328,7 @@ class PoseEstimator():
             image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
             self.publisher_crop[camera_id].publish(image_message)
 
-        logy.warn("Done")
-
+        logy.log_fps("end_of_metrabs_loop")
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")

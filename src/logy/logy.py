@@ -159,15 +159,18 @@ class LogyHandler:
             var_list[0] = per
             return None
 
-    def _log_fps(self, name, period, smoothing):
+    def _log_fps(self, name, period):
         fps_last_time = self._fps_timings.get(name)
         if fps_last_time is None:
             self._fps_timings[name] = time.time()
             return
 
-        time_s = time.time()
-        fps = 1 / (time_s - fps_last_time)
-        self._fps_timings[name] = time_s
+        time_ns = time.time_ns()
+        test = (time_ns - fps_last_time) / 1000000
+        if test == 0:
+            self.error(f"{time_ns}:{fps_last_time}")
+        fps = 1000 / test
+        self._fps_timings[name] = time_ns
         #print("logy fps=", fps)
         self._log_tracing(name, fps, period, smoothing, 5)
 

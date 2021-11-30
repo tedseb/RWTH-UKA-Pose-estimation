@@ -240,10 +240,10 @@ class PoseEstimator():
                         image = cv2.resize(image, (AI_WIDTH, AI_HEIGHT))
                         w_factor = AI_WIDTH / width
                         h_factor = AI_HEIGHT / height
-                        box_np[0, 0] *= w_factor
-                        box_np[0, 1] *= h_factor
-                        box_np[0, 2] *= w_factor
-                        box_np[0, 3] *= h_factor
+                        box_np[:, 0] *= w_factor
+                        box_np[:, 1] *= h_factor
+                        box_np[:, 2] *= w_factor
+                        box_np[:, 3] *= h_factor
 
                     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                     images.append(image)

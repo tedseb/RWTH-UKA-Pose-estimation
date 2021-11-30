@@ -22,57 +22,10 @@ def main():
     #demo_with_just_an_image()
     #demo_with_known_intrinsics_and_boxes()
     #image = tf.image.decode_jpeg(tf.io.read_file('./image.jpg'))
-    #image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-    model = tf.saved_model.load('./models/metrabs_multiperson_smpl')
-    #test_single_image(model, image)
-    #test_multi_image(model, image)
-
-
-
-
-
-
-    ##############################################################
-    intrinsics = tf.constant([[[1962, 0, 540], [0, 1969, 960], [0, 0, 1]]], dtype=tf.float32)
     image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-    print(f"image shape: {image.shape}")
-    print(f"type: {image.dtype}")
-    person_boxes = [np.array([670, 170, 200, 510], np.float32)]
-
-
-    print("### Single image ###")
-    start_ai_1(model, intrinsics, np.stack([image]), [person_boxes])
-    #start_ai_2(model, intrinsics, np.stack([image]), [person_boxes])
-    print("### Double image ###")
-    start_ai_1(model, intrinsics, np.stack([image, image]), [person_boxes, person_boxes])
-    #start_ai_2(model, intrinsics, np.stack([image, image]), [person_boxes, person_boxes])
-    print("Done")
-
-def start_ai_2(model, intrinsics, images, boxes):
-    print("####### AI 2 #########")
-    ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
-
-    for i in range(1):
-        print(f"Multi Detection ({images.shape}) {i + 1}:")
-        time_stamp = time.time()
-        pred = model.predict_multi_image(images, intrinsics, ragged_boxes)
-        time_stamp = (time.time() - time_stamp) * 1000
-        print(f"- TIME: {time_stamp} ms")
-
-
-
-def start_ai_1(model, intrinsics, images, boxes):
-    print("####### AI 1 #########")
-    ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
-
-    # print(f"images shape: {images.shape}")
-    # print(f"intrinsics shape: {intrinsics.shape}")
-    # print(f"ragged_boxes shape: {ragged_boxes.shape}")
-    for i in range(1):
-        now = time.time()
-        pred = model.predict_multi_image(images, intrinsics, ragged_boxes)
-        elapsed = (time.time() - now) * 1000
-        print(f"elapsed = {elapsed}")
+    model = tf.saved_model.load('./models/metrabs_multiperson_smpl')
+    test_single_image(model, image)
+    test_multi_image(model, image)
 
 def test_single_image(model, image):
     #image = tf.image.decode_jpeg(tf.io.read_file('img/test_image_3dpw.jpg'))
@@ -92,9 +45,9 @@ def test_single_image(model, image):
 def test_multi_image(model, image):
     _test_multi_image(model, image, 1)
     _test_multi_image(model, image, 2)
-    # _test_multi_image(model, image, 4)
-    # _test_multi_image(model, image, 8)
-    # _test_multi_image(model, image, 16)
+    _test_multi_image(model, image, 4)
+    _test_multi_image(model, image, 8)
+    _test_multi_image(model, image, 16)
 
 def _test_multi_image(model, image, count, repetitions = 2):
     print()
@@ -109,15 +62,6 @@ def _test_multi_image(model, image, count, repetitions = 2):
         pred = model.predict_multi_image(images, intrinsics, ragged_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
-
-    # person_boxes_2 = np.array([100, 100, 100, 100], np.float32)
-    # ragged_boxes = tf.ragged.constant([[person_boxes], [person_boxes, person_boxes_2]], ragged_rank=1)
-    # for i in range(repetitions):
-    #     print(f"Multi Detection ({images.shape}) {i + 1}:")
-    #     time_stamp = time.time()
-    #     pred = model.predict_multi_image(images, intrinsics, ragged_boxes)
-    #     time_stamp = (time.time() - time_stamp) * 1000
-    #     print(f"- TIME: {time_stamp} ms")
 
 def multiply_images_and_boxes(array_len, image, person_boxes):
     images = []

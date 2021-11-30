@@ -154,7 +154,7 @@ class PoseEstimator():
 
         if camera_id in self._image_queues:
             self._image_queues[camera_id].put(msg)
-            logy.log_fps("metraps_image_fps", 50, 0)
+            logy.log_fps("metraps_image_fps", 50)
 
     def get_next_image_in_queue(self, box_frame_number: int, camera_id: int):
         queue = self._image_queues.get(camera_id)

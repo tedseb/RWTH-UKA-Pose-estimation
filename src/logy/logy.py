@@ -130,12 +130,16 @@ class LogyHandler:
             self._variables[name] = [0, value]
             return
 
-        last_val = self._smooth_var(var_list, value, period, smoothing)
-        if last_val is not None:
-             self._logger.send_var(name, last_val, trace_level)
+        if smoothing != 0.0:
+            val = self._smooth_var(var_list, value, period, smoothing)
+        else:
+            val = self._compute_new_avg(var_list, value, period)
+
+        if val is not None:
+            self._logger.send_var(name, val, trace_level)
 
     def _log_tracing(self, name: str, value: float, period, smoothing, trace_level=4):
-        if period == 0 and smoothing == 0.0:
+        if period == 0:
             self._logger.send_tracing(name, value, trace_level)
 
         var_list = self._tracings.get(name)
@@ -143,9 +147,13 @@ class LogyHandler:
             self._tracings[name] = [0, value]
             return
 
-        last_val = self._smooth_var(var_list, value, period, smoothing)
-        if last_val is not None:
-             self._logger.send_tracing(name, last_val, trace_level)
+        if smoothing != 0.0:
+            val = self._smooth_var(var_list, value, period, smoothing)
+        else:
+            val = self._compute_new_avg(var_list, value, period)
+
+        if val is not None:
+            self._logger.send_tracing(name, val, trace_level)
 
     def _smooth_var(self, var_list, value, period, smoothing):
         per = var_list[0] + 1
@@ -159,20 +167,36 @@ class LogyHandler:
             var_list[0] = per
             return None
 
+    def _compute_new_avg(self, old_avg_list, value, period):
+        per = old_avg_list[0]
+        avg_before = old_avg_list[1]
+        y = (per / (per + 1)) * avg_before
+        avg = y + (value / (per + 1))
+        per += 1
+        if per >= period:
+             old_avg_list[0] = 0
+             return avg
+        else:
+            old_avg_list[1] = avg
+            old_avg_list[0] += 1
+            return None
+
     def _log_fps(self, name, period):
         fps_last_time = self._fps_timings.get(name)
         if fps_last_time is None:
-            self._fps_timings[name] = time.time()
+            self._fps_timings[name] = [time.time(), 1]
             return
 
-        time_ns = time.time_ns()
-        test = (time_ns - fps_last_time) / 1000000
-        if test == 0:
-            self.error(f"{time_ns}:{fps_last_time}")
-        fps = 1000 / test
-        self._fps_timings[name] = time_ns
-        #print("logy fps=", fps)
-        self._log_tracing(name, fps, period, smoothing, 5)
+        fps_last_time[1] += 1
+        if fps_last_time[1] < period:
+            return
+
+        now = time.time()
+        time_elapsed = now - fps_last_time[0]
+        fps = fps_last_time[1] / time_elapsed
+        fps_last_time[0] = now
+        fps_last_time[1] = 1
+        self._logger.send_tracing(name, fps, 4)
 
     def debug(self, msg: str, tag="msg"):
         self._send_msg(msg, tag, DEBUG, 3)
@@ -225,8 +249,8 @@ class LogyHandler:
     def log_var(self, name: str, value: float, period=0, smoothing=0.0):
         self._log_var(name, value, period, smoothing)
 
-    def log_fps(self, name: str, period=50, smoothing=0.9):
-        self._log_fps(name, period, smoothing)
+    def log_fps(self, name: str, period=50):
+        self._log_fps(name, period)
 
 class Logy(metaclass=Singleton):
     def __init__(self):
@@ -397,9 +421,9 @@ def log_var(name: str, value: float, period=0, smoothing=0.0):
     logger = Logy()
     logger._root._log_var(name, value, period, smoothing)
 
-def log_fps(name: str, period=50, smoothing=0.9):
+def log_fps(name: str, period=50):
     logger = Logy()
-    logger._root._log_fps(name, period, smoothing)
+    logger._root._log_fps(name, period)
 
 def trace_time(name, period=50, smoothing=0.9):
     def trace_time_decorator(func):

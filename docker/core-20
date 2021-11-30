@@ -31,7 +31,7 @@ RUN npm install opencv4nodejs rosnodejs express ws nodemon socket.io mongodb@3
 
 #Python PIP
 #RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==1.14.0 pycocotools
-RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.4.1 pycocotools
+RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.7.0 pycocotools
 RUN pip3 install msgpack torchvision torchgeometry smplx chumpy
 RUN pip3 install pydrive pandas matplotlib
 # RUN pip3 install pandas

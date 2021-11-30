@@ -124,11 +124,11 @@ class PoseEstimator():
                     pub = rospy.Publisher(f'{channel_info.channel_name}_cropped', Image , queue_size=2)
                     self.publisher_crop[channel_info.cam_id] = pub
                 if channel_info.cam_id not in self._image_queues:
-                    self._image_queues[channel_info.cam_id] = Queue(5)
+                    self._image_queues[channel_info.cam_id] = Queue(15)
                 if channel_info.cam_id not in self._debug_time_queues:
                     self._debug_time_queues[channel_info.cam_id] = Queue(20)
                 if channel_info.cam_id not in self._box_queues:
-                    self._box_queues[channel_info.cam_id] = Queue(2)
+                    self._box_queues[channel_info.cam_id] = Queue(5)
             else:
                 if channel_info.cam_id in self.subscriber_image:
                     self.subscriber_image[channel_info.cam_id].unregister()
@@ -147,14 +147,15 @@ class PoseEstimator():
     def callback_setImage(self, msg: ImageData):
         camera_id = int(msg.image.header.frame_id[3:])
         #logy.debug_throttle("Received Image", 2000)
+        #logy.warn(f"Get image {msg.frame_num}")
         if msg.is_debug:
-            logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
+            #logy.debug(f"Received image. Debug frame {msg.debug_id}", tag="debug_frame")
             time_ms = time.time() * 1000
             self._debug_time_queues[camera_id].put((time_ms, msg.debug_id))
 
         if camera_id in self._image_queues:
             self._image_queues[camera_id].put(msg)
-            logy.log_fps("metraps_image_fps", 50)
+            #logy.log_fps("metraps_image_fps", 50)
 
     def get_next_image_in_queue(self, box_frame_number: int, camera_id: int):
         queue = self._image_queues.get(camera_id)
@@ -163,16 +164,20 @@ class PoseEstimator():
 
         bbox_num = box_frame_number
         next_img_num = queue[0].frame_num
+        if next_img_num > box_frame_number:
+            logy.warn(f"Queue empty num={next_img_num}, box={bbox_num}? next in queue {queue[1].frame_num}")
 
         while next_img_num <= bbox_num:
             img_data = queue.get()
+            if next_img_num == bbox_num:
+                return img_data
             if queue.empty():
                 break
             next_img_num = queue[0].frame_num
 
-        if next_img_num != bbox_num:
-            return None
-        return img_data
+        logy.warn(f"2: next = {next_img_num}, box = {bbox_num}")
+        return None
+
 
     def get_next_debug_frame(self, box_debug_id: int, camera_id: int):
         queue = self._debug_time_queues.get(camera_id)
@@ -214,10 +219,10 @@ class PoseEstimator():
                     if box_np.size == 0:
                         continue
 
-                    img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
-                    if img_data is None:
-                        #logy.warn("The next image is missing")
-                        continue
+                    with logy.TraceTime("image_queue"):
+                        img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
+                        if img_data is None:
+                            continue
 
                     if box.is_debug:
                         debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
@@ -259,6 +264,7 @@ class PoseEstimator():
 
     def start_ai(self, data, images, boxes):
         ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
+        logy.debug_throttle(f"{images.shape[0]}", 1000)
 
         with logy.TraceTime("matrabs_multi_image"):
             pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)

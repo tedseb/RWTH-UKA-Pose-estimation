@@ -70,6 +70,7 @@ class CameraNode():
 
     def start_camera_publisher(self):
         rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
+        frame_num = 0
 
         logy.info("Camera node started")
         if self._debug_repetition_ms > 0:
@@ -108,7 +109,9 @@ class CameraNode():
                     logy.debug(f"#### Start Debug Frame {debug_id} ####", tag="debug_frame")
                     time_past = time_now
                     debug_id += 1
+            msg.frame_num = frame_num
             self._pub.publish(msg)
+            frame_num += 1
             rate.sleep()
 
     def start_video_publisher(self, calculate_timestamps=True):

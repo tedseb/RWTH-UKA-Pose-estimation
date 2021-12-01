@@ -59,8 +59,7 @@ class Queue:
                 self._elements.popleft()
 
     def get(self):
-        with self._mutex:
-            item = self._elements.popleft()
+        item = self._elements.popleft()
         return item
 
     def empty(self):

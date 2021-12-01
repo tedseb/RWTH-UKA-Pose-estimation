@@ -46,6 +46,7 @@ RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-pyt
 
 RUN pip3 install msgpack_numpy
 
+RUN apt-get update
 RUN apt-get -y install libpq-dev
 RUN npm install yaml minimist
 RUN pip3 install psycopg2 websocket-client autobahn twisted pyqtgraph websockets PyQt5==5.15.4 pymongo pytube qt5reactor neptune-client Pillow>=8.4.0 requests>=2.23.0 filelock sklearn
@@ -60,7 +61,7 @@ RUN pip3 install psycopg2 websocket-client autobahn twisted pyqtgraph websockets
 RUN sudo ln -s /usr/local/cuda-11.2/lib64/libcusolver.so.11 /usr/local/cuda-11.2/lib64/libcusolver.so.10
 
 RUN echo "LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:\$LD_LIBRARY_PATH" >> /home/trainerai/.bashrc
-RUN echo "PYTHONPATH=\$PYTHONPATH:/home/trainerai/trainerai-core/src/logy/" >> /home/trainerai/.bashrc
+RUN echo "PYTHONPATH=\$PYTHONPATH:/home/trainerai/trainerai-core/src/lib/" >> /home/trainerai/.bashrc
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 

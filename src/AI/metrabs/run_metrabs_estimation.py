@@ -10,7 +10,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices
 import tensorflow as tf
 import time
 import rospy
-from collections import deque
 from sensor_msgs.msg import Image
 from backend.msg import ImageData, ChannelInfo
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
@@ -35,7 +34,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')
 from mpl_toolkits.mplot3d import Axes3D
 
-from inspect import getmembers, isfunction
+from gymy_tools import Queue
 
 THREAD_WAIT_TIME_MS = 20 #40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
@@ -45,32 +44,6 @@ CONFIG = {
     'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
     'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
 }
-
-class Queue:
-    def __init__(self, queue_len = 10):
-        self._elements = deque([])
-        self._mutex = Lock()
-        self._queue_len = queue_len
-
-    def put(self, item):
-        with self._mutex:
-            self._elements.append(item)
-            if len(self._elements) > self._queue_len:
-                self._elements.popleft()
-
-    def get(self):
-        item = self._elements.popleft()
-        return item
-
-    def empty(self):
-        if self._elements:
-            return False
-        return True
-
-    def __getitem__(self, key):
-        with self._mutex:
-            item = self._elements[key]
-        return item
 
 class PoseEstimator():
     def __init__(self):
@@ -164,7 +137,7 @@ class PoseEstimator():
         bbox_num = box_frame_number
         next_img_num = queue[0].frame_num
         if next_img_num > box_frame_number:
-            logy.warn(f"Queue empty num={next_img_num}, box={bbox_num}? next in queue {queue[1].frame_num}")
+            logy.debug(f"Queue empty num={next_img_num}, box={bbox_num}? next in queue {queue[1].frame_num}")
 
         while next_img_num <= bbox_num:
             img_data = queue.get()
@@ -174,7 +147,7 @@ class PoseEstimator():
                 break
             next_img_num = queue[0].frame_num
 
-        logy.warn(f"2: next = {next_img_num}, box = {bbox_num}")
+        logy.debug(f"2: next = {next_img_num}, box = {bbox_num}")
         return None
 
 
@@ -200,13 +173,13 @@ class PoseEstimator():
         if camera_id in self._box_queues:
                 self._box_queues[camera_id].put(body_bbox_list_station)
 
+    @logy.catch_thread_and_restart
     def thread_handler(self):
-        logy.debug("Metrabs Thread is Active")
+        logy.debug("Metrabs Thread is active")
         thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
         while(self._is_active):
             boxes = []
             images = []
-            intrinsics = []
             data = []
             with self._thread_lock:
                 for camera_id, queue in self._box_queues.items():
@@ -218,10 +191,9 @@ class PoseEstimator():
                     if box_np.size == 0:
                         continue
 
-                    with logy.TraceTime("image_queue"):
-                        img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
-                        if img_data is None:
-                            continue
+                    img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
+                    if img_data is None:
+                        continue
 
                     if box.is_debug:
                         debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
@@ -254,7 +226,7 @@ class PoseEstimator():
                     boxes.append(box_np.astype(np.float32))
                     data.append((camera_id, box.stationID, last_image.header))
 
-            if len(data) == 0:
+            if not data:
                 time.sleep(thread_wait_time)
                 continue
 

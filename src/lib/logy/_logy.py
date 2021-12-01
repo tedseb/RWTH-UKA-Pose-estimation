@@ -461,4 +461,23 @@ def catch_ros(func):
             critical_throttle("Logy Traceback Hook (ROS CALLBACK): \n" + traceback_string, 1000)
     return _catch_ros
 
+def catch_thread(func):
+    def _catch_thread(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            traceback_string = traceback.format_exc()
+            critical_throttle("Logy Traceback Hook (THREAD): \n" + traceback_string, 1000)
+    return _catch_thread
+
+def catch_thread_and_restart(func):
+    def _catch_catch_thread_and_restart(*args, **kwargs):
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except Exception:
+                traceback_string = traceback.format_exc()
+                error_throttle("Logy Traceback Hook (THREAD): \n" + traceback_string + "\nRestart Thread", 1000)
+    return _catch_catch_thread_and_restart
+
 sys.excepthook = exception_hook

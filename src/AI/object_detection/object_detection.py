@@ -1,22 +1,28 @@
 #!/usr/bin/python3
-from dataclasses import dataclass
-import numpy as np
+from ctypes import resize
+import threading
 import collections
-from typing import List
-from backend.msg import ImageData, ChannelInfo
-from backend.msg import Bboxes
-from backend.msg import LabelsCameraID
-from sensor_msgs.msg import Image
-from scheduler import BoxChecker
 import time
+from dataclasses import dataclass
+from multiprocessing import Lock
+from typing import List, Dict, Tuple
+import cv2
+import numpy as np
 import rospy
 import yaml
 import torch
 import logy
-
+from gymy_tools import Queue
+from backend.msg import ImageData, ChannelInfo, LabelsCameraID, Bboxes
+from sensor_msgs.msg import Image
+from scheduler import BoxChecker
 
 YOLO_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5'
 MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5s.pt'
+IMAGE_QUEUE_LEN = 3
+THREAD_WAIT_TIME_MS = 30
+AI_HEIGHT = 720
+AI_WIDTH = 1280
 
 @dataclass
 class YoloData:
@@ -32,84 +38,155 @@ class ObjectDetectionPipeline:
         self._model = torch.hub.load(YOLO_PATH, 'custom', path=MODEL_PATH, source='local') # .eval().to(device)
         self._threshold = threshold
         self._renderer = renderer
-        self.publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
-        self.publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
-        self.subscriber_image = {}
-        self.publisher_img_yolo = {}
+        self._publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
+        self._publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
+        self._subscriber_image = {}
+        self._publisher_img_yolo = {}
+        self._image_queues : Dict[Queue] = {}
 
-        rospy.Subscriber('image', ImageData, self._object_detector_loop)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         logy.info("Object Detection is listening")
 
+        self._image_queues_lock = Lock()
+        self._is_active = True
+        self._detection_thread = threading.Thread(target=self._object_detector_loop)
+        self._detection_thread.start()
+
+    def __del__(self):
+        self._is_active = False
+        self._detection_thread.join(timeout=1)
+
+    @logy.catch_ros
+    def callback_set_image(self, msg: ImageData):
+        camera_id = int(msg.image.header.frame_id[3:])
+        # if msg.is_debug:
+        #     time_ms = time.time() * 1000
+        #     self._debug_time_queues[camera_id].put((time_ms, msg.debug_id))
+        if camera_id in self._image_queues:
+            self._image_queues[camera_id].put(msg)
+
     @logy.catch_ros
     def handle_new_channel(self, channel_info: ChannelInfo):
-        if channel_info.is_active:
-            logy.debug(f"New Channel: {channel_info.channel_name}")
-            if channel_info.cam_id not in self.subscriber_image:
-                sub = rospy.Subscriber(channel_info.channel_name, ImageData, self._object_detector_loop)
-                self.subscriber_image[channel_info.cam_id] = sub
-            if channel_info.cam_id not in self.publisher_img_yolo and self._renderer:
-                pub = rospy.Publisher(f'{channel_info.channel_name}_yolo', Image , queue_size=2)
-                self.publisher_img_yolo[channel_info.cam_id] = pub
-        else:
-            if channel_info.cam_id in self.subscriber_image:
-                self.subscriber_image[channel_info.cam_id].unregister()
-                del self.subscriber_image[channel_info.cam_id]
-            if channel_info.cam_id in self.publisher_img_yolo and self._renderer:
-                self.publisher_img_yolo[channel_info.cam_id].unregister()
-                del self.publisher_img_yolo[channel_info.cam_id]
+        with self._image_queues_lock:
+            if channel_info.is_active:
+                logy.debug(f"New Channel: {channel_info.channel_name}")
+                if channel_info.cam_id not in self._subscriber_image:
+                    sub = rospy.Subscriber(channel_info.channel_name, ImageData, self.callback_set_image)
+                    self._subscriber_image[channel_info.cam_id] = sub
+                if channel_info.cam_id not in self._publisher_img_yolo and self._renderer:
+                    pub = rospy.Publisher(f'{channel_info.channel_name}_yolo', Image , queue_size=2)
+                    self._publisher_img_yolo[channel_info.cam_id] = pub
+                if channel_info.cam_id not in self._image_queues:
+                    self._image_queues[channel_info.cam_id] = Queue(IMAGE_QUEUE_LEN)
+            else:
+                if channel_info.cam_id in self._subscriber_image:
+                    self._subscriber_image[channel_info.cam_id].unregister()
+                    del self._subscriber_image[channel_info.cam_id]
+                if channel_info.cam_id in self._publisher_img_yolo and self._renderer:
+                    self._publisher_img_yolo[channel_info.cam_id].unregister()
+                    del self._publisher_img_yolo[channel_info.cam_id]
+                if channel_info.cam_id in self._image_queues:
+                    del self._image_queues[channel_info.cam_id]
 
-    @logy.catch_ros
-    def _object_detector_loop(self, img_data: ImageData):
+    @logy.catch_thread_and_restart
+    def _object_detector_loop(self):
         '''
-        This is a callback function which receives the message from the subscriber.
-        The message contains an image from the camera, this is reshaped,
-        sent to the function obj_detectYolo() and then the result (BBOX) is published.
+        This is a thread function which pull images from the queues.
+        The image is reshaped and sent to the yolo detection. The results are published as boxes.
+
         '''
-        if img_data.is_debug:
-            logy.debug(f"Received image. Debug frame {img_data.debug_id}", tag="debug_frame")
+        logy.debug_throttle("Object Detection thread is active", 1000)
+        thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
+        while(self._is_active):
+            images = []
+            camera_ids = []
+            image_data = []
+            resize_factors = []
+            with self._image_queues_lock:
 
-        img_msg = img_data.image
-        shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
-        img = np.frombuffer(img_msg.data, dtype=np.uint8)
-        img_original_bgr = img.reshape(shape)
-        camera_id = int(img_msg.header.frame_id[3:])
+                for camera_id, queue in self._image_queues.items():
+                    if queue.empty():
+                        continue
 
-        yolo_data = self.detect_objects(img_original_bgr)
-        if yolo_data is None:
-            return
+                    img_data = queue.get()
+                    if img_data.is_debug:
+                        logy.debug(f"Received image. Debug frame {img_data.debug_id}", tag="debug_frame")
 
-        station_boxes = self._get_person_boxes_in_station(yolo_data, camera_id)
+                    img_msg = img_data.image
+                    shape = img_msg.height, img_msg.width, 3                            #(480, 640, 3) --> (y,x,3)
+                    img = np.frombuffer(img_msg.data, dtype=np.uint8)
+                    img_original_bgr = img.reshape(shape)
+                    img_original_bgr = cv2.resize(img_original_bgr, (AI_WIDTH, AI_HEIGHT))
+                    w_factor = img_msg.width / AI_WIDTH
+                    h_factor = img_msg.height / AI_HEIGHT
+                    resize_factors.append((w_factor, h_factor))
 
-        self._publish_boxes(station_boxes, img_data, camera_id)
-        self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_id)
-        self._publish_labels(yolo_data.labels, img_data)
-        logy.log_fps("object_detection_fps")
+                    images.append(img_original_bgr)
+                    camera_ids.append(camera_id)
+                    image_data.append(img_data)
 
-    def detect_objects(self, img) -> YoloData:
-        '''This function uses the Yolo object detector. It predicts BBOX with label and confidence values.'''
-        img_tens = img
-        tmpTime = time.time()
-        results = self._model(img_tens, size=640)
-        fps = int(1/(time.time()-tmpTime))
-        logy.log_var("yolo_fps", fps, period=25, smoothing=0.9)
+            if not images:
+                time.sleep(thread_wait_time)
+                continue
 
-        yolo_data = YoloData()
-        if self._renderer:
-            results.render()  # updates results.imgs with boxes and labels
-            yolo_data.render_img = results.imgs[0]
+            yolo_data_results = self.detect_objects(images, resize_factors)
+            if yolo_data_results is None:
+                return
 
-        result_np = results.xyxy[0].cpu().detach().numpy() # BBox is in x1,y1,x2,y2
-        if result_np.size == 0:
-            rospy.logerr_throttle(5, "Ojbect detection is currently failing. If you see this message repeatedly, there is something wrong...")
-            return None
+            for i, yolo_data in enumerate(yolo_data_results):
+                if yolo_data is None:
+                    continue
+                station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
+                #logy.warn(f"boxes = {station_boxes}")
+                self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
+                self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
+                self._publish_labels(yolo_data.labels, image_data[i])
+            logy.log_fps("object_detection_fps")
 
-        sorted(result_np, key=lambda entry : (entry[2] - entry[0]) * (entry[3] - entry[1])) # Sort list by area
+    @logy.trace_time("detect_objects")
+    def detect_objects(self, imgs : List, resize_factors : Tuple) -> YoloData:
+        '''
+        This function uses the Yolo object detector. It predicts BBOX with label and confidence values.
+        Returns:
+            List[YoloData]: Yolo Predictions for each image. YoloData is None if there is no Prediction for this index.
+        '''
+        with logy.TraceTime("yolo_model"):
+            results = self._model(imgs, size=640)
 
-        yolo_data.labels = result_np[:,5]
-        yolo_data.confs = result_np[:,4]
-        yolo_data.boxes = result_np[:,:4]
-        return yolo_data
+
+        yolo_data_results = []
+        for i in range(len(results.imgs)):
+            yolo_data = YoloData()
+            if self._renderer:
+                results.render()  # updates results.imgs with boxes and labels
+                yolo_data.render_img = results.imgs[i]
+
+            result_np = results.xyxy[i].cpu().detach().numpy() # BBox is in x1,y1,x2,y2
+            if result_np.size == 0:
+                rospy.logerr_throttle(5, "Ojbect detection is currently failing. If you see this message repeatedly, there is something wrong...")
+                yolo_data_results.append(None)
+                continue
+
+            result_np[:, 0] *= resize_factors[i][0]
+            result_np[:, 1] *= resize_factors[i][1]
+            result_np[:, 2] *= resize_factors[i][0]
+            result_np[:, 3] *= resize_factors[i][1]
+            sorted(result_np, key=lambda entry : (entry[2] - entry[0]) * (entry[3] - entry[1])) # Sort list by area
+
+            yolo_data.labels = result_np[:,5]
+            yolo_data.confs = result_np[:,4]
+            yolo_data.boxes = np.array(result_np[:,:4])
+            # logy.warn(f"shape = {yolo_data.boxes.shape}")
+            # logy.warn(f"boxes np = {yolo_data.boxes}")
+            # logy.warn(f"boxes1 np = {yolo_data.boxes[:, 0]}")
+            # logy.warn(f"factors np = {resize_factors[i, 0]}")
+            # yolo_data.boxes[:, 0] *= resize_factors[i][0]
+            # yolo_data.boxes[:, 1] *= resize_factors[i][1]
+            # yolo_data.boxes[:, 2] *= resize_factors[i][0]
+            # yolo_data.boxes[:, 3] *= resize_factors[i][1]
+            yolo_data_results.append(yolo_data)
+
+        return yolo_data_results
 
     def _get_person_boxes_in_station(self, yolo_data : YoloData, camera_id : int):
         '''Function for checking labels and assigning BBOX to stations'''
@@ -152,7 +229,7 @@ class ObjectDetectionPipeline:
         msg_render_image.data = np.array(img, dtype=np.uint8).tobytes()
         msg_render_image.height, msg_render_image.width = img.shape[:-1]
         msg_render_image.step = img.shape[-1]*img.shape[0]
-        self.publisher_img_yolo[camera_id].publish(msg_render_image)
+        self._publisher_img_yolo[camera_id].publish(msg_render_image)
 
     def _publish_boxes(self, station_boxes, old_img_data, camera_id : int):
         box_list_1d = []
@@ -171,7 +248,7 @@ class ObjectDetectionPipeline:
             box_msg.is_debug = True
             box_msg.debug_id = old_img_data.debug_id
             logy.debug(f"Publish bboxes. Debug frame {old_img_data.debug_id}", tag="debug_frame")
-        self.publisher_boxes.publish(box_msg)
+        self._publisher_boxes.publish(box_msg)
 
     def _publish_labels(self, labels, old_img_data):
         label_msg  = LabelsCameraID()
@@ -179,7 +256,7 @@ class ObjectDetectionPipeline:
         label_msg.header.frame_id = old_img_data.image.header.frame_id  #From which camera
         label_msg.sensorID = old_img_data.image.header.frame_id
         label_msg.data = list(labels)
-        self.publisher_labels.publish(label_msg)
+        self._publisher_labels.publish(label_msg)
 
     def spin(self):
         '''We enter in a loop and wait for exit whenever `Ctrl + C` is pressed'''

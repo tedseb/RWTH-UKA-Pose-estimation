@@ -61,26 +61,27 @@ def get_message_type(level: int, msg: str, tag: str, module: str, file: str, lin
     }
     return message
 
-def get_value_type(name: str, value: float, caller_hash: hash, type: LogType) :
+def get_value_type(name: str, value: float, tag: str, caller_hash: hash, type: LogType) :
     message =  {
         "type": type,
         "name": name,
         "value": value,
+        "tag": tag,
         "hash": caller_hash
     }
     return message
 
-def get_avg_type(name: str, value: float, caller_hash: hash) :
-    return get_value_type(name, value, caller_hash, LogType.AVG)
+def get_avg_type(name: str, value: float, tag: str, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, tag, LogType.AVG)
 
-def get_mean_type(name: str, value: float, caller_hash: hash) :
-    return get_value_type(name, value, caller_hash, LogType.MEAN)
+def get_mean_type(name: str, value: float, tag: str, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, tag, LogType.MEAN)
 
-def get_var_type(name: str, value: float, caller_hash: hash) :
-    return get_value_type(name, value, caller_hash, LogType.VARIABLE)
+def get_var_type(name: str, value: float, tag: str, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, tag, LogType.VARIABLE)
 
-def get_tracing_type(name: str, value: float, caller_hash: hash) :
-    return get_value_type(name, value, caller_hash, LogType.TRACING)
+def get_tracing_type(name: str, value: float, tag: str, caller_hash: hash) :
+    return get_value_type(name, value, tag, caller_hash, LogType.TRACING)
 
 class Singleton(type):
     _instance = None
@@ -140,7 +141,7 @@ class LogyHandler:
 
     def _log_tracing(self, name: str, value: float, period, smoothing, trace_level=4):
         if period == 0:
-            self._logger.send_tracing(name, value, trace_level)
+            self._logger.send_tracing(name, value, "time", trace_level)
 
         var_list = self._tracings.get(name)
         if var_list is None:
@@ -153,7 +154,7 @@ class LogyHandler:
             val = self._compute_new_avg(var_list, value, period)
 
         if val is not None:
-            self._logger.send_tracing(name, val, trace_level)
+            self._logger.send_tracing(name, val, "time", trace_level)
 
     def _smooth_var(self, var_list, value, period, smoothing):
         per = var_list[0] + 1
@@ -196,7 +197,7 @@ class LogyHandler:
         fps = fps_last_time[1] / time_elapsed
         fps_last_time[0] = now
         fps_last_time[1] = 1
-        self._logger.send_tracing(name, fps, 4)
+        self._logger.send_tracing(name, fps, "fps", 4)
 
     def debug(self, msg: str, tag="msg"):
         self._send_msg(msg, tag, DEBUG, 3)
@@ -301,28 +302,29 @@ class Logy(metaclass=Singleton):
         file_name, line_no, function_name = findCaller(trace_level)
         caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_avg_type(name, value, caller_hash)
+            data = get_avg_type(name, value, "avg", caller_hash)
             self._pipe_send(data)
 
     def send_mean(self, name: str, value: float, trace_level = 3):
         file_name, line_no, function_name = findCaller(trace_level)
         caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_mean_type(name, value, caller_hash)
+            data = get_mean_type(name, value, "mean", caller_hash)
             self._pipe_send(data)
 
     def send_var(self, name: str, value: float, trace_level = 3):
         file_name, line_no, function_name = findCaller(trace_level)
         caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
-            data = get_var_type(name, value, caller_hash)
+            data = get_var_type(name, value, "var", caller_hash)
             self._pipe_send(data)
 
-    def send_tracing(self, name: str, value: float, trace_level = 3):
+    def send_tracing(self, name: str, value: float, tag: str, trace_level = 3):
         file_name, line_no, function_name = findCaller(trace_level)
         caller_hash = hash(file_name + str(line_no) + function_name)
+
         with self._lock:
-            data = get_tracing_type(name, value, caller_hash)
+            data = get_tracing_type(name, value, tag, caller_hash)
             self._pipe_send(data)
 
     def set_root_debug_level(self, debug_level: int):

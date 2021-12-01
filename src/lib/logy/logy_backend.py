@@ -14,6 +14,7 @@ import neptune.new as neptune
 
 NOTSET = 0
 DEBUG = 10
+TRACING = 15
 INFO = 20
 WARNING = 30
 ERROR = 40
@@ -76,6 +77,7 @@ _name_to_level = {
     'error': ERROR,
     'warning': WARNING,
     'info': INFO,
+    'tracing': TRACING,
     'debug': DEBUG,
     'notset': NOTSET,
 }
@@ -86,6 +88,7 @@ class LogyBackend:
         ERROR: 'ERROR',
         WARNING: 'WARNING',
         INFO: 'INFO',
+        TRACING: 'TRACING',
         DEBUG: 'DEBUG',
         NOTSET: 'NOTSET',
     }
@@ -110,6 +113,7 @@ class LogyBackend:
 
     _format_colors = {
         DEBUG: '\033[94m',
+        TRACING: '\033[95m', #'\033[35m'
         INFO: '\033[97m',
         WARNING: '\033[93m',
         ERROR: '\033[91m',
@@ -296,12 +300,13 @@ class LogyBackend:
         caller_hash = data["hash"]
         name = data["name"]
         value = data["value"]
+        tag = data["tag"]
 
         if self._use_neptune:
             self._neptune_run[f"tracing/{name}"].log(value)
 
         if "tracing" in self._print_tags:
-            self._log_msg_to_terminal(f"TRACING:{name}: {value}", DEBUG)
+            self._log_msg_to_terminal(f"{tag}:{name}: {value}", TRACING)
 
         values_before: VariableData = self._tracing_data.get(name)
         if values_before is None:

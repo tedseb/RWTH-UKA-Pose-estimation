@@ -289,9 +289,12 @@ class Logy(metaclass=Singleton):
                 return
         lock = FileLock(FIFO_LOCK)
         with lock:
-            pickle.dump(data, self._pipe, protocol=pickle.HIGHEST_PROTOCOL)
-            #self._pipe.write(str(data) + "\n")
-            self._pipe.flush()
+            try:
+                pickle.dump(data, self._pipe, protocol=pickle.HIGHEST_PROTOCOL)
+                #self._pipe.write(str(data) + "\n")
+                self._pipe.flush()
+            except BrokenPipeError:
+                print("Pipe Error (Pipe closed, Logy Backend not available)")
 
     def send_msg(self, level: int, msg: str, tag: str, module: str, file: str, lineno: int, function: str):
         with self._lock:

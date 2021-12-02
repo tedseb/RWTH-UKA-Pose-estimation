@@ -79,6 +79,7 @@ class StationSelection(StationSelectionUi, QObject):
         self.activate_exercise_button.setEnabled(False)
         time.sleep(1)
 
+        self.shutdown_button.clicked.connect(self.shutdown)
         self.activate_station_button.clicked.connect(self.set_station_state)
         self.activate_exercise_button.clicked.connect(self.set_exercise_state)
         self.weight_detection_button.clicked.connect(self.start_weight_detection)
@@ -115,6 +116,11 @@ class StationSelection(StationSelectionUi, QObject):
         for proc in process.children(recursive=True):
             proc.kill()
         process.kill()
+
+    def shutdown(self):
+        subprocess.call(['kill $(pgrep -f dev.launch)'], shell=True)
+        #subprocess.call(['kill', '$(pgrep -f dev.launch)'])
+        subprocess.call(['kill $(pgrep -f production.launch)'], shell=True)
 
     def client_callback(self, callback):
         #logy.debug("Register Message Callback", self._verbose)

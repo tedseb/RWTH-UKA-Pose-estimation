@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import os
 from multiprocessing import Lock
+import signal
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # TODO: @sm Check how many CUDA devices there actually are and manage them
@@ -83,6 +84,12 @@ class PoseEstimator():
     def __del__(self):
         self._is_active = False
         self._ai_thread.join(timeout=1)
+
+    def shutdown(self, signum, frame):
+        self._is_active = False
+        self._ai_thread.join(timeout=1)
+        rospy.signal_shutdown("Shutdown")
+        #print("shutdown")
 
     @logy.catch_ros
     def handle_new_channel(self, channel_info: ChannelInfo):
@@ -310,8 +317,9 @@ class PoseEstimator():
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
-
     rospy.init_node('metrabs', anonymous=True)
     run_spin_obj = PoseEstimator()
+    signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
+    signal.signal(signal.SIGINT, run_spin_obj.shutdown)
     logy.info("Pose Estimator is listening")
     rospy.spin()

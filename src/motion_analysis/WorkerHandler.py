@@ -31,6 +31,7 @@ except ImportError:
     from src.algorithm.logging import log
     from backend.msg import StationUsage
 
+import signal
 import time
 from PyQt5.QtCore import QThread
 import yaml
@@ -43,9 +44,9 @@ import argparse
 
 class WorkerHandler(QThread):
     """Waits for updates on the usage of spots and communicates them through the a SpotMetaDataInterface.
-    
-    The WorkerHandler waits for updates of the usage of stations. It queries the HMI database for exercise data. 
-    This data includes recordings of experts and further data regarding the exercise. 
+
+    The WorkerHandler waits for updates of the usage of stations. It queries the HMI database for exercise data.
+    This data includes recordings of experts and further data regarding the exercise.
     It uses a feature extractor to extract information that is found in the recording.
     These includes especially, but is not limited to, trajectories of features of interest. For example the trajectory of
     the angle of the left and right knee.
@@ -54,8 +55,8 @@ class WorkerHandler(QThread):
     Furthermore, diverse metadata related to the comparator's computations is reset as received messages indicate
     a change in usage.
     """
-    def __init__(self, 
-    spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
+    def __init__(self,
+    spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface,
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
     features_interface_class: FeaturesInterface = RedisFeaturesInterface):
@@ -80,7 +81,7 @@ class WorkerHandler(QThread):
             self.exercises = db.spin_exercises
             self.recordings = db.spin_recordings
             self.hmiExercises = db.spin_hmiExercises
-        else: 
+        else:
             raise NotImplementedError("There is not database connection setup in the WorkerHandler for this PoseDefinitionAdapter type.")
 
         self.gui_handler = GUIHandler()
@@ -128,7 +129,7 @@ class WorkerHandler(QThread):
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
 
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0, 'station_usage_hash': station_usage_data.stationUsageHash}
-            
+
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
             current_worker = self.workers.get(station_id, None)
@@ -151,6 +152,7 @@ class WorkerHandler(QThread):
 if __name__ == '__main__':
     # initialize ros node
     rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
@@ -162,7 +164,7 @@ if __name__ == '__main__':
         args = parser.parse_args(valid_args)
     else:
         args = parser.parse_args()
-    
+
     if args.ai == 'spin':
         pose_definition_adapter_class = SpinPoseDefinitionAdapter
     elif args.ai == 'metrabs':

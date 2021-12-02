@@ -12,6 +12,7 @@ import rospy
 import yaml
 import torch
 import logy
+import signal
 from gymy_tools import Queue
 from backend.msg import ImageData, ChannelInfo, LabelsCameraID, Bboxes
 from sensor_msgs.msg import Image
@@ -30,6 +31,9 @@ class YoloData:
     confs: List[float] = None
     boxes: List[List[int]] = None
     render_img = None
+
+
+    #raise ServiceExit
 
 class ObjectDetectionPipeline:
     def __init__(self, threshold=0.5, device="cpu", renderer=False, check_station=False):
@@ -55,6 +59,12 @@ class ObjectDetectionPipeline:
     def __del__(self):
         self._is_active = False
         self._detection_thread.join(timeout=1)
+
+    def shutdown(self, signum, frame):
+        self._is_active = False
+        self._detection_thread.join(timeout=1)
+        rospy.signal_shutdown("Shutdown")
+        #print("shutdown")
 
     @logy.catch_ros
     def callback_set_image(self, msg: ImageData):
@@ -88,7 +98,7 @@ class ObjectDetectionPipeline:
                 if channel_info.cam_id in self._image_queues:
                     del self._image_queues[channel_info.cam_id]
 
-    @logy.catch_thread_and_restart
+    #@logy.catch_thread_and_restart
     def _object_detector_loop(self):
         '''
         This is a thread function which pull images from the queues.
@@ -256,8 +266,11 @@ class ObjectDetectionPipeline:
         rospy.spin()
 
 if __name__ == '__main__':
+
     logy.basic_config(debug_level=logy.DEBUG, module_name="OD")
     rospy.init_node('object_detection', anonymous=True)
     rospy.set_param('param_server', yaml.dump({0: {}}))
     obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=True, check_station=True)
+    signal.signal(signal.SIGTERM, obj_detect.shutdown)
+    signal.signal(signal.SIGINT, obj_detect.shutdown)
     obj_detect.spin()

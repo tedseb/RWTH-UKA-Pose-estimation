@@ -1,6 +1,10 @@
 <launch>
+  <arg name="ai" default="metrabs" doc="Choose AI out of the following: (metrabs, spin)"/>
   <arg name="bagfile" default=""/>
-  <include file="$(find motion_analysis)/launch/motion_analysis.launch" />
+  <include file="$(find logy_backend)/launch/logy_backend.launch"/>
+  <include file="$(find motion_analysis)/launch/motion_analysis_dev.launch">
+    <arg name="ai" value="$(arg ai)"/>
+  </include>
   <node name="Validator" pkg="ma_validation" type="Validator.py"/>
   <node name="Bagfileplayer" pkg="ma_validation" type="bagfileplayer.sh" />
 </launch> 

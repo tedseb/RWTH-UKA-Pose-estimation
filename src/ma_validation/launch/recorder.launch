@@ -3,7 +3,11 @@
   <arg name="output" default="/home/trainerai/trainerai-core/data/videos/video.bag" doc="Specify an output file for rosbag to write to."/>
   <arg name="input_video" default="/home/trainerai/trainerai-core/data/videos/video.mp4" doc="Specify a folder of input videos and timecodes with the same names."/>
   <arg name="input_timecodes" default="/home/trainerai/trainerai-core/data/videos/timecodes.yml" doc="Specify a folder of input videos and timecodes with the same names."/>
-  <include file="$(find metrabs)/launch/metrabs.launch"/>
+  
+  <include file="$(find metrabs)/launch/metrabs.launch" if="$(eval arg('ai') == 'metrabs')"/>
+  <include file="$(find spin)/launch/spin.launch" if="$(eval arg('ai') == 'spin')"/>
+  <include file="$(find logy_backend)/launch/logy_backend.launch"/>
+  
   <include file="$(find object_detection)/launch/object_detection.launch" />
   <node name="DataSetRecorder" pkg="ma_validation" type="DataSetRecorder.py" args="-i $(arg input_video) -t $(arg input_timecodes) -o $(arg output)"/>
   <include file="$(find backend)/launch/SkeletonVisualizationHelper.launch">

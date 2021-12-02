@@ -6,21 +6,24 @@ This file contains code that deals with adapting code that is based on numpy to 
 """
 
 from abc import abstractmethod
-
+from typing import Set
+import copy
 import numpy as np
+import rospy as rp
+from sklearn.preprocessing import normalize
+import pymongo
+
 
 try:
     from motion_analysis.src.DataConfig import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.algorithm.AlgoConfig import X, Y, Z
-    from motion_analysis.src.algorithm.AlgoUtils import PoseDefinitionAdapter
-    from motion_analysis.src.algorithm.SkelletonUtility import *
+    from motion_analysis.src.algorithm.AlgoUtils import *
 except ImportError:
     from src.DataConfig import *
     from src.DataUtils import *
     from src.algorithm.AlgoConfig import X, Y, Z
-    from src.algorithm.AlgoUtils import PoseDefinitionAdapter
-    from src.algorithm.SkelletonUtility import *
+    from src.algorithm.AlgoUtils import *
 
 try:
     from backend.msg import Bodypart
@@ -56,11 +59,20 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
 
         self.center_of_body_label = 'M_Hip'
 
-    def get_joint_index(self, joint_name: str):
-        return self.joints_used_labels.index(joint_name)
+        # Build order of the current Gymy skeleton
+        self.body_build_order = [(0, 3), (3, 6), (6, 9), (9, 12), (12, 15), (12, 13), (13, 16), (16, 18), (18, 20), (20, 22), (12, 14), (14, 17),
+        (17, 19), (19, 21), (21, 23), (0, 1), (1, 4), (4, 7), (7, 10), (0, 2), (2, 5), (5, 8), (8, 11)]
 
-    def get_joint_name(self, joint_idx: int):
-        return self.joints_used_labels[joint_idx]
+        # This is me, Artur, doing military press
+        # All skelletons are normalized to my skelleton. :)
+        self.normal_skelleton = np.load('/home/trainerai/trainerai-core/src/motion_analysis/standard_skelleton_metrabs.npy') #, allow_pickle=True)
+
+        self.central_joint_idx = 0 # Choose this to be something like the pelvis and a joint in the back, skelletons are rotatet sich that this bone always overlaps
+        # We do not know the orientation of the ground, so we need to orient skelletons along each other and not to the ground
+        self.orientational_vector_joint_idxs_1 = (0, 1)
+        self.orientational_vector_joint_idxs_2 = (0, 2)
+
+        super().__init__()
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
@@ -134,8 +146,27 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
         self.center_of_body_label = 'Pelvis_MPII'
 
-    def get_joint_index(self, joint_name: str):
-        return self.joints_used_labels.index(joint_name)
+        # Build order of the current Gymy skeleton, by Ted
+        # original_body_build_order = [(39, 8), (39, 27), (39, 28), (28, 12), (12, 9), (39, 41), (41, 1), (27, 2), (28, 5), (2, 3), (3, 4),
+        # (5, 6), (6, 7), (27, 10), (10, 11), (11, 23), (11, 22), (28, 13), (13, 14), (14, 19), (14, 20), (1, 37),
+        # (37, 43), (43, 38), (43, 17), (43, 18), (17, 42), (42, 0), (0, 15), (0, 16)]
+
+        # Bew build order
+        modified_body_build_order = [(22, 23), (23, 24), (24, 11), (11, 10), (10, 9), (9, 27), (27, 39), (39, 41), (39, 28), (28, 12), (12, 13), (13, 14), (14, 21), (21, 19), (19, 20), (41, 1), (1, 2), (2, 3), (3, 4), (1, 5), (5, 6), (6, 7), (1, 37), (37, 43), (43, 42), (42, 17), (17, 18), (18, 0)]
+
+        # We need to transform this build order, because we leave out some joints of the spin skelleton
+        self.body_build_order = [(self.joints_used.index(idx_1), self.joints_used.index(idx_2)) for idx_1, idx_2 in modified_body_build_order]
+
+        # This is me, Artur, doing military press
+        # All skelletons are normalized to my skelleton. :)
+        self.normal_skelleton = np.load('/home/trainerai/trainerai-core/src/motion_analysis/standard_skelleton_spin.npy') #, allow_pickle=True)
+
+        self.central_joint_idx = 8 # Choose this to be something like the pelvis and a joint in the back, skelletons are rotatet sich that this bone always overlaps
+        # We do not know the orientation of the ground, so we need to orient skelletons along each other and not to the ground
+        self.orientational_vector_joint_idxs_1 = (self.joints_used.index(39), self.joints_used.index(9))
+        self.orientational_vector_joint_idxs_2 = (self.joints_used.index(39), self.joints_used.index(12))
+
+        super().__init__()
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)

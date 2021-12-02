@@ -5,24 +5,19 @@
 This file contains a code snippets that have nowhere else to go.
 """
 
-try:
-    from motion_analysis.src.algorithm.SkelletonUtility import *
-except ImportError:
-    from src.algorithm.SkelletonUtility import *
 
 from typing import Any
 import numpy as np
 from abc import abstractmethod
 
+
+class IllegalAngleException(Exception):
+    pass
+
 class PoseDefinitionAdapter():
     @abstractmethod
     def __init__(self):
-        pass
-
-    @abstractmethod
-    def get_joint_index(self, joint_name: str) -> int:
-        """Get the index of a joint from its name"""
-        raise NotImplementedError("This is an interface, it should not be called directly.")
+        self.normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_orientation_vector(self.normal_skelleton))
 
     @abstractmethod
     def poses_to_ndarray(self, poses: object) -> np.ndarray:
@@ -66,11 +61,174 @@ class PoseDefinitionAdapter():
     def normalize_skelletons(self, recording: np.ndarray) -> np.ndarray:
         new_recording = list()
         for pose_array in recording:
-            new_recording.append(normalize_skelleton(pose_array))
+            new_recording.append(self.normalize_skelleton(pose_array))
         
         return np.array(new_recording)
 
+    def get_joint_index(self, joint_name: str):
+        return self.joints_used_labels.index(joint_name)
 
+    def get_joint_name(self, joint_idx: int):
+        return self.joints_used_labels[joint_idx]
+
+    def calculate_orientation_vector(self, input_skelleton):
+        """Returns the orientation of the skelleton's pelvis.
+
+        Calculateas the orientation of the pelvis joint connections of the skelleton.
+        The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
+        """
+        # Roate skelleton, such that skelletons pelvises overlap
+        x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
+        y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
+        assert not np.array_equal(x, y)
+        _x = x / np.linalg.norm(x)
+        cross_x_y = np.cross(x,y)
+        _z = cross_x_y / np.linalg.norm(cross_x_y)
+        cross__z_x = np.cross(_z,x)
+        _y = cross__z_x / np.linalg.norm(cross__z_x)
+        return  np.stack([_x, _y, _z])
+
+    def normalize_skelleton_size(self, input_skelleton):
+        """Stretch all vectors of person to the same length as the vectors in normal_skelleton
+        
+        The order to build a completly new skeleton with the old vectors is defined by self.body_build_order. The first Index in the first tuple
+        is the start point. It is the only point with the same coordinates as before. For the new skeleton, the algorithm
+        takes the vector direction of person and the vecttor length of person2.
+        """
+        resized_skelleton = np.copy(input_skelleton)
+
+        first_joint_idx = self.body_build_order[0][0]
+        resized_skelleton[first_joint_idx] = np.copy(input_skelleton[first_joint_idx])
+
+        for joint_idxs in self.body_build_order:
+            joint1_p1 = input_skelleton[joint_idxs[0]]
+            joint2_p1 = input_skelleton[joint_idxs[1]]
+
+            joint1_p2 = self.normal_skelleton[joint_idxs[0]]
+            joint2_p2 = self.normal_skelleton[joint_idxs[1]]
+            point1_p2 = np.array([joint1_p2[0], joint1_p2[1], joint1_p2[2]])
+            point2_p2 = np.array([joint2_p2[0], joint2_p2[1], joint2_p2[2]])
+            vec_joints_person2 = np.array(point2_p2 - point1_p2)
+            
+            point1_p1 = np.array([joint1_p1[0], joint1_p1[1], joint1_p1[2]])
+            point2_p1 = np.array([joint2_p1[0], joint2_p1[1], joint2_p1[2]])
+            vec_joints_person1 = np.array(point2_p1 - point1_p1)
+
+            new_vec_p1 = resize_len_vec1_to_vec2(vec_joints_person1, vec_joints_person2)
+
+            base_joint = resized_skelleton[joint_idxs[0]]
+            resized_skelleton[joint_idxs[1]] = np.array([base_joint[0] + new_vec_p1[0], base_joint[1] + new_vec_p1[1], base_joint[2] + new_vec_p1[2]]) 
+
+        return resized_skelleton
+
+
+    def normalize_skelleton_position(self, input_skelleton):
+        """Returns a skelleton with the pelvis at (0, 0, 0)."""
+        reoriented_skelleton = np.copy(input_skelleton)
+        # Move skelleton to 0/0/0 by substracting coordinates of central joint from all joints
+        for joint_idx in range(len(reoriented_skelleton)):
+            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[self.central_joint_idx][0]
+            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[self.central_joint_idx][1]
+            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[self.central_joint_idx][2]
+
+        return reoriented_skelleton
+
+    def normalize_skelleton_orientation(self, input_skelleton):
+        """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
+        reoriented_skelleton = np.copy(input_skelleton)
+        reoriented_skelleton_rotation_matrix = self.calculate_orientation_vector(reoriented_skelleton)
+        rotation_matrix_to_normal_orientation = np.matmul(self.normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+
+        for joint_idx in range(len(reoriented_skelleton)):
+            reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix_to_normal_orientation)
+
+        return reoriented_skelleton
+
+    def skelleton_coherency_test(self):
+        """Check whether all joints are connected."""
+        already_added_nodes : Set[int] = set({})
+        already_added_nodes.add(self.body_build_order[0][0])
+        for joint in self.body_build_order:
+            if joint[0] not in already_added_nodes:
+                rp.logerr(f"ERROR: Index {joint[0]} (first index) was not added in the Set before")
+            if joint[1] in already_added_nodes:
+                rp.logerr(f"ERROR: Index {joint[0]} (second index) was added in the Set before")
+            already_added_nodes.add(joint[1])
+        rp.logerr(f"Total number of joints: {len(already_added_nodes)}")
+        rp.logerr(already_added_nodes)
+
+    def normalize_skelleton(self, input_skelleton):
+        """Utility method to normalize size, position and orientation of skelleton."""
+        skelleton = self.normalize_skelleton_size(input_skelleton)
+        skelleton = self.normalize_skelleton_position(skelleton)
+        skelleton = self.normalize_skelleton_orientation(skelleton)
+        return skelleton
+
+    def find_inner_joint(self, joint_names):
+        """A triplet of three joints has three angles. This method finds the inner joint for an angle.
+
+        The inner and outer joints dictionary returned by this method has the following form:
+        Args:
+            joint_names
+
+        Returns:
+            Name of the inner joint
+        """
+        # TODO: Optimize this if it has to be done more often
+        joint_idxs = set(self.joints_used[self.get_joint_index(j)] for j in joint_names)
+
+        def go_deeper(leaf, other_joints, building_blocks_left, found_joints):
+            if found_joints == other_joints:
+                return found_joints
+            new_leafs = []
+            for i, j in building_blocks_left:
+                if i == leaf:
+                    building_blocks_left = list(filter(lambda x: (x[0], x[1]) != (i, j), building_blocks_left))
+                    new_leafs.append(j)
+                if j == leaf:
+                    building_blocks_left = list(filter(lambda x: (x[0], x[1]) != (i, j), building_blocks_left))
+                    new_leafs.append(i)
+                   
+
+            for j in other_joints:
+                if j in new_leafs:
+                    found_joints.add(j)
+
+            for l in new_leafs:
+                found_joints.update(go_deeper(l, other_joints, building_blocks_left, found_joints))
+
+            return found_joints
+
+        body_build_order = [(self.joints_used[idx_1], self.joints_used[idx_2]) for idx_1, idx_2 in self.body_build_order]
+
+        for joint in joint_idxs:
+            total_found_leafs_no = 0
+            other_joints = joint_idxs.copy()
+            other_joints.remove(joint)
+            leafs = set()
+            initial_building_blocks = body_build_order.copy()
+            for i, j in body_build_order:
+                if joint == i:
+                    initial_building_blocks.remove((i, j))
+                    leafs.add(j)
+                elif joint == j:
+                    initial_building_blocks.remove((i, j))
+                    leafs.add(i)
+
+        
+            for l in leafs:
+                found_leafs = set()
+                if l in other_joints:
+                    found_leafs.add(l)
+                found_leafs = go_deeper(l, other_joints, initial_building_blocks.copy(), found_leafs)
+                found_leafs_no = len(found_leafs)
+                if total_found_leafs_no == 1 and found_leafs_no == 1:
+                    return self.get_joint_name(self.joints_used.index(joint))
+                total_found_leafs_no += found_leafs_no
+
+
+        raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")
+                
 
 def map_progress_to_vector(progress: float):
     """ Calculate the cartesian represenation of a progress as a unit vector.
@@ -173,6 +331,13 @@ def update_gui_progress(gui, progress, alignment, progress_alignment_vector):
     if not gui:
         return
     gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
+
+
+
+def resize_len_vec1_to_vec2(vec1, vec2):
+    length_vec1 = np.linalg.norm(vec1)
+    length_vec2 = np.linalg.norm(vec2)
+    return (length_vec2 / length_vec1) * vec1
     
     
 # from src/AI/spin/utils/geometry.py

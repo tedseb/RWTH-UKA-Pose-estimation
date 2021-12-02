@@ -47,7 +47,7 @@ CONFIG = {
 
 class PoseEstimator():
     def __init__(self):
-        rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=1)
+        rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         self.model = tf.saved_model.load(CONFIG["model_path"])
 
@@ -172,6 +172,7 @@ class PoseEstimator():
         camera_id = int(body_bbox_list_station.header.frame_id[3:])
         if camera_id in self._box_queues:
                 self._box_queues[camera_id].put(body_bbox_list_station)
+                logy.log_fps("new_box_received")
 
     @logy.catch_thread_and_restart
     def thread_handler(self):

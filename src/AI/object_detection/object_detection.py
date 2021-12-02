@@ -19,7 +19,7 @@ from scheduler import BoxChecker
 
 YOLO_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5'
 MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5s.pt'
-IMAGE_QUEUE_LEN = 3
+IMAGE_QUEUE_LEN = 2
 THREAD_WAIT_TIME_MS = 30
 AI_HEIGHT = 720
 AI_WIDTH = 1280
@@ -38,8 +38,8 @@ class ObjectDetectionPipeline:
         self._model = torch.hub.load(YOLO_PATH, 'custom', path=MODEL_PATH, source='local') # .eval().to(device)
         self._threshold = threshold
         self._renderer = renderer
-        self._publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=2)
-        self._publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=2)
+        self._publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=10)
+        self._publisher_labels = rospy.Publisher('labels', LabelsCameraID , queue_size=10)
         self._subscriber_image = {}
         self._publisher_img_yolo = {}
         self._image_queues : Dict[Queue] = {}
@@ -138,6 +138,7 @@ class ObjectDetectionPipeline:
                     continue
                 station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
                 #logy.warn(f"boxes = {station_boxes}")
+                logy.log_fps("publish_boxes")
                 self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
                 self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
                 self._publish_labels(yolo_data.labels, image_data[i])
@@ -150,20 +151,20 @@ class ObjectDetectionPipeline:
         Returns:
             List[YoloData]: Yolo Predictions for each image. YoloData is None if there is no Prediction for this index.
         '''
+
         with logy.TraceTime("yolo_model"):
             results = self._model(imgs, size=640)
 
-
         yolo_data_results = []
-        for i in range(len(results.imgs)):
+        for i in range(len(imgs)):
             yolo_data = YoloData()
             if self._renderer:
-                results.render()  # updates results.imgs with boxes and labels
+                results.render()
                 yolo_data.render_img = results.imgs[i]
 
-            result_np = results.xyxy[i].cpu().detach().numpy() # BBox is in x1,y1,x2,y2
+            result_np = results.xyxy[i].cpu().detach().numpy() #x1, y1, x2, y2
             if result_np.size == 0:
-                rospy.logerr_throttle(5, "Ojbect detection is currently failing. If you see this message repeatedly, there is something wrong...")
+                logy.warn_throttle("No Results in Object Detection", 1000)
                 yolo_data_results.append(None)
                 continue
 
@@ -176,16 +177,8 @@ class ObjectDetectionPipeline:
             yolo_data.labels = result_np[:,5]
             yolo_data.confs = result_np[:,4]
             yolo_data.boxes = np.array(result_np[:,:4])
-            # logy.warn(f"shape = {yolo_data.boxes.shape}")
-            # logy.warn(f"boxes np = {yolo_data.boxes}")
-            # logy.warn(f"boxes1 np = {yolo_data.boxes[:, 0]}")
-            # logy.warn(f"factors np = {resize_factors[i, 0]}")
-            # yolo_data.boxes[:, 0] *= resize_factors[i][0]
-            # yolo_data.boxes[:, 1] *= resize_factors[i][1]
-            # yolo_data.boxes[:, 2] *= resize_factors[i][0]
-            # yolo_data.boxes[:, 3] *= resize_factors[i][1]
             yolo_data_results.append(yolo_data)
-
+        logy.log_var("yolo_batch_size", len(yolo_data_results), period=25)
         return yolo_data_results
 
     def _get_person_boxes_in_station(self, yolo_data : YoloData, camera_id : int):

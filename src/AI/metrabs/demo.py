@@ -34,6 +34,8 @@ def test_single_image(model, image):
     intrinsics =  np.array([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], np.float32)
     person_boxes = [person_boxes]
     print()
+    intrinsics =  np.array([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], np.float32)
+
     for i in range(2):
         print(f"Single Detection Boxes {i + 1}:")
         time_stamp = time.time()

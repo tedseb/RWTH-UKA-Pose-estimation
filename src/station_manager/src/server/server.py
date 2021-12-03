@@ -24,7 +24,21 @@ RESPONSE_DICT = {
     "payload": {}
 }
 
+
 class ServerSocket(WebSocketServerProtocol):
+    _err_to_str = {
+        1 : "Success",
+        2 : "Internal Server Error",
+        3 : "No Capaticity",
+        4 : "Station is already in use",
+        5 : "Station is offline",
+        6 : "Exercise not available",
+        7 : "Can not detect weight",
+        8 : "Error in Request",
+        9 : "Wrong user ID",
+        10 : "User already loged in into another station or station does not exist",
+        11 : "User started already an exercise. This should be finished first.",
+    }
 
     def onConnect(self, request):
         print("Client connecting: {0}".format(request.peer))
@@ -45,6 +59,8 @@ class ServerSocket(WebSocketServerProtocol):
         #pylint: disable=broad-except
         try :
             result : ResponseAnswer = function(self._id, pyaload)
+            if result.status_code != 1:
+                logy.warn(f"Client Connection Status {result.status_code}: {self._err_to_str[result.status_code]}")
         except Exception as exception:
             self.send_error_ts(str(exception))
             trace = traceback.format_exc()

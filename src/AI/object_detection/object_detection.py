@@ -98,7 +98,7 @@ class ObjectDetectionPipeline:
                 if channel_info.cam_id in self._image_queues:
                     del self._image_queues[channel_info.cam_id]
 
-    #@logy.catch_thread_and_restart
+    @logy.catch_thread_and_restart
     def _object_detector_loop(self):
         '''
         This is a thread function which pull images from the queues.

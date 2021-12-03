@@ -23,6 +23,7 @@ from twisted.internet import reactor
 import time
 
 DEBUG_STATION_ID = 999
+MAX_STATIONS = 6
 
 def signal_handler(signal, frame):
     print("EXIT")
@@ -36,6 +37,7 @@ class ComputerWorkload:
         self.stations = set({})
 
 class StationManager():
+
     def __init__(self, camera_path, transform_node_path, station_selection_path, verbose=False, debug_frames_ms=0):
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
         self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo , queue_size=5)
@@ -190,11 +192,16 @@ class StationManager():
 
     def login_station(self, user_id: str, station_id: int):
         with self._exercise_station_mutex:
+            if len(self.__active_stations) >= MAX_STATIONS:
+                return ResponseAnswer(501, 3, {})
+
             if station_id in self.__active_stations:
                 return ResponseAnswer(501, 4, {})
 
             if user_id in self.__active_stations:
                 return ResponseAnswer(501, 10, {})
+
+        #Todo: Check if Station Exist
         with self._param_updater_mutex:
             self.__param_updater.set_station(station_id, True)
             cameras = self.__param_updater.get_involved_cameras()
@@ -258,12 +265,14 @@ class StationManager():
 
     def start_exercise(self, user_id: str, station_id: int, exercise_id: int, set_id = 1):
         with self._exercise_station_mutex:
+            if user_id not in self.__active_stations:
+                return ResponseAnswer(502, 10, {})
+
             if self.__active_stations[user_id] != station_id:
                 return ResponseAnswer(502, 10, {})
 
             if user_id in self.__active_exercises:
                 return ResponseAnswer(501, 11, {})
-
 
         station_usage_hash = str(random.getrandbits(128))
         self._publisher_station_usage.publish(StationUsage(station_id, True , str(exercise_id), station_usage_hash))

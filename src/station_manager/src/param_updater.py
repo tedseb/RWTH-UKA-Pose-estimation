@@ -18,10 +18,17 @@ class CameraStationController():
         self._publisher_pull_param = rospy.Publisher('pull_param', String , queue_size=2)
 
         self._camera_station_frames = self._data_manager.get_station_frame_lists()
+        self._stations = self._data_manager.get_stations()
+        logy.warn(self._stations)
         #self._camera_weight_frames = self._data_manager.get_weight_frame_lists()
         #for camera_id, station_dict in frames.items():
             #self._camera_list[camera_id] = station_dict
         logy.debug(f"Camera list: {self._camera_station_frames}")
+
+    def is_station_valid(self, station_id) -> bool:
+        if station_id in self._stations:
+            return True
+        return False
 
     def add_debug_station(self, station_id, camera_id, frame):
         if camera_id not in self._camera_station_frames:

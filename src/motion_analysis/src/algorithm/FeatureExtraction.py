@@ -37,16 +37,16 @@ import hashlib
 import numpy as np
 
 try:
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.ROSAdapters import *
 except (ModuleNotFoundError, ImportError):
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Features import *
-    from src.ROSAdapters import *
 
+X = 0
+Y = 1
+Z = 2
 
 class FeatureExtractorException(Exception):
     pass
@@ -98,7 +98,7 @@ def extract_height_of_joint(pose_array: np.ndarray, index: int) -> float:
     return pose_array[index][Z]
 
 
-def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter) -> float:
+def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter) -> float:
     """Compute the average height of pelvis and neck, representing the height of the body's core.
     
     Args:
@@ -199,7 +199,7 @@ def extract_acceleration(poses_array: np.ndarray, joint: int) -> float:
     raise NotImplementedError("Currently not part of the features of interest.")
 
 
-def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
+def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pose_definition_adapter) -> dict:
     """This method turns an exercise data dictionary into a dictionary of features.
 
     Features are specified according to the following structure:
@@ -223,7 +223,7 @@ def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pos
     return features_of_interest
 
 
-def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
+def extract_angles_of_interest(joint_names: list, pose_definition_adapter) -> dict:
     frozen_joint_names = frozenset(joint_names)
     
     exceptions = dict()

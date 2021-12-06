@@ -1,5 +1,6 @@
 <launch>
   <arg name="ai" default="metrabs" doc="Choose AI out of the following: (metrabs, spin)"/>
+  <arg name="config" default="home/trainerai/trainerai-core/src/motion_analysis/">
   <arg name="bagfile" default=""/>
   <include file="$(find logy_backend)/launch/logy_backend.launch"/>
   <include file="$(find motion_analysis)/launch/motion_analysis_dev.launch">

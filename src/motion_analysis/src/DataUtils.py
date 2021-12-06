@@ -9,10 +9,8 @@ import json
 import rospy as rp
 
 try:
-    from motion_analysis.src.DataConfig import *
     from motion_analysis.src.algorithm.logging import log
 except ImportError:
-    from src.DataConfig import *
     from src.algorithm.logging import log
 
 def publish_message(publisher, topic, data):

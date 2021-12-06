@@ -25,11 +25,9 @@ import pickle
 from std_msgs.msg import Int32
 
 try:
-    from motion_analysis.src.DataConfig import *
     from motion_analysis.src.algorithm.logging import log, log_throttle
 except ImportError:
     from src.algorithm.logging import log, log_throttle
-    from src.DataConfig import *
 
 # Patch msgpack to understand numpy arrays
 m.patch()
@@ -118,7 +116,7 @@ class MessageQueueInterface(ABC):
 class QueueLoadBalancerInterface(ABC):
     """This load balancing interface provides implements what queue we should dequeue from."""
     @abstractmethod
-    def __init__(self):
+    def __init__(self, config):
         raise NotImplementedError("This is an interface and shold not be called directly")
 
     @abstractmethod
@@ -174,7 +172,7 @@ class FeaturesInterface(ABC):
 
 
 class RedisInterface:
-    def __init__(self):
+    def __init__(self, config):
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
 
     def delete(self, key: str) -> None:
@@ -239,7 +237,7 @@ class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface
     def get_queue_key(self):
         # For now, we want a thread to always focus on the largest queue
         try:
-            key_tuple = self.redis_connection.bzpopmax(REDIS_LOAD_BALANCER_SORTED_SET_KEY, timeout=1)
+            key_tuple = self.redis_connection.bzpopmax(self.config['REDIS_LOAD_BALANCER_SORTED_SET_KEY'], timeout=1)
         except TimeoutError:
             raise QueueEmpty
         
@@ -261,7 +259,7 @@ class RedisQueueLoadBalancerInterface(RedisInterface, QueueLoadBalancerInterface
 
     def set_queue_size(self, key: str, size: int = 1) -> None:
         """Increment the size of a queue as seen by the load balancer."""
-        self.redis_connection.zadd(REDIS_LOAD_BALANCER_SORTED_SET_KEY, {key: size})
+        self.redis_connection.zadd(self.config['REDIS_LOAD_BALANCER_SORTED_SET_KEY'], {key: size})
     
 
 class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
@@ -306,7 +304,8 @@ class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
 
 
 class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
         self.ma_validation_rate_control = rp.Publisher("ma_validation_rosbag_rate_control", Int32, queue_size=10)
         # Dequeueing consists of several operations. Until we move to a distribuetd system, we can use a semaphore to guarantee correct queuing.
@@ -316,7 +315,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         # TODO: Maybe use https://github.com/RedisTimeSeries/RedisTimeSeries
         # TODO: Investigate if these redis instructions can be optimized, possibly use a distributed lock
 
-        spot_queue_key, spot_past_queue_key, _, _ = generate_redis_key_names(spot_key)
+        spot_queue_key, spot_past_queue_key, _, _ = generate_redis_key_names(spot_key, self.config)
 
         try:
             joints_with_timestame_bytes = self.redis_connection.rpoplpush(spot_queue_key, spot_past_queue_key)
@@ -329,22 +328,22 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise QueueEmpty
 
-        self.redis_connection.ltrim(spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        self.redis_connection.ltrim(spot_past_queue_key, 0, config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
 
-        future_joints_with_timestamp_list = self.redis_connection.lrange(spot_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
-        past_joints_with_timestamp_list = self.redis_connection.lrange(spot_past_queue_key, 0, REDIS_MAXIMUM_PAST_QUEUE_SIZE)
+        future_joints_with_timestamp_list = self.redis_connection.lrange(spot_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
+        past_joints_with_timestamp_list = self.redis_connection.lrange(spot_past_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
 
         return past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
 
     def enqueue(self, spot_key: str, data: Any) -> int:
-        spot_queue_key, _, _, _ = generate_redis_key_names(spot_key)
+        spot_queue_key, _, _, _ = generate_redis_key_names(spot_key, self.config)
 
         queue_size = self.redis_connection.rpush(spot_queue_key, msgpack.packb(data))
 
-        if (queue_size >= REDIS_QUEUE_SIZE_PANIC_BOUNDARY):
-            if (queue_size >= REDIS_MAXIMUM_QUEUE_SIZE):
+        if (queue_size >= self.config['REDIS_QUEUE_SIZE_PANIC_BOUNDARY']):
+            if (queue_size >= self.config['REDIS_MAXIMUM_QUEUE_SIZE']):
                 log_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
-                self.redis_connection.ltrim(spot_queue_key, 0, REDIS_MAXIMUM_QUEUE_SIZE)
+                self.redis_connection.ltrim(spot_queue_key, 0, self.config['REDIS_MAXIMUM_QUEUE_SIZE'])
             else:
                 log_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
         else:
@@ -352,16 +351,16 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         return 1
 
     def size(self, spot_key: str):
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_features_key  = generate_redis_key_names(spot_key)
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_features_key  = generate_redis_key_names(spot_key, self.config)
         return self.redis_connection.llen(spot_queue_key), self.redis_connection.llen(spot_past_queue_key), self.redis_connection.llen(spot_info_key), self.redis_connection.llen(spot_features_key)
 
     def delete(self, spot_key: str):
-        spot_queue_key, spot_past_queue_key, _,  _ = generate_redis_key_names(spot_key)
+        spot_queue_key, spot_past_queue_key, _,  _ = generate_redis_key_names(spot_key, self.config)
         self.redis_connection.delete(spot_queue_key)
         self.redis_connection.delete(spot_past_queue_key)
             
 
-def generate_redis_key_names(spot_key: str) -> List[str]:
+def generate_redis_key_names(spot_key: str, config) -> List[str]:
     """This method simplifies handling of general key names.
 
     Returns: 
@@ -377,10 +376,10 @@ def generate_redis_key_names(spot_key: str) -> List[str]:
         * Info for spot with ID N is            <spot_key:info>                     :Redis Hashmap
         * Features of spot with ID N is         <spot_key:features:*>               :multiple Redis FIFO Queues
     """
-    redis_spot_queue_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_QUEUE_POSTFIX
-    redis_spot_past_queue_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + redis_spot_queue_key + REDIS_KEY_SEPARATOR + REDIS_SPOT_PAST_QUEUE_POSTFIX
-    redis_spot_info_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_INFO_POSTFIX
-    redis_spot_features_key = REDIS_GENERAL_PREFIX + REDIS_KEY_SEPARATOR + str(spot_key) + REDIS_KEY_SEPARATOR + REDIS_SPOT_FEATURES
+    redis_spot_queue_key = config['REDIS_GENERAL_PREFIX'] + config['REDIS_KEY_SEPARATOR'] + str(spot_key) + config['REDIS_KEY_SEPARATOR'] + config['REDIS_SPOT_QUEUE_POSTFIX']
+    redis_spot_past_queue_key = config['REDIS_GENERAL_PREFIX'] + config['REDIS_KEY_SEPARATOR'] + redis_spot_queue_key + config['REDIS_KEY_SEPARATOR'] + config['REDIS_SPOT_PAST_QUEUE_POSTFIX']
+    redis_spot_info_key = config['REDIS_GENERAL_PREFIX'] + config['REDIS_KEY_SEPARATOR'] + str(spot_key) + config['REDIS_KEY_SEPARATOR'] + config['REDIS_SPOT_INFO_POSTFIX']
+    redis_spot_features_key = config['REDIS_GENERAL_PREFIX'] + config['REDIS_KEY_SEPARATOR'] + str(spot_key) + config['REDIS_KEY_SEPARATOR'] + config['REDIS_SPOT_FEATURES']
 
     return redis_spot_queue_key, redis_spot_past_queue_key, redis_spot_info_key, redis_spot_features_key
 

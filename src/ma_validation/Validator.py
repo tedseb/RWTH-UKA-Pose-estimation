@@ -95,8 +95,7 @@ class Validator():
 
             self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
         
-            with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
-                d = yaml.dump(self.done_exercises, outfile)
+            self.create_report(None) # TODO: Remove me, this is for testing only
 
         self.semaphore.release()
             
@@ -118,6 +117,12 @@ class Validator():
             fprs.append(fpr)
 
         rows = list(done_exercises.keys())
+
+        if not rows:
+            rp.logerr("No exercise recorded, writing an empty yaml file.")
+            with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
+                yaml.dump({}, outfile)
+            return
         
         df = pd.DataFrame.from_dict(done_exercises, orient='index', columns=columns) # (np.random.randn(10, 4), columns=list('ABCD'))
         with PdfPages('/home/trainerai/trainerai-core/data/ma_validation_report.pdf') as pdf:
@@ -139,7 +144,7 @@ class Validator():
             d['ModDate'] = datetime.datetime.today()
 
         with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
-            yaml.dump(self.done_exercises, outfile)
+            yaml.dump({k: v.tolist() for k,v in done_exercises.items()}, outfile)
 
 
 if __name__ == '__main__':

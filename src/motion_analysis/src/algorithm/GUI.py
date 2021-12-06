@@ -16,10 +16,8 @@ import pyqtgraph as pg
 from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
 
 try:
-    from motion_analysis.src.algorithm.AlgoConfig import GUI_FPS
     from motion_analysis.src.algorithm.logging import log
 except ImportError:
-    from src.algorithm.AlgoConfig import GUI_FPS
     from src.algorithm.logging import log
 
 def clamp(x): # Used only for formating color strings
@@ -118,10 +116,10 @@ class FeatureGraphsWidget(QWidget):
 
         self.thread = QThread()
 
-        # This timer saves us resources, because we do not update plots lots, but rather with GUI_FPS fps
+        # This timer saves us resources, because we do not update plots lots, but rather with 25 fps
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_plots)
-        self.timer.start(1000 / GUI_FPS) # 10 FPS
+        self.timer.start(1000 / 25)
 
         # Since we do not always re-plot reference plot data, we need to keep track of wether it has already been set
         self.reference_plot_data_set = False

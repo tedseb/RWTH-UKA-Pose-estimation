@@ -11,13 +11,11 @@ import numpy as np
 from typing import Any, Tuple
 
 try:
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
 except (ModuleNotFoundError, ImportError):
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.Features import *
     from src.algorithm.AlgoUtils import *

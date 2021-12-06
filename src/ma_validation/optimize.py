@@ -83,7 +83,7 @@ def validation_objective_function(hps):
         tpr_by_fpr = 0
         num_exercises = 0
         for exercise in report.values():
-            tpr_by_fpr +=  exercise[5] / exercise[6] if exercise[6] else 1
+            tpr_by_fpr +=  exercise[5] / exercise[6] if exercise[6] else 0
             num_exercises += 1
         score = tpr_by_fpr / num_exercises
 

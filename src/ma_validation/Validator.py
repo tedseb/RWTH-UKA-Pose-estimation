@@ -94,8 +94,6 @@ class Validator():
                 self.done_exercises[finished_set.exercise_id] = np.array([0, 0, 0, 0, 0])
 
             self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
-        
-            self.create_report(None) # TODO: Remove me, this is for testing only
 
         self.semaphore.release()
             

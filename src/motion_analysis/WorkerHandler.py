@@ -153,7 +153,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
     parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
-    parser.add_argument("-c", "--config", help="Path to config file", type=str, default='/home/trainerai/trainerai-core/src/motion_analysis/config.yml')
+    parser.add_argument("-c", "--configpath", help="Path to config file", type=str, default='/home/trainerai/trainerai-core/src/motion_analysis/config.yml')
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     else:
         rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
 
-    with open(args.config, 'r') as infile:
+    with open(args.configpath, 'r') as infile:
         config = yaml.safe_load(infile)
 
     spot_info_handler = WorkerHandler(config, pose_definition_adapter_class=pose_definition_adapter_class)

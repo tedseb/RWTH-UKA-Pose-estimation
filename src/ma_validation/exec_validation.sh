@@ -1,14 +1,19 @@
 #!/bin/bash
+echo "Starting new validation..."
 
-while getopts t: flag
+while getopts c:t: flag
 do
     case "${flag}" in
-        t) time=${OPTARG};;
-        c) config_path=${OPTARG};;
+        t) 
+            time=${OPTARG}
+            echo "Maximum runtime will be $time"
+        ;;
+        c) 
+            configpath=${OPTARG}
+            echo "Reading config from $configpath"
+        ;;
     esac
 done
 
-echo "New validation running. killing after: $time seconds";
-
 cd ~/trainerai-core/
-timeout --signal=SIGINT $time roslaunch src/ma_validation/launch/validator.launch c:=${config_path}
+timeout --signal=SIGINT $time roslaunch src/ma_validation/launch/validator.launch config:=$configpath

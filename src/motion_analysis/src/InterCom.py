@@ -323,15 +323,17 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
                 raise QueueEmpty
             joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes) 
             assert joints_with_timestamp
+
         except (KeyError, AssertionError):
             print_exc()
             # Supposingly, no message queue is holding any value (at the start of the system)
             raise QueueEmpty
-
-        self.redis_connection.ltrim(spot_past_queue_key, 0, config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
+        
+        self.redis_connection.ltrim(spot_past_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
 
         future_joints_with_timestamp_list = self.redis_connection.lrange(spot_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
         past_joints_with_timestamp_list = self.redis_connection.lrange(spot_past_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
+
 
         return past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
 

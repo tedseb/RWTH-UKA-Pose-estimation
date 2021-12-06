@@ -180,7 +180,7 @@ class Worker(Thread):
                         increase_reps = False
 
                 # If the feature alignment in this repetitions is too high, we do not count the repetition
-                if increase_reps and np.mean(self.alignments_this_rep) < MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT:
+                if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT']:
                     log("Feature missalignment during this repetition. Repetition falsified.")
                     increase_reps = False
                     self.alignments_this_rep = np.array([])
@@ -215,7 +215,7 @@ class Worker(Thread):
                 # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
 
-                if correction != None and SEND_CORRETIONS:
+                if correction != None and self.config['SEND_CORRETIONS']:
                     user_correction_message = {
                         'user_id': 0,
                         'repetition': self.spot_info_dict['repetitions'],
@@ -223,7 +223,7 @@ class Worker(Thread):
                         'display_text': correction,
                         'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
                     }
-                    publish_message(self.user_correction_publisher, ROS_TOPIC_USER_CORRECTIONS, user_correction_message)
+                    publish_message(self.user_correction_publisher, self.config['ROS_TOPIC_USER_CORRECTIONS'], user_correction_message)
                     
             except QueueEmpty:
                 continue

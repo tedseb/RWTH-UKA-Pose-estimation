@@ -140,12 +140,8 @@ class WorkerHandler(QThread):
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
-<<<<<<< Updated upstream
                 self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
-=======
-                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
                 logy.debug("New worker started for spot with key " + str(spot_info_key))
->>>>>>> Stashed changes
 
         else:
             current_worker = self.workers.get(station_id, None)

@@ -32,7 +32,7 @@ import math
 from abc import abstractmethod
 from itertools import combinations
 from typing import Tuple
-
+import logy
 import hashlib
 import numpy as np
 
@@ -218,7 +218,7 @@ def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pos
             feature_hash = hashlib.md5(sorted(feature_strings).__repr__().encode()).digest()
             features_of_interest.update({feature_hash: {"type": FeatureType.JOINT_DISTANCE, "joints": f['value']}})
         else:
-            log("Unhandled feature type:" + str(f['type']))
+            logy.debug_throttle("Unhandled feature type:" + str(f['type']))
 
     return features_of_interest
 
@@ -236,7 +236,7 @@ def extract_angles_of_interest(joint_names: list, pose_definition_adapter) -> di
 
     
     if exceptions:
-        rp.logerr("Errors occured while parsing the provided exercise:" + str(exceptions))
+        logy.debug_throttle("Errors occured while parsing the provided exercise:" + str(exceptions))
     
     joint_hash = hashlib.md5(sorted(frozen_joint_names).__repr__().encode()).digest()
     features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}

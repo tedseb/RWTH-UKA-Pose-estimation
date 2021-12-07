@@ -22,6 +22,7 @@ import rospy as rp
 from std_msgs.msg import String
 from unittest import mock
 from scipy import signal
+import logy
 
 from backend.msg import Person
 
@@ -35,7 +36,6 @@ try:
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Algorithm import *
-    from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.Worker import *
     from src.InterCom import *
@@ -46,7 +46,6 @@ except ImportError:
     from src.algorithm.Features import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Algorithm import *
-    from src.algorithm.logging import log
 
 
 class NoJointsAvailable(Exception):
@@ -59,7 +58,6 @@ class NoSpoMetaDataAvailable(Exception):
 
 class NoExerciseDataAvailable(Exception):
     pass
-
 
 class Worker(Thread):
     """Pops data from inbound spot queues and calculates and metrics which are put into outbound message queues.
@@ -112,6 +110,9 @@ class Worker(Thread):
         self.skelleton_deltas_since_rep_start = []
 
         self.start()
+    
+    def log_with_metadata(logger, msg):
+        logger("Spot:" + str(self.spot_key) + ":ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']) + str(msg))
 
     @lru_cache(maxsize=1000)
     def get_exercise_data(self, spot_info_key, exercise_data_hash):
@@ -145,91 +146,95 @@ class Worker(Thread):
 
         while(self.running):
             try:
-                self.spot_info_dict.update(self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "station_usage_hash"]))
-                self.spot_info_dict.update(self.get_exercise_data(spot_info_key, self.spot_info_dict["exercise_data_hash"]))
+                with logy.TraceTime("motion_analysis_full_algorithm_iter_t"):
+                    self.spot_info_dict.update(self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "station_usage_hash"]))
+                    self.spot_info_dict.update(self.get_exercise_data(spot_info_key, self.spot_info_dict["exercise_data_hash"]))
 
-                # As long as there are skelletons available for this spot, continue
-                past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
+                    # As long as there are skelletons available for this spot, continue
+                    past_joints_with_timestamp_list, present_joints_with_timestamp, future_joints_with_timestamp_list = self.spot_queue_interface.dequeue(self.spot_key)
 
-                # Extract feature states
-                pose = present_joints_with_timestamp['used_joint_ndarray']
+                    # Extract feature states
+                    pose = present_joints_with_timestamp['used_joint_ndarray']
 
-                pose = self.pose_definition_adapter.normalize_skelleton(pose)
+                    pose = self.pose_definition_adapter.normalize_skelleton(pose)
 
-                for f in self.features.values():
-                    f.update(pose, self.pose_definition_adapter)
+                    for f in self.features.values():
+                        f.update(pose, self.pose_definition_adapter)
 
-                # Compare joints with expert system data
-                increase_reps = self.analyze_feature_progressions(self.features)
+                    # Compare joints with expert system data
+                    increase_reps = self.analyze_feature_progressions(self.features)
 
-                # See if progress jumped around too much
-                if increase_reps:
-                    negative_progress_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep < 0)]
-                    positive_progresses_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep > 0)]
-                    if len(negative_progress_differences) > 0:
-                        neg_mean = abs(np.mean(negative_progress_differences))
-                    else:
-                        neg_mean = 0
-                    if len(positive_progresses_differences) > 0: 
-                        pos_median = abs(np.median(positive_progresses_differences))
-                    else:
-                        pos_median = 0
-                    if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and not self.config['ROBUST_COUNTING_MODE']:
-                        log("Progression was too jumpy in this repetition. Marking this repetition as bad...")
-                        self.bad_repetition = True
+                    # See if progress jumped around too much
+                    if increase_reps:
+                        negative_progress_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep < 0)]
+                        positive_progresses_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep > 0)]
+                        if len(negative_progress_differences) > 0:
+                            neg_mean = abs(np.mean(negative_progress_differences))
+                        else:
+                            neg_mean = 0
+                        if len(positive_progresses_differences) > 0: 
+                            pos_median = abs(np.median(positive_progresses_differences))
+                        else:
+                            pos_median = 0
+                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and not self.config['ROBUST_COUNTING_MODE']:
+                            logy.debug("Progression was too jumpy in this repetition. Marking this repetition as bad...")
+                            self.bad_repetition = True
+                            increase_reps = False
+                            self.alignments_this_rep = np.array([])
+                        
+                        # Calculate a new reference pose mapping
+                        reference_pose = self.calculate_reference_pose_mapping()
+
+                    # If the feature alignment in this repetitions is too high, we do not count the repetition
+                    if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT']:
+                        logy.debug("Feature missalignment during this repetition. Repetition falsified.")
                         increase_reps = False
-
-                # If the feature alignment in this repetitions is too high, we do not count the repetition
-                if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT']:
-                    log("Feature missalignment during this repetition. Repetition falsified.")
-                    increase_reps = False
-                    self.alignments_this_rep = np.array([])
-                
-                # Calculate a new reference pose mapping
-                reference_pose = self.calculate_reference_pose_mapping()
-
-                delta = (pose - reference_pose).sum()
-                self.skelleton_deltas_since_rep_start.append(delta)
-                score = self.calculate_repetition_score()
-
-                # Send info back to REST API
-                if increase_reps:
-                    score = self.calculate_repetition_score()
-                    self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
-                    user_state_data = {
-                        'station_id': self.spot_key,
-                        'current_exercise_name': self.spot_info_dict.get('exercise_data').get('name'),
-                        'repetitions': self.spot_info_dict['repetitions'],
-                        'miliseconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time', 0))) / 1e+6,
-                        'milliseconds_since_last_repetition': 0,
-                        'repetition_score': int(score),
-                        'exercise_score': 100,
-                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', "")
-                    }
-                    publish_message(self.user_exercise_state_publisher, self.config['ROS_TOPIC_USER_EXERCISE_STATES'], user_state_data)
-
-                # Publish poses on ROS
-                self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
-                self.publish_pose(pose, self.user_skelleton_publisher)
-
-                # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
-                correction = None
-
-                if correction != None and self.config['SEND_CORRETIONS']:
-                    user_correction_message = {
-                        'user_id': 0,
-                        'repetition': self.spot_info_dict['repetitions'],
-                        'positive_correction': False,
-                        'display_text': correction,
-                        'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
-                    }
-                    publish_message(self.user_correction_publisher, self.config['ROS_TOPIC_USER_CORRECTIONS'], user_correction_message)
+                        self.alignments_this_rep = np.array([])
                     
+                    # Calculate a new reference pose mapping
+                    reference_pose = self.calculate_reference_pose_mapping()
+
+                    delta = (pose - reference_pose).sum()
+                    self.skelleton_deltas_since_rep_start.append(delta)
+                    score = self.calculate_repetition_score()
+
+                    # Send info back to REST API
+                    if increase_reps:
+                        score = self.calculate_repetition_score()
+                        self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
+                        user_state_data = {
+                            'station_id': self.spot_key,
+                            'current_exercise_name': self.spot_info_dict.get('exercise_data').get('name'),
+                            'repetitions': self.spot_info_dict['repetitions'],
+                            'miliseconds_since_last_exercise_start': (time.time_ns() - int(self.spot_info_dict.get('start_time', 0))) / 1e+6,
+                            'milliseconds_since_last_repetition': 0,
+                            'repetition_score': int(score),
+                            'exercise_score': 100,
+                            'station_usage_hash': self.spot_info_dict.get('station_usage_hash', "")
+                        }
+                        publish_message(self.user_exercise_state_publisher, self.config['ROS_TOPIC_USER_EXERCISE_STATES'], user_state_data)
+
+                    # Publish poses on ROS
+                    self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
+                    self.publish_pose(pose, self.user_skelleton_publisher)
+
+                    # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
+                    correction = None
+
+                    if correction != None and self.config['SEND_CORRETIONS']:
+                        user_correction_message = {
+                            'user_id': 0,
+                            'repetition': self.spot_info_dict['repetitions'],
+                            'positive_correction': False,
+                            'display_text': correction,
+                            'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
+                        }
+                        publish_message(self.user_correction_publisher, self.config['ROS_TOPIC_USER_CORRECTIONS'], user_correction_message)
+                        
             except QueueEmpty:
                 continue
             except Exception as e:
-                log_throttle("Encountered an Error while analyzing.")
-                log(format_exc())
+                logy.log_throttle("Encountered an error during motion analysis :" + format_exc())
             
         # Enqueue data for feature progressions and resampled feature lists
         self.features_interface.set(self.spot_key, self.features)
@@ -240,7 +245,7 @@ class Worker(Thread):
         self.bad_repetition = False
         self.moving_average_joint_difference = 0
 
-    @logy.trace_time("calculate_reference_pose_mapping", perdiod=30)
+    @logy.trace_time("calculate_reference_pose_mapping", perdiod=100)
     def calculate_reference_pose_mapping(self) -> np.ndarray:
         """Calculate the pose in the reference trajectory that we think our user is most probably in.
 
@@ -306,7 +311,7 @@ class Worker(Thread):
 
         return reference_pose
 
-    @logy.trace_time("analyze_feature_progressions")
+    @logy.trace_time("analyze_feature_progressions", perdiod=100)
     def analyze_feature_progressions(self,
         features: dict) -> Tuple[bool, bool, dict, Any]:
         """Detect done and bad repetitions by analyzing the feature's progressions.
@@ -330,8 +335,7 @@ class Worker(Thread):
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
             elif f.progression > number_of_dicided_state_changes_for_repetition and not self.config['ROBUST_COUNTING_MODE']:
-                log("A feature has progressed through too many states. Marking this repetition as bad...")
-                log("Feature specification: " + str(f.specification_dict))
+                self.log_with_metadata("A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition = True
                 num_features_progressed += 1
             elif f.progression == number_of_dicided_state_changes_for_repetition:
@@ -376,7 +380,7 @@ class Worker(Thread):
 
 
         if in_beginning_state and self.bad_repetition:
-            log("Bad repetition aborted. Resetting feature progressions and repetition data...")
+            self.log_with_metadata("Bad repetition aborted. Resetting feature progressions and repetition data...")
             for f in features.values():
                 f.progression = 0
             self.bad_repetition = False
@@ -388,13 +392,13 @@ class Worker(Thread):
             increase_reps = False
 
         if increase_reps:
-            log("All features have progressed. Repetition detected. Resetting feature progressions...")
+            self.log_with_metadata("All features have progressed. Repetition detected. Resetting feature progressions...")
             for f in features.values():
                 f.progression = 0
             self.beginning_of_next_repetition_detected = True
 
         if not in_beginning_state and self.beginning_of_next_repetition_detected:
-            log("Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+            self.log_with_metadata("Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
             self.skelleton_deltas_since_rep_start = []
             self.beginning_of_next_repetition_detected = False
             self.alignments_this_rep = np.array([])
@@ -414,4 +418,7 @@ class Worker(Thread):
         average_delta = np.average(x) # Try average and median here, see which one works better
         delta_score = np.absolute(average_delta * alpha)
         score = 100 * np.clip(1 - delta_score, 0, 1)
+        logy.log_mean("LowestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.min(self.skelleton_deltas_since_rep_start)), tag="LowestScore")
+        logy.log_mean("HighestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.max(self.skelleton_deltas_since_rep_start)), tag="HighestScore")
+        logy.log_mean("ExerciseScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(score), tag="ExerciseScore")
         return score

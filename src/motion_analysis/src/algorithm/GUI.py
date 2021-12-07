@@ -15,11 +15,6 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
 
-try:
-    from motion_analysis.src.algorithm.logging import log
-except ImportError:
-    from src.algorithm.logging import log
-
 def clamp(x): # Used only for formating color strings
     return max(0, min(x, 255))
 
@@ -168,7 +163,7 @@ class FeatureGraphsWidget(QWidget):
             # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
             self.progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = GYMY_GREEN)
         except IndexError as e: # This occurs if our progress points to an index higher than our trajectory length
-            log(e)
+            logy.error_throttle((e)
 
     @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, str, str)
     def _update_static_data(self, reference_trajectory, filtered_reference_trajectory, discrete_reference_trajectory, feature_type, feature_spec):

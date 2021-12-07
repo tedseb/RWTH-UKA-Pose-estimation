@@ -39,10 +39,8 @@ from typing import List
 
 try:
     from motion_analysis.src.algorithm.AlgoUtils import *
-    from motion_analysis.src.algorithm.logging import log
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoUtils import *
-    from src.algorithm.logging import log
 
 
 X = 0

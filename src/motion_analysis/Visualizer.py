@@ -4,6 +4,8 @@
 
 import rospy as rp
 import argparse
+import logy
+
 
 try:
     from motion_analysis.src.Worker import *
@@ -43,6 +45,7 @@ class Visualizer():
     def reference_callback(self, data):
         return self.frame_callback(data, self.reference_pub)
 
+    @logy.trace_time("visualizer:frame_callback", perdiod=100)
     def frame_callback(self, data, publisher):
         idx = 0
         marker_array = MarkerArray()

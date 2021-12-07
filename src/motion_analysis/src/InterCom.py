@@ -21,13 +21,9 @@ import redis
 import yaml
 import rospy as rp
 import pickle
+import logy
 
 from std_msgs.msg import Int32
-
-try:
-    from motion_analysis.src.algorithm.logging import log, log_throttle
-except ImportError:
-    from src.algorithm.logging import log, log_throttle
 
 # Patch msgpack to understand numpy arrays
 m.patch()
@@ -294,8 +290,7 @@ class RedisMessageQueueInterface(RedisInterface, MessageQueueInterface):
         except QueueEmpty:
             raise QueueEmpty
         except Exception as e:
-            log("Issue getting message from Queue: " + str(key))
-            log(str(e))
+            logy.error("Issue getting message from Queue: " + str(key) + ' Error: \n' + str(e))
         
         return message
 
@@ -344,10 +339,10 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
 
         if (queue_size >= self.config['REDIS_QUEUE_SIZE_PANIC_BOUNDARY']):
             if (queue_size >= self.config['REDIS_MAXIMUM_QUEUE_SIZE']):
-                log_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
+                logy.debug_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
                 self.redis_connection.ltrim(spot_queue_key, 0, self.config['REDIS_MAXIMUM_QUEUE_SIZE'])
             else:
-                log_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
+                logy.debug_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached. Increasing load balancing priority...")
         else:
             self.ma_validation_rate_control.publish(Int32(0))
         return 1

@@ -82,13 +82,15 @@ def validation_objective_function(hps):
 
         tpr_by_fpr = 0
         num_exercises = 0
-        for exercise in report.values():
-            tpr_by_fpr +=  exercise[5] / exercise[6] if exercise[6] else 0
+        for name, exercise in report.items():
+            tpr = exercise[5]
+            fpr = exercise[6]
+            if exercise[6] != 0:
+                tpr_by_fpr +=  exercise[5] / exercise[6]
+            else:
+                tpr_by_fpr += exercise[5]
             num_exercises += 1
-        score = tpr_by_fpr / num_exercises
-
-        tpr = exercise[5]
-        fpr = exercise[6]
+        score = tpr_by_fpr / min(num_exercises, 1)
 
         clean_files()
     except Exception as e:

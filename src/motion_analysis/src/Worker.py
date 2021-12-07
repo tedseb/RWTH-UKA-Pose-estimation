@@ -27,12 +27,10 @@ from backend.msg import Person
 
 try:
     from motion_analysis.src.Worker import *
-    from motion_analysis.src.DataConfig import *
     from motion_analysis.src.InterCom import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.ROSAdapters import *
     from motion_analysis.src.algorithm.GUI import *
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.algorithm.AlgoUtils import *
@@ -40,12 +38,10 @@ try:
     from motion_analysis.src.algorithm.logging import log
 except ImportError:
     from src.Worker import *
-    from src.DataConfig import *
     from src.InterCom import *
     from src.DataUtils import *
     from src.ROSAdapters import *
     from src.algorithm.GUI import *
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.Features import *
     from src.algorithm.AlgoUtils import *
@@ -74,6 +70,7 @@ class Worker(Thread):
     scale the throughput of the Worker thread.
     """
     def __init__(self,
+    config: dict, 
     spot_key: str,
     gui: MotionAnaysisGUI = mock.MagicMock(),
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
@@ -81,8 +78,10 @@ class Worker(Thread):
     pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
     features_interface_interface_class: FeaturesInterface = RedisFeaturesInterface,):
         super().__init__()
+        
+        self.config = config
 
-        self.spot_queue_interface = spot_queue_interface_class()
+        self.spot_queue_interface = spot_queue_interface_class(self.config)
         self.spot_metadata_interface = spot_metadata_interface_class()
         self.pose_definition_adapter = pose_definition_adapter_class()
         # Use the same interface class for these two, because they have the same needs to the interface 
@@ -93,8 +92,8 @@ class Worker(Thread):
         # This can be set to false by an external entity to stop the loop from running
         self.running = True
 
-        self.user_exercise_state_publisher = rp.Publisher(ROS_TOPIC_USER_EXERCISE_STATES, String, queue_size=1000)  
-        self.user_correction_publisher = rp.Publisher(ROS_TOPIC_USER_CORRECTIONS, String, queue_size=1000)  
+        self.user_exercise_state_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_EXERCISE_STATES'], String, queue_size=1000)  
+        self.user_correction_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_CORRECTIONS'], String, queue_size=1000)  
 
         self.predicted_skelleton_publisher = rp.Publisher("motion_analysis_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("motion_analysis_input", Person, queue_size=1000)
@@ -114,7 +113,7 @@ class Worker(Thread):
 
         self.start()
 
-    @lru_cache(maxsize=EXERCISE_DATA_LRU_CACHE_SIZE)
+    @lru_cache(maxsize=1000)
     def get_exercise_data(self, spot_info_key, exercise_data_hash):
         """Gets data on the exercise that is to be performed on the spot.
         
@@ -132,7 +131,7 @@ class Worker(Thread):
         publisher.publish(msg)
 
     def run(self) -> NoReturn:
-        _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key)
+        _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key, self.config)
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
@@ -175,13 +174,13 @@ class Worker(Thread):
                         pos_median = abs(np.median(positive_progresses_differences))
                     else:
                         pos_median = 0
-                    if  neg_mean > pos_median * JUMPY_PROGRESS_ALPHA and JUMPY_PROGRESS_BETA * len(negative_progress_differences) > len(positive_progresses_differences) and not ROBUST_COUNTING_MODE:
+                    if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and not self.config['ROBUST_COUNTING_MODE']:
                         log("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                         self.bad_repetition = True
                         increase_reps = False
 
                 # If the feature alignment in this repetitions is too high, we do not count the repetition
-                if increase_reps and np.mean(self.alignments_this_rep) < MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT:
+                if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT']:
                     log("Feature missalignment during this repetition. Repetition falsified.")
                     increase_reps = False
                     self.alignments_this_rep = np.array([])
@@ -207,7 +206,7 @@ class Worker(Thread):
                         'exercise_score': 100,
                         'station_usage_hash': self.spot_info_dict.get('station_usage_hash', "")
                     }
-                    publish_message(self.user_exercise_state_publisher, ROS_TOPIC_USER_EXERCISE_STATES, user_state_data)
+                    publish_message(self.user_exercise_state_publisher, self.config['ROS_TOPIC_USER_EXERCISE_STATES'], user_state_data)
 
                 # Publish poses on ROS
                 self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
@@ -216,7 +215,7 @@ class Worker(Thread):
                 # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                 correction = None
 
-                if correction != None and SEND_CORRETIONS:
+                if correction != None and self.config['SEND_CORRETIONS']:
                     user_correction_message = {
                         'user_id': 0,
                         'repetition': self.spot_info_dict['repetitions'],
@@ -224,7 +223,7 @@ class Worker(Thread):
                         'display_text': correction,
                         'station_usage_hash': self.spot_info_dict.get('station_usage_hash', 0)
                     }
-                    publish_message(self.user_correction_publisher, ROS_TOPIC_USER_CORRECTIONS, user_correction_message)
+                    publish_message(self.user_correction_publisher, self.config['ROS_TOPIC_USER_CORRECTIONS'], user_correction_message)
                     
             except QueueEmpty:
                 continue
@@ -328,7 +327,7 @@ class Worker(Thread):
                 num_features_progressed += 1
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
-            elif f.progression > number_of_dicided_state_changes_for_repetition and not ROBUST_COUNTING_MODE:
+            elif f.progression > number_of_dicided_state_changes_for_repetition and not self.config['ROBUST_COUNTING_MODE']:
                 log("A feature has progressed through too many states. Marking this repetition as bad...")
                 log("Feature specification: " + str(f.specification_dict))
                 self.bad_repetition = True
@@ -383,7 +382,7 @@ class Worker(Thread):
             
             increase_reps = self.analyze_feature_progressions(features)
 
-        if self.bad_repetition and not ROBUST_COUNTING_MODE:
+        if self.bad_repetition and not self.config['ROBUST_COUNTING_MODE']:
             increase_reps = False
 
         if increase_reps:

@@ -1,5 +1,6 @@
 <launch>
   <arg name="ai" default="metrabs" doc="Choose AI out of the following: (metrabs, spin)"/>
-  <node name="MotionAnalysis_Receiver" pkg="motion_analysis" type="Receiver.py" />
-  <node name="MotionAnalysis_WorkerHandler" pkg="motion_analysis" type="WorkerHandler.py" args="-a $(arg ai)"/>
+  <arg name="configpath" default="home/trainerai/trainerai-core/src/motion_analysis/"/>
+  <node name="MotionAnalysis_Receiver" pkg="motion_analysis" type="Receiver.py" args="-a $(arg ai) -c $(arg configpath)"/>
+  <node name="MotionAnalysis_WorkerHandler" pkg="motion_analysis" type="WorkerHandler.py" args="-a $(arg ai) -c $(arg configpath)"/>
 </launch> 

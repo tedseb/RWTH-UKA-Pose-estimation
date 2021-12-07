@@ -8,11 +8,9 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 
 try:
     from motion_analysis.src.Worker import *
-    from motion_analysis.src.DataConfig import *
     from motion_analysis.src.InterCom import *
     from motion_analysis.src.DataUtils import *
     from motion_analysis.src.ROSAdapters import *
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
@@ -20,11 +18,9 @@ try:
     from backend.msg import StationUsage
 except ImportError:
     from src.Worker import *
-    from src.DataConfig import *
     from src.InterCom import *
     from src.DataUtils import *
     from src.ROSAdapters import *
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
@@ -56,21 +52,27 @@ class WorkerHandler(QThread):
     a change in usage.
     """
     def __init__(self,
+<<<<<<< HEAD
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface,
+=======
+    config,
+    spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
+>>>>>>> an_roc_curve
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
     features_interface_class: FeaturesInterface = RedisFeaturesInterface):
         super().__init__()
+        self.config = config
 
-        self.subscriber_expert_system = rp.Subscriber(ROS_STATION_USAGE_UPDATE_TOPIC, StationUsage, self.callback)
+        self.subscriber_expert_system = rp.Subscriber(self.config['ROS_STATION_USAGE_UPDATE_TOPIC'], StationUsage, self.callback)
         self.spots = dict()
         self.spot_metadata_interface = spot_metadata_interface_class()
-        self.spot_queue_interface = spot_queue_interface_class()
+        self.spot_queue_interface = spot_queue_interface_class(self.config)
         self.pose_definition_adapter = pose_definition_adapter_class()
         self.features_interface = features_interface_class()
         self.workers = {} # A dictionary, with spot IDs as keys
 
-        mongo_client = pymongo.MongoClient(MONGO_DB_URI)
+        mongo_client = pymongo.MongoClient(self.config['MONGO_DB_URI'])
         db = mongo_client.trainerai
 
         if pose_definition_adapter_class == MetrabsPoseDefinitionAdapter:
@@ -93,7 +95,7 @@ class WorkerHandler(QThread):
 
     def callback(self, station_usage_data: Any) -> NoReturn:
         station_id = station_usage_data.stationID
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(spot_key=station_id)
+        spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
 
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
@@ -116,10 +118,10 @@ class WorkerHandler(QThread):
 
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
-            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(c) for c in reference_recording_feature_collections}
+            features_dict = {c.feature_hash: Feature(self.config, c) for c in reference_recording_feature_collections}
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
@@ -138,7 +140,7 @@ class WorkerHandler(QThread):
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
-                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+                self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
 
         else:
             current_worker = self.workers.get(station_id, None)
@@ -157,6 +159,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
     parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
+    parser.add_argument("-c", "--configpath", help="Path to config file", type=str, default='/home/trainerai/trainerai-core/src/motion_analysis/config.yml')
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
@@ -172,6 +175,9 @@ if __name__ == '__main__':
     else:
         rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
 
-    spot_info_handler = WorkerHandler(pose_definition_adapter_class=pose_definition_adapter_class)
+    with open(args.configpath, 'r') as infile:
+        config = yaml.safe_load(infile)
+
+    spot_info_handler = WorkerHandler(config, pose_definition_adapter_class=pose_definition_adapter_class)
 
     rp.spin()

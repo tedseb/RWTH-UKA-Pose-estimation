@@ -240,6 +240,7 @@ class Worker(Thread):
         self.bad_repetition = False
         self.moving_average_joint_difference = 0
 
+    @logy.trace_time("calculate_reference_pose_mapping", perdiod=30)
     def calculate_reference_pose_mapping(self) -> np.ndarray:
         """Calculate the pose in the reference trajectory that we think our user is most probably in.
 
@@ -305,6 +306,7 @@ class Worker(Thread):
 
         return reference_pose
 
+    @logy.trace_time("analyze_feature_progressions")
     def analyze_feature_progressions(self,
         features: dict) -> Tuple[bool, bool, dict, Any]:
         """Detect done and bad repetitions by analyzing the feature's progressions.

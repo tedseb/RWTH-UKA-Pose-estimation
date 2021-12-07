@@ -14,7 +14,6 @@ try:
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.GUI import *
-    from motion_analysis.src.algorithm.logging import log
     from backend.msg import StationUsage
 except ImportError:
     from src.Worker import *
@@ -24,7 +23,6 @@ except ImportError:
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
-    from src.algorithm.logging import log
     from backend.msg import StationUsage
 
 import signal
@@ -36,6 +34,7 @@ import rospy as rp
 from std_msgs.msg import String
 import random
 import argparse
+import logy
 
 
 class WorkerHandler(QThread):
@@ -93,6 +92,7 @@ class WorkerHandler(QThread):
         rp.on_shutdown(kill_gui_hook)
         self.gui_handler.run(self.gui)
 
+    @logy.catch_ros
     def callback(self, station_usage_data: Any) -> NoReturn:
         station_id = station_usage_data.stationID
         spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
@@ -100,13 +100,13 @@ class WorkerHandler(QThread):
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
 
-        log("Updating info for spot with key: " + str(spot_info_key))
+        logy.debug("Updating info for spot with key: " + str(spot_info_key))
 
         if station_usage_data.isActive:
             exercise_data = self.exercises.find_one({"name": station_usage_data.exerciseName})
 
             if exercise_data is None:
-                log("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
+                logy.error("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
                 return
 
             # TODO: In the future: Possibly use multiple recordings
@@ -140,19 +140,29 @@ class WorkerHandler(QThread):
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
+<<<<<<< Updated upstream
                 self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+=======
+                self.workers[station_id] = Worker(spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+                logy.debug("New worker started for spot with key " + str(spot_info_key))
+>>>>>>> Stashed changes
 
         else:
             current_worker = self.workers.get(station_id, None)
+
             if current_worker:
                 current_worker.running = False
                 del self.workers[station_id]
+                logy.debug("Worker stopped for spot with key " + str(spot_info_key))
+            else:
+                logy.info("Tried stopping non existent worker for spot with key " + str(spot_info_key))
             self.gui.update_available_spots(spot_name=station_id, active=False)
             self.spot_metadata_interface.delete(spot_info_key)
 
 
 if __name__ == '__main__':
     # initialize ros node
+    logy.basic_config(debug_level=logy.DEBUG, module_name="MA")
     rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -173,7 +183,7 @@ if __name__ == '__main__':
     elif args.ai == 'metrabs':
         pose_definition_adapter_class = MetrabsPoseDefinitionAdapter
     else:
-        rp.logerr("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
+        logy.error("Could not find a suitable PoseDefinition Adapter for ai argument: <" + str(args.ai) + ">")
 
     with open(args.configpath, 'r') as infile:
         config = yaml.safe_load(infile)

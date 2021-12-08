@@ -13,8 +13,8 @@ import time
 import rospy
 from sensor_msgs.msg import Image
 from backend.msg import ImageData, ChannelInfo
-from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
-from std_msgs.msg import Float32MultiArray
+from backend.msg import Person, Persons, Bodypart, Pixel, Bboxes
+from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 import logy
 import time
@@ -48,6 +48,8 @@ CONFIG = {
 
 class PoseEstimator():
     def __init__(self):
+
+        self.ready_signal = rospy.Publisher('/signals/metrabs_ready', Bool, queue_size=2)
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         self.model = tf.saved_model.load(CONFIG["model_path"])
@@ -322,4 +324,5 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
     signal.signal(signal.SIGINT, run_spin_obj.shutdown)
     logy.info("Pose Estimator is listening")
+    run_spin_obj.ready_signal.publish(True)
     rospy.spin()

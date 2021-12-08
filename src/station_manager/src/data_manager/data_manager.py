@@ -4,8 +4,9 @@ from multiprocessing import Lock
 import psycopg2
 import copy
 import pymongo
+from .data_manager_interface import DataManagerInterface
 
-class DataManager():
+class DataManager(DataManagerInterface):
     def __init__(self):
         super().__init__()
 

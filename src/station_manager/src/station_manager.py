@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import json
 from typing import Set, Dict
 from multiprocessing import Lock
@@ -8,10 +7,11 @@ import argparse
 import sys
 import signal
 import psutil
+#from data_manager import data_manager
 import logy
 
-from src import DataManager, CameraStationController, VideoSelection, StationSelection, TwoWayDict
-from src.server import ServerController, ServerSocket, ResponseAnswer
+from . import DataManager, CameraStationController, VideoSelection, TwoWayDict, SMResponse
+from .server import ServerController, ServerSocket
 import rospy
 import random
 
@@ -25,10 +25,6 @@ import time
 DEBUG_STATION_ID = 999
 MAX_STATIONS = 6
 
-def signal_handler(signal, frame):
-    print("EXIT")
-    reactor.callFromThread(reactor.stop)
-
 class ComputerWorkload:
     def __init__(self):
         self.pc_id = 0
@@ -38,7 +34,7 @@ class ComputerWorkload:
 
 class StationManager():
 
-    def __init__(self, camera_path, transform_node_path, station_selection_path, verbose=False, debug_frames_ms=0):
+    def __init__(self, camera_path, transform_node_path, station_selection_path, data_manager, verbose=False, debug_frames_ms=0, with_gui=True):
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
         self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo , queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
@@ -49,14 +45,17 @@ class StationManager():
             ("Time out on channel  'ai/weight_detection'")
 
         self._debug_frames_ms = debug_frames_ms
-        self._data_manager = DataManager()
+        self._data_manager = data_manager
         self._occupied_camera_channels = {}
 
+        self._with_gui = with_gui
         self._verbose = verbose
         self._path_camera_node = camera_path
         self._path_transform_node = transform_node_path
-        self._path_station_selection = station_selection_path
-        self._station_selection_process = subprocess.Popen([self._path_station_selection])
+
+        if self._with_gui:
+            self._path_station_selection = station_selection_path
+            self._station_selection_process = subprocess.Popen([self._path_station_selection])
 
         # Thread Shared Data. Don't Use without Mutex lock!!!
         self.__active_stations = TwoWayDict({}) #Dict[station_id: user_id]
@@ -156,7 +155,7 @@ class StationManager():
         process.kill()
 
     def return_error(self, error_string, code):
-        return ResponseAnswer(508, code, {"error": error_string})
+        return SMResponse(508, code, {"error": error_string})
 
     def send_repitition(self, user_id: str, repetition: int, exercise: str, set_id: int):
         payload = {
@@ -192,14 +191,17 @@ class StationManager():
 
     def login_station(self, user_id: str, station_id: int):
         with self._exercise_station_mutex:
+            if not self.__param_updater.is_station_valid(station_id):
+                return SMResponse(501, 4, {"station" : station_id})
+
             if len(self.__active_stations) >= MAX_STATIONS:
-                return ResponseAnswer(501, 3, {})
+                return SMResponse(501, 3, {"station" : station_id})
 
             if station_id in self.__active_stations:
-                return ResponseAnswer(501, 4, {})
+                return SMResponse(501, 4, {"station" : station_id})
 
             if user_id in self.__active_stations:
-                return ResponseAnswer(501, 10, {})
+                return SMResponse(501, 10, {"station" : station_id})
 
         #Todo: Check if Station Exist
         with self._param_updater_mutex:
@@ -216,7 +218,7 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_stations[user_id] = station_id
 
-        return ResponseAnswer(501, 1, {"station": station_id})
+        return SMResponse(501, 1, {"station": station_id})
 
     def logout_station_payload(self, user_id: str, payload: Dict):
         logy.debug(f"Logout {user_id}, payload: {payload}")
@@ -225,14 +227,14 @@ class StationManager():
     def logout_station(self, user_id):
         with self._exercise_station_mutex:
             if user_id not in self.__active_stations:
-                return ResponseAnswer(502, 10, {})
+                return SMResponse(502, 12, {})
 
             if user_id in self.__active_exercises:
                 self.__active_exercises.pop(user_id)
 
             station_id = self.__active_stations.get(user_id)
             if station_id is None:
-                return ResponseAnswer(502, 10, {})
+                return SMResponse(502, 10, {})
             logy.info(f"Logout from Station {station_id}")
 
         with self._param_updater_mutex:
@@ -248,7 +250,7 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_stations.pop(user_id)
 
-        return ResponseAnswer(502, 1, {"station": station_id})
+        return SMResponse(502, 1, {"station": station_id})
 
     def start_exercise_payload(self, user_id: str, payload: Dict):
         logy.debug(f"Start exercise {user_id}, payload: {payload}")
@@ -266,13 +268,13 @@ class StationManager():
     def start_exercise(self, user_id: str, station_id: int, exercise_id: int, set_id = 1):
         with self._exercise_station_mutex:
             if user_id not in self.__active_stations:
-                return ResponseAnswer(502, 10, {})
+                return SMResponse(503, 10, {"station": station_id, "exercise": exercise_id, "set_id" : set_id}), None
 
             if self.__active_stations[user_id] != station_id:
-                return ResponseAnswer(502, 10, {})
+                return SMResponse(503, 10, {"station": station_id, "exercise": exercise_id, "set_id" : set_id}), None
 
             if user_id in self.__active_exercises:
-                return ResponseAnswer(501, 11, {})
+                return SMResponse(503, 11, {"station": station_id, "exercise": exercise_id, "set_id" : set_id}), None
 
         station_usage_hash = str(random.getrandbits(128))
         self._publisher_station_usage.publish(StationUsage(station_id, True , str(exercise_id), station_usage_hash))
@@ -280,7 +282,7 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_exercises[user_id] = (exercise_id, set_id, 0)
 
-        return ResponseAnswer(503, 1, {"station": station_id, "exercise": exercise_id}), station_usage_hash
+        return SMResponse(503, 1, {"station": station_id, "exercise": exercise_id, "set_id" : set_id}), station_usage_hash
 
     def stop_exercise_payload(self, user_id : str, payload : Dict):
         logy.debug(f"Stop exercise {user_id}, payload: {payload}")
@@ -293,7 +295,7 @@ class StationManager():
 
         with self._exercise_station_mutex:
             if user_id not in self.__active_stations or user_id not in self.__active_exercises:
-                return ResponseAnswer(502, 10, {})
+                return SMResponse(504, 12, {}), None
             station_id = self.__active_stations[user_id]
             exercise_data = self.__active_exercises[user_id]
             exercise_id = exercise_data[0]
@@ -306,7 +308,7 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_exercises.pop(user_id)
 
-        return ResponseAnswer(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id}), station_usage_hash
+        return SMResponse(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id}), station_usage_hash
 
     def get_weight_detection(self, user_id: str, payload: Dict):
         logy.debug(f"weight detection {user_id}, payload: {payload}")
@@ -326,7 +328,7 @@ class StationManager():
                     hsv_low=color_data[2], hsv_high=color_data[3], camera_station_id=color_data[4]))
 
             result: WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
-            return ResponseAnswer(507, 1, {"weight": result.weight, "probability": 1})
+            return SMResponse(507, 1, {"weight": result.weight, "probability": 1})
 
     def user_state_callback(self, msg):
         data = str(msg.data)
@@ -340,47 +342,3 @@ class StationManager():
             repetition = exercise_data[2] + 1
             self.__active_exercises[user_id] = (exercise_id, set_id, repetition)
         self.send_repitition(user_id, repetition, exercise_id, set_id)
-
-
-if __name__ == '__main__':
-    rospy.init_node('station_manager', anonymous=False)
-    signal.signal(signal.SIGINT, signal_handler)
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", help="Verbose mode.", action="store_true")
-    parser.add_argument("-d", "--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
-    arg_count = len(sys.argv)
-    last_arg = sys.argv[arg_count - 1]
-
-    if last_arg[:2] == "__":
-        valid_args = sys.argv[1:arg_count - 2]
-        args = parser.parse_args(valid_args)
-    else:
-        args = parser.parse_args()
-
-
-    logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
-
-
-    camera_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/infrastructure/CameraNode.py"
-    transform_node_path = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
-    station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/src/station_selection.py"
-
-    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, verbose=True, debug_frames_ms=args.debug_frames)
-    logy.info("Station Manager is Ready")
-    reactor.listenTCP(3030, station_manager._server_controller)
-    reactor.run()
-
-    ## Use Station Manager Directly ##
-    # def repetition_callback(response_code=508, satus_code=2, payload=dict({})):
-    #     print("repetitions =", payload["repetitions"])
-    #     print("exercise =", payload["exercise"])
-    #     print("set id =", payload["set_id"])
-
-    # my_id = "id124"
-    # station_manager = StationManager(debug_mode=args.debug, verbose=args.verbose)
-    # station_manager.set_client_callback(my_id, repetition_callback)
-    # station_manager.login_station(my_id, 2)
-    # station_manager.start_exercise(my_id, 2, 105)
-    # time.sleep(5)
-    # station_manager.stop_exercise(my_id)
-    # station_manager.logout_station(my_id)

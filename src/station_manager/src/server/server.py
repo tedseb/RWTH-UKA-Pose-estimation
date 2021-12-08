@@ -6,15 +6,8 @@ import json
 import autobahn.exception as aex
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
 from twisted.internet import reactor
+from ..station_manager_response import SMResponse
 import logy
-
-class ResponseAnswer:
-    def __init__(self, response_code = 500, status_code = 8, payload = dict(), request_requiered = True):
-        self.response_code = response_code
-        self.status_code = status_code
-        self.payload = payload
-        self.request_requiered = request_requiered
-
 
 RESPONSE_DICT = {
     "id" : "",
@@ -23,7 +16,6 @@ RESPONSE_DICT = {
     "status_code": 0,
     "payload": {}
 }
-
 
 class ServerSocket(WebSocketServerProtocol):
     _err_to_str = {
@@ -58,7 +50,7 @@ class ServerSocket(WebSocketServerProtocol):
     def callback_wrapper(self, function : Callable, pyaload : Dict):
         #pylint: disable=broad-except
         try :
-            result : ResponseAnswer = function(self._id, pyaload)
+            result : SMResponse = function(self._id, pyaload)
             if result.status_code != 1:
                 logy.warn(f"Client Connection Status {result.status_code}: {self._err_to_str[result.status_code]}")
         except Exception as exception:

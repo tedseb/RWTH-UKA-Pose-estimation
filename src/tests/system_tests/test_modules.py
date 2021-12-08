@@ -6,8 +6,11 @@ import roslaunch
 import rospy
 from typing import List, Tuple, Set, Dict
 from std_msgs.msg import Bool
+from backend.msg import ImageData, ChannelInfo, LabelsCameraID, Bboxes
 from dataclasses import dataclass
 import pytest
+import logy
+import cv2
 sys.path.append('/home/trainerai/trainerai-core/')
 
 #Station Manager
@@ -125,6 +128,7 @@ class GymyEnviroment:
         self._metrabs_ready = False
         self._metrabs_wait_s = 45
         self._data_manger = None
+        rospy.init_node('pytest', anonymous=True)
         rospy.Subscriber('/signals/metrabs_ready', Bool, self._metrabs_ready_callback)
 
     def __del__(self):
@@ -135,7 +139,6 @@ class GymyEnviroment:
             self._metrabs_ready = True
 
     def warm_up(self):
-        rospy.init_node('en_Mapping', anonymous=True)
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
 
         ros_launch_files = []
@@ -161,6 +164,14 @@ class GymyEnviroment:
 
         print("metrabs ready")
         #time.sleep(3)
+
+        camera_path = "/home/trainerai/trainerai-core/src/infrastructure/CameraNode.py"
+        transform_node_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
+        station_selection_path = "/home/trainerai/trainerai-core/src/station_manager/src/station_selection.py"
+
+        data_manager = LocalDataManager()
+        self.station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager, with_gui=False)
+
         self._valid = True
 
     def is_valid(self):
@@ -184,13 +195,8 @@ def _ros_env():
 class TestCollection:
 
     def test_station_manager_api(self, ros_env):
-        camera_path = "/home/trainerai/trainerai-core/src/infrastructure/CameraNode.py"
-        transform_node_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
-        station_selection_path = "/home/trainerai/trainerai-core/src/station_manager/src/station_selection.py"
         assert ros_env.is_valid()
-
-        data_manager = LocalDataManager()
-        station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager, with_gui=False)
+        station_manager = ros_env.station_manager
 
         command_wait_time_ms = 30
         # Login into no available Station
@@ -240,6 +246,69 @@ class TestCollection:
         time.sleep(command_wait_time_ms / 1000)
         pass
 
+    def test_camera(self, ros_env):
+        #img = cv2.imread('../data/ted_image.jpg')
+        #boxes = [670, 170, 200, 510]
+        #assert img is not None
+        station_manager = ros_env.station_manager
+        received_channel_info_start = False
+        received_channel_info_stop = False
+        received_channel_info_s = 0
+        received_image = False
+        received_image_s = 0
+        image_sub = None
+        channel_sub = None
+
+        @logy.catch_ros
+        def callback_new_image(msg: ImageData):
+            nonlocal received_image
+            if not received_image:
+                nonlocal received_image_s
+                img_msg = msg.image
+                height, width = img_msg.height, img_msg.width
+                assert height >= 720
+                assert width >= 1280
+                received_image_s = time.time() - received_image_s
+                received_image = True
+
+        @logy.catch_ros
+        def callback_new_channel(channel_info: ChannelInfo):
+            nonlocal image_sub
+            nonlocal received_channel_info_s
+            if channel_info.is_active:
+                nonlocal received_channel_info_start
+                received_channel_info_s = time.time() - received_channel_info_s
+                received_channel_info_start = True
+                image_sub = rospy.Subscriber(channel_info.channel_name, ImageData, callback_new_image)
+            else:
+                nonlocal received_channel_info_stop
+                received_channel_info_stop = True
+                image_sub.unregister()
+
+        received_channel_info_s = time.time()
+        received_image_s = time.time()
+        channel_sub = rospy.Subscriber('/channel_info', ChannelInfo, callback_new_channel)
+        time.sleep(0.01)
+        station_manager.login_station_payload("user_1", {"station" : 1})
+
+        try:
+            with logy.TimeOutHandler(3000):
+                while not received_image:
+                    time.sleep(0.01)
+                print(station_manager.logout_station_payload("user_1", {}))
+                while not received_channel_info_stop:
+                    time.sleep(0.01)
+        except TimeoutError:
+            assert not "Time Out"
+
+        channel_sub.unregister()
+        logy.info(f"Time for new channel: {received_channel_info_s * 1000}ms", "test")
+        logy.info(f"Time for first image: {received_image_s * 1000}ms", "test")
+
+        assert received_channel_info_start
+        assert received_channel_info_stop
+        assert received_image
+
     def todo_test_server(self):
         pass
 
@@ -259,8 +328,10 @@ class TestCollection:
         pass
 
 if __name__ == '__main__':
-    assert SMResponse(503, 1, {'station': 1, 'exercise': 105, 'set_id': 1}) == SMResponse(503, 1, {'station': 1, 'exercise': 105, 'set_id': 1})
-
+    x = "moin"
+    def print_moint():
+        print(x)
+    print_moint()
 
     # test = TestCollection()
     # env = _ros_env()

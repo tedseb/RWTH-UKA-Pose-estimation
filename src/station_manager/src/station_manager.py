@@ -24,6 +24,7 @@ import time
 
 DEBUG_STATION_ID = 999
 MAX_STATIONS = 6
+CAMERA_CHANNEL_INFO = "/image/channel_{0}"
 
 class ComputerWorkload:
     def __init__(self):
@@ -104,8 +105,8 @@ class StationManager():
         logy.debug(f"Start cam type {cam_type}, on {cam_info}")
         new_channel_id = self.get_new_channel()
         self._occupied_camera_channels[camera_id] = new_channel_id
-        new_channel_name = f"/image/channel_{new_channel_id}"
 
+        new_channel_name = CAMERA_CHANNEL_INFO.format(new_channel_id)
         self._publisher_channel_info.publish(ChannelInfo(new_channel_name, new_channel_id, camera_id, True))
 
         if cam_type == 0:
@@ -129,7 +130,12 @@ class StationManager():
 
     def stop_camera(self, camera_id: int):
         logy.debug(f"Stop Camera {camera_id}") # We get stuck on this line when using it withing the DataSetRecorder
+        new_channel_id = self._occupied_camera_channels[camera_id]
+        new_channel_name = CAMERA_CHANNEL_INFO.format(new_channel_id)
+        self._publisher_channel_info.publish(ChannelInfo(new_channel_name, new_channel_id, camera_id, False))
         with self._camera_process_mutex:
+
+
             if camera_id in self.__camera_process:
                 self.__camera_process[camera_id].terminate()
                 try:
@@ -145,7 +151,6 @@ class StationManager():
                 except subprocess.TimeoutExpired:
                     self.kill(self.__transform_process[camera_id].pid)
                 del self.__transform_process[camera_id]
-
             del self._occupied_camera_channels[camera_id]
 
     def kill(self, proc_pid):

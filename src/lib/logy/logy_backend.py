@@ -447,7 +447,7 @@ if __name__ == '__main__':
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
 
     arg_count = len(sys.argv)
-    print(sys.argv)
+    #print(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]

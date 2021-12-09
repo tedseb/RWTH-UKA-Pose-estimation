@@ -13,6 +13,7 @@ FIFO = '/home/trainerai/logy_pipe'
 FIFO_LOCK = '/home/trainerai/logy_pipe.lock'
 
 NOTSET = 0
+TEST = 5
 DEBUG = 10
 INFO = 20
 WARNING = 30
@@ -216,6 +217,9 @@ class LogyHandler:
         fps_last_time[1] = 1
         self._logger.send_tracing(name, fps, "fps", 4)
 
+    def test(self, msg: str, tag="test"):
+        self._send_msg(msg, tag, TEST, 3)
+
     def debug(self, msg: str, tag="msg"):
         self._send_msg(msg, tag, DEBUG, 3)
 
@@ -399,6 +403,10 @@ def exception_hook(exctype, value, trace):
     traceback_string = "".join(traceback_formated)
     critical("Logy Traceback Hook: \n" + traceback_string)
     sys.__excepthook__(exctype, value, trace)
+
+def test(msg: str, tag="test"):
+    logger = Logy()
+    logger._root._send_msg(msg, tag, TEST, 3)
 
 def debug(msg: str, tag="msg"):
     logger = Logy()

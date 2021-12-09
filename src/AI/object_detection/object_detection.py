@@ -135,24 +135,24 @@ class ObjectDetectionPipeline:
                     camera_ids.append(camera_id)
                     image_data.append(img_data)
 
-            if not images:
-                time.sleep(thread_wait_time)
-                continue
-
-            yolo_data_results = self.detect_objects(images, resize_factors)
-            if yolo_data_results is None:
-                return
-
-            for i, yolo_data in enumerate(yolo_data_results):
-                if yolo_data is None:
+                if not images:
+                    time.sleep(thread_wait_time)
                     continue
-                station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
-                #logy.warn(f"boxes = {station_boxes}")
-                logy.log_fps("publish_boxes")
-                self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
-                self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
-                self._publish_labels(yolo_data.labels, image_data[i])
-            logy.log_fps("object_detection_fps")
+
+                yolo_data_results = self.detect_objects(images, resize_factors)
+                if yolo_data_results is None:
+                    return
+
+                for i, yolo_data in enumerate(yolo_data_results):
+                    if yolo_data is None:
+                        continue
+                    station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
+                    #logy.warn(f"boxes = {station_boxes}")
+                    logy.log_fps("publish_boxes")
+                    self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
+                    self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
+                    self._publish_labels(yolo_data.labels, image_data[i])
+                logy.log_fps("object_detection_fps")
 
     @logy.trace_time("detect_objects")
     def detect_objects(self, imgs : List, resize_factors : Tuple) -> YoloData:

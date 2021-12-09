@@ -59,7 +59,7 @@ class PoseEstimator():
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
 
         # define a publisher to publish the 3D skeleton of multiple people
-        self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
+        self.publisher = rospy.Publisher('personsJS', Persons, queue_size=10)
         self.publisher_crop = {}
 
         self.subscriber_image = {}

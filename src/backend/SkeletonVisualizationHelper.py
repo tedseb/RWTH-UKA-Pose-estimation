@@ -9,6 +9,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 import argparse
 import sys
 import logy
+from multiprocessing import Lock
 
 metrabs_pose = [
     (1,4),(1,0),(2,5),(2,0),(3,6),(3,0),(4,7),(5,8),(6,9),(7,10),(8,11),(9,12),(12,13),(12,14),(12,15),(13,16),(14,17),(16,18),(17,19),
@@ -28,6 +29,7 @@ class RealtimeVisualization():
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         self.fused_skeleton_pub = rospy.Publisher('fused_skelleton', Persons, queue_size=100)
         self.visualization_skeleton_pubs = {}
+        self._thread_lock = Lock()
 
         if ai == "metrabs":
             self.ownpose = metrabs_pose
@@ -53,15 +55,16 @@ class RealtimeVisualization():
 
     @logy.catch_ros
     def handle_new_channel(self, channel_info: ChannelInfo):
-        if channel_info.is_active:
-            logy.debug(f"New Channel: {channel_info.channel_name}")
-            if channel_info.cam_id not in self.visualization_skeleton_pubs:
-                pub = rospy.Publisher(f'/visualization/skeleton_{channel_info.channel_id}', MarkerArray, queue_size=100)
-                self.visualization_skeleton_pubs[channel_info.cam_id] = pub
-        else:
-            if channel_info.cam_id in self.visualization_skeleton_pubs:
-                self.visualization_skeleton_pubs[channel_info.cam_id].unregister()
-                del self.visualization_skeleton_pubs[channel_info.cam_id]
+        with self._thread_lock:
+            if channel_info.is_active:
+                logy.debug(f"New Channel: {channel_info.channel_name}")
+                if channel_info.cam_id not in self.visualization_skeleton_pubs:
+                    pub = rospy.Publisher(f'/visualization/skeleton_{channel_info.channel_id}', MarkerArray, queue_size=100)
+                    self.visualization_skeleton_pubs[channel_info.cam_id] = pub
+            else:
+                if channel_info.cam_id in self.visualization_skeleton_pubs:
+                    self.visualization_skeleton_pubs[channel_info.cam_id].unregister()
+                    del self.visualization_skeleton_pubs[channel_info.cam_id]
 
 
     def create_marker(self, index, color, marker_type, size, time):
@@ -128,8 +131,9 @@ class RealtimeVisualization():
 
         # publish the markers
         #self.visualization_skeleton_pub.publish(marker_array)
-        self.visualization_skeleton_pubs[camera_id].publish(marker_array)
-        self.fused_skeleton_pub.publish(data)  # TODO: Fusion and normalization is missing here
+        with self._thread_lock:
+            self.visualization_skeleton_pubs[camera_id].publish(marker_array)
+            self.fused_skeleton_pub.publish(data)  # TODO: Fusion and normalization is missing here
 
 
 if __name__ == '__main__':

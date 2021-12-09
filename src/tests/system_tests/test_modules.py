@@ -6,7 +6,7 @@ import roslaunch
 import rospy
 from typing import List, Tuple, Set, Dict
 from std_msgs.msg import Bool
-from backend.msg import ImageData, ChannelInfo, LabelsCameraID, Bboxes, Persons
+from backend.msg import ImageData, ChannelInfo, LabelsCameraID, Bboxes, Persons, Bboxes
 from dataclasses import dataclass
 import pytest
 import logy
@@ -341,7 +341,7 @@ class TestCollection:
         bbox_sub = None
 
         @logy.catch_ros
-        def callback_new_bbox(msg: ImageData):
+        def callback_new_bbox(msg: Bboxes):
             nonlocal received_bbox
             nonlocal received_bbox_s
             if not received_bbox:
@@ -371,6 +371,7 @@ class TestCollection:
         ros_env.logy.test(f"# OK", "test")
 
     def test_metrabs_single(self, ros_env):
+        time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Metrabs Test  ####", "test")
         station_manager = ros_env.station_manager
         station_manager = ros_env.station_manager
@@ -418,11 +419,97 @@ class TestCollection:
         assert received_skeleton
         ros_env.logy.test(f"# OK", "test")
 
-    def test_detection_and_metrabs_speed(self):
+    def todo_test_metrabs_multi_4_one_person(self):
         pass
 
-    def test_metrabs_multi_4_one_person(self):
-        pass
+    def test_detection_and_metrabs_speed(self, ros_env):
+        time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
+        ros_env.logy.test(f"\n####  Metrabs Test  ####", "test")
+        station_manager = ros_env.station_manager
+        station_manager = ros_env.station_manager
+        received_skeleton_avg_s = 0
+        received_skeleton_num = 0
+        initial_count_skeleton = 0
+        received_bbox_avg_s = 0
+        received_bbox_num = 0
+        initial_count_bbox = 0
+        skeleton_sub = None
+        channel_sub = None
+        bbox_sub = None
+        sleep_time_s = 3
+        INITIAL_COUNT = 5
+
+        @logy.catch_ros
+        def callback_new_bbox(msg: Bboxes):
+            nonlocal initial_count_bbox
+            nonlocal received_bbox_avg_s
+            nonlocal received_bbox_num
+            if initial_count_bbox <= INITIAL_COUNT:
+                initial_count_bbox += 1
+            elapsed_s = rospy.Time.now().to_sec() - msg.header.stamp.to_sec()
+            n = received_bbox_num
+            y = (n / (n + 1)) * received_bbox_avg_s
+            avg = y + (elapsed_s / (n + 1))
+            received_bbox_avg_s = avg
+            received_bbox_num += 1
+
+        @logy.catch_ros
+        def callback_new_skelton(msg: Persons):
+            nonlocal received_skeleton_avg_s
+            nonlocal received_skeleton_num
+            nonlocal initial_count_skeleton
+            if initial_count_skeleton <= INITIAL_COUNT:
+                initial_count_skeleton += 1
+            elapsed_s = rospy.Time.now().to_sec() - msg.header.stamp.to_sec()
+            n = received_skeleton_num
+            y = (n / (n + 1)) * received_skeleton_avg_s
+            avg = y + (elapsed_s / (n + 1))
+            received_skeleton_avg_s = avg
+            received_skeleton_num += 1
+
+        def log_and_set_zero(log_str : str):
+            nonlocal received_skeleton_avg_s
+            nonlocal received_skeleton_num
+            nonlocal received_bbox_avg_s
+            nonlocal received_bbox_num
+            ros_env.logy.test(f"# {log_str} time bbox avg: {received_bbox_avg_s * 1000:.2f}ms  N={received_bbox_num}")
+            ros_env.logy.test(f"# {log_str} time skeleton avg: {received_skeleton_avg_s * 1000:.2f}ms  N={received_skeleton_num}")
+            received_skeleton_avg_s = 0
+            received_skeleton_num = 0
+            received_bbox_avg_s = 0
+            received_bbox_num = 0
+
+        bbox_sub = rospy.Subscriber('bboxes', Bboxes, callback_new_bbox, queue_size=10)
+        skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skelton)
+
+        assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
+        assert received_bbox_avg_s <= 0.06
+        assert received_skeleton_avg_s <= 0.125
+        time.sleep(sleep_time_s)
+        log_and_set_zero("1 Station")
+        assert station_manager.login_station_payload("user_2", {"station" : 2}) == SMResponse(501, 1, {"station": 2})
+        assert received_bbox_avg_s <= 0.12
+        assert received_skeleton_avg_s <= 0.19
+        time.sleep(sleep_time_s)
+        log_and_set_zero("2 Station")
+        assert station_manager.login_station_payload("user_3", {"station" : 3}) == SMResponse(501, 1, {"station": 3})
+        assert received_bbox_avg_s <= 0.15
+        assert received_skeleton_avg_s <= 0.24
+        time.sleep(sleep_time_s)
+        log_and_set_zero("3 Station")
+        assert station_manager.login_station_payload("user_4", {"station" : 4}) == SMResponse(501, 1, {"station": 4})
+        assert received_bbox_avg_s <= 0.18
+        assert received_skeleton_avg_s <= 0.28
+        time.sleep(sleep_time_s)
+        log_and_set_zero("4 Station")
+
+        assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
+        assert station_manager.logout_station_payload("user_2", {}) == SMResponse(502, 1, {"station": 2})
+        assert station_manager.logout_station_payload("user_3", {}) == SMResponse(502, 1, {"station": 3})
+        assert station_manager.logout_station_payload("user_4", {}) == SMResponse(502, 1, {"station": 4})
+        skeleton_sub.unregister()
+        bbox_sub.unregister()
+        ros_env.logy.test(f"# OK", "test")
 
 if __name__ == '__main__':
     test = TestCollection()

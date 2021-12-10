@@ -111,7 +111,7 @@ class Worker(Thread):
 
         self.start()
     
-    def log_with_metadata(logger, msg):
+    def log_with_metadata(self, logger, msg):
         logger("Spot:" + str(self.spot_key) + ":ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']) + str(msg))
 
     @lru_cache(maxsize=1000)
@@ -234,7 +234,7 @@ class Worker(Thread):
             except QueueEmpty:
                 continue
             except Exception as e:
-                logy.log_throttle("Encountered an error during motion analysis :" + format_exc())
+                logy.error_throttle("Encountered an error during motion analysis :" + format_exc(), throttel_time_ms=3000)
             
         # Enqueue data for feature progressions and resampled feature lists
         self.features_interface.set(self.spot_key, self.features)
@@ -245,7 +245,7 @@ class Worker(Thread):
         self.bad_repetition = False
         self.moving_average_joint_difference = 0
 
-    @logy.trace_time("calculate_reference_pose_mapping", perdiod=100)
+    @logy.trace_time("calculate_reference_pose_mapping", period=100)
     def calculate_reference_pose_mapping(self) -> np.ndarray:
         """Calculate the pose in the reference trajectory that we think our user is most probably in.
 
@@ -311,7 +311,7 @@ class Worker(Thread):
 
         return reference_pose
 
-    @logy.trace_time("analyze_feature_progressions", perdiod=100)
+    @logy.trace_time("analyze_feature_progressions", period=100)
     def analyze_feature_progressions(self,
         features: dict) -> Tuple[bool, bool, dict, Any]:
         """Detect done and bad repetitions by analyzing the feature's progressions.
@@ -335,7 +335,7 @@ class Worker(Thread):
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
             elif f.progression > number_of_dicided_state_changes_for_repetition and not self.config['ROBUST_COUNTING_MODE']:
-                self.log_with_metadata("A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+                self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition = True
                 num_features_progressed += 1
             elif f.progression == number_of_dicided_state_changes_for_repetition:
@@ -380,7 +380,7 @@ class Worker(Thread):
 
 
         if in_beginning_state and self.bad_repetition:
-            self.log_with_metadata("Bad repetition aborted. Resetting feature progressions and repetition data...")
+            self.log_with_metadata(logy.info, "Bad repetition aborted. Resetting feature progressions and repetition data...")
             for f in features.values():
                 f.progression = 0
             self.bad_repetition = False
@@ -392,13 +392,13 @@ class Worker(Thread):
             increase_reps = False
 
         if increase_reps:
-            self.log_with_metadata("All features have progressed. Repetition detected. Resetting feature progressions...")
+            self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions...")
             for f in features.values():
                 f.progression = 0
             self.beginning_of_next_repetition_detected = True
 
         if not in_beginning_state and self.beginning_of_next_repetition_detected:
-            self.log_with_metadata("Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+            self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
             self.skelleton_deltas_since_rep_start = []
             self.beginning_of_next_repetition_detected = False
             self.alignments_this_rep = np.array([])
@@ -413,12 +413,12 @@ class Worker(Thread):
         alpha = 1/20 # This has to be heuristically determined, as is depends on the size of the normal skelleton
         critical_freq = 0.01 # TODO: Choose heuristically!!
         # Filter scores in order to minimize impact of faulty reference skelleton predictions
-        b, a = signal.butter(4, critical_freq, analog=False)
-        x = signal.filtfilt(b, a, x)
+        b, a = signal.butter(min(4, max(1, int(len(self.skelleton_deltas_since_rep_start)/4))), critical_freq, analog=False)
+        x = signal.filtfilt(b, a, x, padlen=max(0, min(12, len(x) - 1)))
         average_delta = np.average(x) # Try average and median here, see which one works better
         delta_score = np.absolute(average_delta * alpha)
         score = 100 * np.clip(1 - delta_score, 0, 1)
-        logy.log_mean("LowestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.min(self.skelleton_deltas_since_rep_start)), tag="LowestScore")
-        logy.log_mean("HighestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.max(self.skelleton_deltas_since_rep_start)), tag="HighestScore")
-        logy.log_mean("ExerciseScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(score), tag="ExerciseScore")
+        logy.log_mean("LowestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.min(self.skelleton_deltas_since_rep_start)))
+        logy.log_mean("HighestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.max(self.skelleton_deltas_since_rep_start)))
+        logy.log_mean("ExerciseScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(score))
         return score

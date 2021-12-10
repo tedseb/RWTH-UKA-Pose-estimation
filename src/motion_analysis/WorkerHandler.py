@@ -51,12 +51,8 @@ class WorkerHandler(QThread):
     a change in usage.
     """
     def __init__(self,
-<<<<<<< HEAD
-    spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface,
-=======
     config,
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
->>>>>>> an_roc_curve
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
     features_interface_class: FeaturesInterface = RedisFeaturesInterface):

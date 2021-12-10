@@ -163,7 +163,7 @@ class FeatureGraphsWidget(QWidget):
             # TODO: draw vector here? https://stackoverflow.com/questions/44246283/how-to-add-a-arrow-head-to-my-line-in-pyqt4
             self.progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = GYMY_GREEN)
         except IndexError as e: # This occurs if our progress points to an index higher than our trajectory length
-            logy.error_throttle((e)
+            logy.error_throttle(e)
 
     @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, str, str)
     def _update_static_data(self, reference_trajectory, filtered_reference_trajectory, discrete_reference_trajectory, feature_type, feature_spec):

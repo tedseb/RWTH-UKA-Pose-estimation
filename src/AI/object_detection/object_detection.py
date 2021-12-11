@@ -270,7 +270,7 @@ if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="OD")
     rospy.init_node('object_detection', anonymous=True)
     rospy.set_param('param_server', yaml.dump({0: {}}))
-    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=True, check_station=True)
+    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=False, check_station=True)
     signal.signal(signal.SIGTERM, obj_detect.shutdown)
     signal.signal(signal.SIGINT, obj_detect.shutdown)
     obj_detect.spin()

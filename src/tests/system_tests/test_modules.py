@@ -2,6 +2,10 @@
 import time
 import sys
 import copy
+import numpy as np
+import nvidia_smi
+import psutil
+
 import roslaunch
 import rospy
 from typing import List, Tuple, Set, Dict
@@ -32,6 +36,10 @@ class LocalDataManager(DataManagerInterface):
             1 : ["langhantel_ted", 0, "gTux94rB92w"],
             2 : ["deadlift_ted", 0, "O9wJvxWMiBg"],
             3 : ["military_ted", 0, "Uv9qwcALYKU"],
+            10 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
+            12 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
+            14 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
+            16 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
         }
 
         self._stations = {
@@ -40,6 +48,14 @@ class LocalDataManager(DataManagerInterface):
             2 : ["langhantel", [CameraFrame(1, [562, 100, 871, 693])]],
             3 : ["deadlift", [CameraFrame(2, [645, 160, 1018, 701])]],
             4 : ["military", [CameraFrame(3, [669, 152, 985, 667])]],
+            10 : ["Ted_1", [CameraFrame(10, [249, 68, 650, 708])]],
+            11 : ["Orhan_1", [CameraFrame(10, [1091, 65, 1672, 1058])]],
+            12 : ["Ted_2", [CameraFrame(12, [249, 68, 650, 708])]],
+            13 : ["Orhan_2", [CameraFrame(12, [1091, 65, 1672, 1058])]],
+            14 : ["Ted_3", [CameraFrame(14, [249, 68, 650, 708])]],
+            15 : ["Orhan_3", [CameraFrame(14, [1091, 65, 1672, 1058])]],
+            16 : ["Ted_4", [CameraFrame(16, [249, 68, 650, 708])]],
+            17 : ["Orhan_4", [CameraFrame(16, [1091, 65, 1672, 1058])]],
         }
 
         self._exercises = {
@@ -114,7 +130,7 @@ class LocalDataManager(DataManagerInterface):
 class GymyEnviroment:
 
     _LAUNCH_FILES = [
-        ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True'],
+        ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
         #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
         ['infrastructure', 'mobile_server.launch'],
         ['metrabs', 'metrabs.launch', 'log_level:=debug'],
@@ -180,16 +196,12 @@ class GymyEnviroment:
 
 @pytest.fixture(scope="module")
 def ros_env():
-    print("init")
     env = GymyEnviroment()
-    print("warm")
     env.warm_up()
     return env
 
 def _ros_env():
-    print("init")
     env = GymyEnviroment()
-    print("warm")
     env.warm_up()
     return env
 
@@ -257,28 +269,39 @@ class TestCollection:
         received_channel_info_start = False
         received_channel_info_stop = False
         received_channel_info_s = 0
-        received_image = False
         received_image_s = 0
         received_image_after_channel_s = 0
         received_image_after_sending_s = 0
+        received_images = 0
         image_sub = None
         channel_sub = None
+        initial_count_image = 0
+        INITIAL_COUNT = 5
 
         @logy.catch_ros
         def callback_new_image(msg: ImageData):
-            nonlocal received_image
+            nonlocal received_images
             nonlocal received_image_s
             nonlocal received_image_after_channel_s
             nonlocal received_image_after_sending_s
-            if not received_image:
+            nonlocal initial_count_image
+
+            if initial_count_image <= INITIAL_COUNT:
+                initial_count_image += initial_count_image
+            if received_images == 0:
                 received_image_s = time.time() - received_image_s
                 received_image_after_channel_s = time.time() - received_image_after_channel_s
-                received_image_after_sending_s = rospy.Time.now().to_sec() - msg.image.header.stamp.to_sec()
-                img_msg = msg.image
-                height, width = img_msg.height, img_msg.width
-                assert height >= 720
-                assert width >= 1280
-                received_image = True
+
+            img_msg = msg.image
+            height, width = img_msg.height, img_msg.width
+            assert height >= 720
+            assert width >= 1280
+            elapsed_s = rospy.Time.now().to_sec() - msg.image.header.stamp.to_sec()
+            n = received_images
+            y = (n / (n + 1)) * received_image_after_sending_s
+            avg = y + (elapsed_s / (n + 1))
+            received_image_after_sending_s = avg
+            received_images += 1
 
         @logy.catch_ros
         def callback_new_channel(channel_info: ChannelInfo):
@@ -303,9 +326,10 @@ class TestCollection:
         assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
 
         try:
-            with logy.TimeOutHandler(3000):
-                while not received_image:
+            with logy.TimeOutHandler(6000):
+                while received_images == 0:
                     time.sleep(0.01)
+                time.sleep(3)
                 assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
                 while not received_channel_info_stop:
                     time.sleep(0.01)
@@ -316,14 +340,14 @@ class TestCollection:
         ros_env.logy.test(f"# Time for new channel: {received_channel_info_s * 1000:.2f}ms", "test")
         ros_env.logy.test(f"# Time for first image: {received_image_s * 1000:.2f}ms", "test")
         ros_env.logy.test(f"# Time image received after opening channel: {received_image_after_channel_s * 1000:.2f}ms", "test")
-        ros_env.logy.test(f"# Time from sending in camera node to receive: {received_image_after_sending_s * 1000:.2f}ms", "test")
+        ros_env.logy.test(f"# Time from sending to receive avg: {received_image_after_sending_s * 1000:.2f}ms  N={received_images}", "test")
 
         assert received_channel_info_s < 0.02
         assert received_image_s < 0.5
         assert received_image_after_sending_s < 0.02
         assert received_channel_info_start
         assert received_channel_info_stop
-        assert received_image
+        assert received_images > 0
         ros_env.logy.test(f"# OK", "test")
 
     def todo_test_server(self):
@@ -369,6 +393,8 @@ class TestCollection:
         assert received_bbox_s < 0.6
         assert received_bbox
         ros_env.logy.test(f"# OK", "test")
+
+# TODO Rendern effizienter
 
     def test_metrabs_single(self, ros_env):
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
@@ -422,58 +448,113 @@ class TestCollection:
     def todo_test_metrabs_multi_4_one_person(self):
         pass
 
-    def test_detection_and_metrabs_speed(self, ros_env):
-        time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
-        ros_env.logy.test(f"\n####  Metrabs Test  ####", "test")
+    def _compute_avg(self, old_avg, old_samples, new_value):
+        n = old_samples
+        y = (n / (n + 1)) * old_avg
+        avg = y + (new_value / (n + 1))
+        return avg, n+1
+
+    def _detection_and_metrabs_speed(self, ros_env, station_data, sleep_time_s, step=1): #station_data = [[station, camera, max_avg_ms, max_avg_fps]]
         station_manager = ros_env.station_manager
         station_manager = ros_env.station_manager
+
         received_skeleton_avg_s = 0
         received_skeleton_num = 0
-        initial_count_skeleton = 0
+        initial_counts_skeleton = {} # start with test if each camera sends min. INITIAL_COUNT frames
+        initial_time_skeleton = 0
+
         received_bbox_avg_s = 0
         received_bbox_num = 0
-        initial_count_bbox = 0
+        initial_counts_bbox = {}
+        initial_time_bbox = 0
+
+        system_data = [[0, 0], [0, 0] ,[0, 0], [0, 0]] #GPU Util, GPU Mem, CPU, RAM
         skeleton_sub = None
-        channel_sub = None
         bbox_sub = None
-        sleep_time_s = 3
-        INITIAL_COUNT = 5
+        INITIAL_COUNT = 10
+
+        nvidia_smi.nvmlInit()
+        gp_count = nvidia_smi.nvmlDeviceGetCount()
+        #print(f"# GPU count = {gp_count}")
+        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
 
         @logy.catch_ros
         def callback_new_bbox(msg: Bboxes):
-            nonlocal initial_count_bbox
+            nonlocal initial_counts_bbox
             nonlocal received_bbox_avg_s
             nonlocal received_bbox_num
-            if initial_count_bbox <= INITIAL_COUNT:
-                initial_count_bbox += 1
+            nonlocal initial_time_bbox
+            camera_id = int(msg.header.frame_id[3:])
+
+            for i, initial_count in initial_counts_bbox.items():
+                if initial_count <= INITIAL_COUNT:
+                    if i != camera_id:
+                        return
+                    if initial_count == INITIAL_COUNT:
+                        initial_time_bbox = time.time()
+                    initial_counts_bbox[i] += 1
+                    return
+            boxes = np.array(msg.data).reshape(-1, 4)
             elapsed_s = rospy.Time.now().to_sec() - msg.header.stamp.to_sec()
-            n = received_bbox_num
-            y = (n / (n + 1)) * received_bbox_avg_s
-            avg = y + (elapsed_s / (n + 1))
-            received_bbox_avg_s = avg
-            received_bbox_num += 1
+            for _ in range(boxes.shape[0]):
+                received_bbox_avg_s, received_bbox_num = self._compute_avg(received_bbox_avg_s, received_bbox_num, elapsed_s)
 
         @logy.catch_ros
         def callback_new_skelton(msg: Persons):
+            nonlocal initial_counts_skeleton
             nonlocal received_skeleton_avg_s
             nonlocal received_skeleton_num
-            nonlocal initial_count_skeleton
-            if initial_count_skeleton <= INITIAL_COUNT:
-                initial_count_skeleton += 1
-            elapsed_s = rospy.Time.now().to_sec() - msg.header.stamp.to_sec()
-            n = received_skeleton_num
-            y = (n / (n + 1)) * received_skeleton_avg_s
-            avg = y + (elapsed_s / (n + 1))
-            received_skeleton_avg_s = avg
-            received_skeleton_num += 1
+            nonlocal initial_time_skeleton
+            camera_id = int(msg.header.frame_id[3:])
+            # Before test, all cameras must send min INITIAL_COUNT images
+            for i, initial_count in initial_counts_skeleton.items():
+                if initial_count <= INITIAL_COUNT:
+                    if i != camera_id:
+                        return
+                    if initial_count == INITIAL_COUNT:
+                        initial_time_skeleton = time.time()
+                    initial_counts_skeleton[i] += 1
+                    return
 
-        def log_and_set_zero(log_str : str):
+            elapsed_s = rospy.Time.now().to_sec() - msg.header.stamp.to_sec()
+            for _ in msg.persons:
+                received_skeleton_avg_s, received_skeleton_num = self._compute_avg(received_skeleton_avg_s, received_skeleton_num, elapsed_s)
+
+            nonlocal system_data
+            res_util = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
+            res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+            cpu = psutil.cpu_percent()
+            ram = psutil.virtual_memory().used
+            system_data[0][0], system_data[0][1] = self._compute_avg(system_data[0][0], system_data[0][1], res_util.gpu)
+            system_data[1][0], system_data[1][1] = self._compute_avg(system_data[1][0], system_data[1][1], res_mem.used)
+            system_data[2][0], system_data[2][1] = self._compute_avg(system_data[2][0], system_data[2][1], cpu)
+            system_data[3][0], system_data[3][1] = self._compute_avg(system_data[3][0], system_data[3][1], ram)
+
+        def log_and_set_zero(log_str : str, num_stations : int):
             nonlocal received_skeleton_avg_s
             nonlocal received_skeleton_num
             nonlocal received_bbox_avg_s
             nonlocal received_bbox_num
-            ros_env.logy.test(f"# {log_str} time bbox avg: {received_bbox_avg_s * 1000:.2f}ms  N={received_bbox_num}")
-            ros_env.logy.test(f"# {log_str} time skeleton avg: {received_skeleton_avg_s * 1000:.2f}ms  N={received_skeleton_num}")
+            nonlocal initial_time_skeleton
+            nonlocal initial_time_bbox
+            nonlocal system_data
+            ram_total = psutil.virtual_memory().total
+            res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+            mib = 1024 * 1024
+
+            time_s = time.time()
+            avg_fps_box = (received_bbox_num / (time_s - initial_time_bbox)) / num_stations
+            avg_fps_skeleton = (received_skeleton_num / (time_s - initial_time_skeleton)) / num_stations
+            ros_env.logy.test(f"# {log_str} time bbox avg: {received_bbox_avg_s * 1000:.2f}ms".ljust(45) + f"N={received_bbox_num}")
+            ros_env.logy.test(f"# {log_str} fps bbox avg: {avg_fps_box:.2f}fps".ljust(45) + f"N={received_bbox_num}")
+            ros_env.logy.test(f"# {log_str} time skeleton avg: {received_skeleton_avg_s * 1000:.2f}ms".ljust(45) + f"N={received_skeleton_num}")
+            ros_env.logy.test(f"# {log_str} fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
+            ros_env.logy.test(f"# {log_str} fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
+            ros_env.logy.test(f"# {log_str} fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
+            ros_env.logy.test(f"# (Average) GPU: {system_data[0][0]:.2f}%, Mem used: {system_data[1][0] / mib:.0f} / {res_mem.total / mib:.0f} MB")
+            ros_env.logy.test(f"# (Average) CPU: {system_data[2][0]:.2f}%, RAM: {system_data[3][0] / mib:.0f} / {ram_total / mib:.0f} MB" )
+            ros_env.logy.test(f"# ".ljust(45, '-'))
+
             received_skeleton_avg_s = 0
             received_skeleton_num = 0
             received_bbox_avg_s = 0
@@ -482,36 +563,71 @@ class TestCollection:
         bbox_sub = rospy.Subscriber('bboxes', Bboxes, callback_new_bbox, queue_size=10)
         skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skelton)
 
-        assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
-        assert received_bbox_avg_s <= 0.06
-        assert received_skeleton_avg_s <= 0.125
-        time.sleep(sleep_time_s)
-        log_and_set_zero("1 Station")
-        assert station_manager.login_station_payload("user_2", {"station" : 2}) == SMResponse(501, 1, {"station": 2})
-        assert received_bbox_avg_s <= 0.12
-        assert received_skeleton_avg_s <= 0.19
-        time.sleep(sleep_time_s)
-        log_and_set_zero("2 Station")
-        assert station_manager.login_station_payload("user_3", {"station" : 3}) == SMResponse(501, 1, {"station": 3})
-        assert received_bbox_avg_s <= 0.15
-        assert received_skeleton_avg_s <= 0.24
-        time.sleep(sleep_time_s)
-        log_and_set_zero("3 Station")
-        assert station_manager.login_station_payload("user_4", {"station" : 4}) == SMResponse(501, 1, {"station": 4})
-        assert received_bbox_avg_s <= 0.18
-        assert received_skeleton_avg_s <= 0.28
-        time.sleep(sleep_time_s)
-        log_and_set_zero("4 Station")
+        for i, data in enumerate(station_data):
+            initial_counts_bbox[data[1]] = 0
+            initial_counts_skeleton[data[1]] = 0
+            assert station_manager.login_station_payload(f"user_{i}", {"station" : data[0]}) == SMResponse(501, 1, {"station": data[0]})
+            assert received_bbox_avg_s <= data[2]
+            assert received_skeleton_avg_s <= data[3]
+            if i % step == (step - 1):
+                time.sleep(sleep_time_s)
+                log_and_set_zero(f"{i + 1} Station", (i + 1))
 
-        assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
-        assert station_manager.logout_station_payload("user_2", {}) == SMResponse(502, 1, {"station": 2})
-        assert station_manager.logout_station_payload("user_3", {}) == SMResponse(502, 1, {"station": 3})
-        assert station_manager.logout_station_payload("user_4", {}) == SMResponse(502, 1, {"station": 4})
+        for i, data in enumerate(station_data):
+            assert station_manager.logout_station_payload(f"user_{i}", {}) == SMResponse(502, 1, {"station": data[0]})
+
         skeleton_sub.unregister()
         bbox_sub.unregister()
+
+    def test_detection_and_metrabs_speed_1(self, ros_env):
+        time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
+        ros_env.logy.test(f"\n####  Detection / Metrabs Speed test (one station / Camera) ####", "test")
+        station_data = [
+            [1, 0, 0.06, 0.125],
+            [2, 1, 0.12, 0.19],
+            [3, 2, 0.15, 0.24],
+            [4, 3, 0.18, 0.28],
+        ]
+        self._detection_and_metrabs_speed(ros_env, station_data, 5)
+        ros_env.logy.test(f"# OK", "test")
+
+    def test_detection_and_metrabs_speed_2(self, ros_env):
+        time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
+        ros_env.logy.test(f"\n####  Detection / Metrabs Speed test (two stations / Camera) ####", "test")
+        station_data = [
+            [10, 10, 0.5, 0.5],
+            [11, 10, 0.5, 0.5],
+            [12, 12, 0.5, 0.5],
+            [13, 12, 0.5, 0.5],
+            [14, 14, 0.5, 0.5],
+            [15, 14, 0.5, 0.5],
+            [16, 16, 0.5, 0.5],
+            [17, 16, 0.5, 0.5],
+        ]
+        self._detection_and_metrabs_speed(ros_env, station_data, 5, 2)
         ros_env.logy.test(f"# OK", "test")
 
 if __name__ == '__main__':
-    test = TestCollection()
-    env = _ros_env()
-    test.test_station_manager_api(env)
+
+    nvidia_smi.nvmlInit()
+    gp_count = nvidia_smi.nvmlDeviceGetCount()
+    print(f"# GPU count = {gp_count}")
+    handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+    time_tmp = time.time()
+
+    res_util = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
+    res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+    cpu = psutil.cpu_percent()
+    ram = psutil.virtual_memory().used
+
+    ram_total = psutil.virtual_memory().total
+    time_tmp = time.time() - time_tmp
+    print(f"Time = {time_tmp * 1000}")
+    n = 1024 * 1024
+    print(f"GPU: {res_util.gpu}%, Mem used: {res_mem.used / n:.0f} / {res_mem.total / n:.0f} MB")
+    print(f"CPU: {cpu}%, RAM: {ram / n:.0f} / {ram_total / n:.0f} MB" )
+
+
+    # test = TestCollection()
+    # env = _ros_env()
+    # test.test_station_manager_api(env)

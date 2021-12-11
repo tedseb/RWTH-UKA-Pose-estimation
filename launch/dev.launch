@@ -8,7 +8,7 @@
   <arg name="neptune" default="False" doc="      If Logy schould log to neptune."/>
   <include file="$(find logy_backend)/launch/logy_backend.launch">
     <arg name="log_level" value="$(arg log_level)"/>
-    <arg name="logger_tags" value="$(arg log_tags)"/>
+    <arg name="log_tags" value="$(arg log_tags)"/>
     <arg name="neptune" value="$(arg neptune)"/>
   </include>
   <include file="$(find station_manager)/launch/station_manager.launch">

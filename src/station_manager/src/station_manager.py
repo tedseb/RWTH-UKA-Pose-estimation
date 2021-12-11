@@ -23,7 +23,7 @@ from twisted.internet import reactor
 import time
 
 DEBUG_STATION_ID = 999
-MAX_STATIONS = 6
+MAX_STATIONS = 8
 CAMERA_CHANNEL_INFO = "/image/channel_{0}"
 
 class ComputerWorkload:

@@ -313,7 +313,9 @@ class PoseEstimator():
 
             img = cv2.hconcat(cropped_images)
             image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
-            self.publisher_crop[camera_id].publish(image_message)
+            pub = self.publisher_crop.get(camera_id)
+            if pub is not None:
+                pub.publish(image_message)
 
         logy.log_fps("end_of_metrabs_loop")
 

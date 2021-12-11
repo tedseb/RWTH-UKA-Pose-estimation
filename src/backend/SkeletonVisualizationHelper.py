@@ -132,7 +132,8 @@ class RealtimeVisualization():
         # publish the markers
         #self.visualization_skeleton_pub.publish(marker_array)
         with self._thread_lock:
-            self.visualization_skeleton_pubs[camera_id].publish(marker_array)
+            if camera_id in self.visualization_skeleton_pubs:
+                self.visualization_skeleton_pubs[camera_id].publish(marker_array)
             self.fused_skeleton_pub.publish(data)  # TODO: Fusion and normalization is missing here
 
 

@@ -75,9 +75,9 @@ class PoseEstimator():
         self._box_queues = {}
         self._thread_lock = Lock()
 
-        image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-        person_boxes = [np.array([100, 100, 100, 100], np.float32)]
-        self.start_ai([], np.stack([image]), [person_boxes])
+        self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
+        self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
+        self.start_ai([], np.stack([self._fake_image]), [self._fake_person_boxes], set())
 
         self._is_active = True
         self._ai_thread = threading.Thread(target=self.thread_handler)
@@ -187,22 +187,39 @@ class PoseEstimator():
     def thread_handler(self):
         logy.debug("Metrabs Thread is active")
         thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
+
         while(self._is_active):
             boxes = []
             images = []
             data = []
             with self._thread_lock:
+                fake_images = set()
                 for camera_id, queue in self._box_queues.items():
                     if queue.empty():
+                        fake_images.add(camera_id)
+                        data.append((camera_id, None, None))
+                        images.append(self._fake_image)
+                        boxes.append(self._fake_person_boxes)
+                        #logy.warn("Queue Empty")
                         continue
 
                     box = queue.get()
                     box_np = np.array(box.data).reshape(-1, 4)
                     if box_np.size == 0:
+                        fake_images.add(camera_id)
+                        data.append((camera_id, None, None))
+                        images.append(self._fake_image)
+                        boxes.append(self._fake_person_boxes)
+                        #logy.warn("Box Size 0")
                         continue
 
                     img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
                     if img_data is None:
+                        fake_images.add(camera_id)
+                        data.append((camera_id, None, None))
+                        images.append(self._fake_image)
+                        boxes.append(self._fake_person_boxes)
+                        data.append((camera_id, None, None))
                         continue
 
                     if box.is_debug:
@@ -241,9 +258,11 @@ class PoseEstimator():
                 continue
 
             images = np.stack(images)
-            self.start_ai(data, images, boxes)
+            if images.shape[0] != len(self._box_queues):
+                logy.warn(f"only {images.shape[0]} boxes but {len(self._box_queues)}. Queue: {fake_images}")
+            self.start_ai(data, images, boxes, fake_images)
 
-    def start_ai(self, data, images, boxes):
+    def start_ai(self, data, images, boxes, fake_images):
         ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
         logy.debug_throttle(f"{images.shape[0]}", 1000)
 
@@ -256,6 +275,9 @@ class PoseEstimator():
 
         for i, info in enumerate(data):
             camera_id = info[0]
+
+            if camera_id in fake_images:
+                continue
             station_ids = info[1]
             image_boxes = boxes[i]
             image = images[i]
@@ -317,7 +339,7 @@ class PoseEstimator():
             if pub is not None:
                 pub.publish(image_message)
 
-        logy.log_fps("end_of_metrabs_loop")
+        #logy.log_fps("end_of_metrabs_loop")
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")

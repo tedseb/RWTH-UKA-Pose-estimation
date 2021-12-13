@@ -134,7 +134,7 @@ class GymyEnviroment:
         #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
         ['infrastructure', 'mobile_server.launch'],
         ['metrabs', 'metrabs.launch', 'log_level:=debug'],
-        ['object_detection', 'object_detection.launch', 'log_level:=debug'],
+        ['object_detection', 'object_detection.launch', 'render:=False'],
         #['motion_analysis', 'motion_analysis_dev.launch', 'log_level:=debug'],
         ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
     ]
@@ -525,10 +525,13 @@ class TestCollection:
             res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
             cpu = psutil.cpu_percent()
             ram = psutil.virtual_memory().used
+            # print("CPU:", cpu)
+            # print("GPU:", res_util.gpu)
             system_data[0][0], system_data[0][1] = self._compute_avg(system_data[0][0], system_data[0][1], res_util.gpu)
             system_data[1][0], system_data[1][1] = self._compute_avg(system_data[1][0], system_data[1][1], res_mem.used)
-            system_data[2][0], system_data[2][1] = self._compute_avg(system_data[2][0], system_data[2][1], cpu)
-            system_data[3][0], system_data[3][1] = self._compute_avg(system_data[3][0], system_data[3][1], ram)
+            if cpu > 0.1:
+                system_data[2][0], system_data[2][1] = self._compute_avg(system_data[2][0], system_data[2][1], cpu)
+                system_data[3][0], system_data[3][1] = self._compute_avg(system_data[3][0], system_data[3][1], ram)
 
         def log_and_set_zero(log_str : str, num_stations : int):
             nonlocal received_skeleton_avg_s
@@ -549,16 +552,15 @@ class TestCollection:
             ros_env.logy.test(f"# {log_str} fps bbox avg: {avg_fps_box:.2f}fps".ljust(45) + f"N={received_bbox_num}")
             ros_env.logy.test(f"# {log_str} time skeleton avg: {received_skeleton_avg_s * 1000:.2f}ms".ljust(45) + f"N={received_skeleton_num}")
             ros_env.logy.test(f"# {log_str} fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
-            ros_env.logy.test(f"# {log_str} fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
-            ros_env.logy.test(f"# {log_str} fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
             ros_env.logy.test(f"# (Average) GPU: {system_data[0][0]:.2f}%, Mem used: {system_data[1][0] / mib:.0f} / {res_mem.total / mib:.0f} MB")
-            ros_env.logy.test(f"# (Average) CPU: {system_data[2][0]:.2f}%, RAM: {system_data[3][0] / mib:.0f} / {ram_total / mib:.0f} MB" )
+            ros_env.logy.test(f"# (Average) CPU: {system_data[2][0]:.2f}%,      RAM: {system_data[3][0] / mib:.0f} / {ram_total / mib:.0f} MB" )
             ros_env.logy.test(f"# ".ljust(45, '-'))
 
             received_skeleton_avg_s = 0
             received_skeleton_num = 0
             received_bbox_avg_s = 0
             received_bbox_num = 0
+            system_data = [[0, 0], [0, 0] ,[0, 0], [0, 0]]
 
         bbox_sub = rospy.Subscriber('bboxes', Bboxes, callback_new_bbox, queue_size=10)
         skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skelton)
@@ -588,7 +590,7 @@ class TestCollection:
             [3, 2, 0.15, 0.24],
             [4, 3, 0.18, 0.28],
         ]
-        self._detection_and_metrabs_speed(ros_env, station_data, 5)
+        self._detection_and_metrabs_speed(ros_env, station_data, 3)
         ros_env.logy.test(f"# OK", "test")
 
     def test_detection_and_metrabs_speed_2(self, ros_env):
@@ -604,7 +606,7 @@ class TestCollection:
             [16, 16, 0.5, 0.5],
             [17, 16, 0.5, 0.5],
         ]
-        self._detection_and_metrabs_speed(ros_env, station_data, 5, 2)
+        self._detection_and_metrabs_speed(ros_env, station_data, 3, 2)
         ros_env.logy.test(f"# OK", "test")
 
 if __name__ == '__main__':
@@ -628,6 +630,6 @@ if __name__ == '__main__':
     print(f"CPU: {cpu}%, RAM: {ram / n:.0f} / {ram_total / n:.0f} MB" )
 
 
-    # test = TestCollection()
-    # env = _ros_env()
-    # test.test_station_manager_api(env)
+    test = TestCollection()
+    env = _ros_env()
+    test.test_station_manager_api(env)

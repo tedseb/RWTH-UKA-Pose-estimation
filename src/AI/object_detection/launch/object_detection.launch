@@ -1,3 +1,4 @@
 <launch>
-  <node name="object_detection" pkg="object_detection" type="object_detection.py" output="log" />
+  <arg name="render" default="True"/>
+  <node name="object_detection" pkg="object_detection" type="object_detection.py" output="log" args="$(eval str(' --render' if arg('render') else ''))"/>
 </launch>

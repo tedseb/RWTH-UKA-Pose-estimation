@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import sys
+import argparse
 from ctypes import resize
 import threading
 import collections
@@ -266,11 +268,22 @@ class ObjectDetectionPipeline:
         rospy.spin()
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--render", help="Draw and publish yolo images", action="store_true")
+
+    arg_count = len(sys.argv)
+    #print(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
 
     logy.basic_config(debug_level=logy.DEBUG, module_name="OD")
     rospy.init_node('object_detection', anonymous=True)
     rospy.set_param('param_server', yaml.dump({0: {}}))
-    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=False, check_station=True)
+    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=args.render, check_station=True)
     signal.signal(signal.SIGTERM, obj_detect.shutdown)
     signal.signal(signal.SIGINT, obj_detect.shutdown)
     obj_detect.spin()

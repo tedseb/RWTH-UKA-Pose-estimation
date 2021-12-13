@@ -42,7 +42,6 @@ try:
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoUtils import *
 
-
 X = 0
 Y = 1
 Z = 2

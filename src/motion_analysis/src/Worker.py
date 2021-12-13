@@ -269,7 +269,6 @@ class Worker(Thread):
         median_resampled_values_reference_trajectory_fractions = []
         progress_vectors = []
 
-
         for h, f in self.features.items():
             # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
             discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
@@ -324,25 +323,33 @@ class Worker(Thread):
         """
         increase_reps = True
         in_beginning_state = True
-        num_features_in_beginning_state = 0
         num_features_progressed = 0
+        num_features_progressed_too_far = 0
+        num_features_in_beginning_state = 0
+
+        def num_features_to_progress(num_features):
+            # Simple formula to determine the number of feature that have to finish before exercise is finished
+            return int(num_features/self.config['NUM_FEATURE_TO_PROGRESS_ALPHA'] + self.config['NUM_FEATURE_TO_PROGRESS_BETA'])
 
         for f in features.values():
             beginning_state = f.reference_feature_collection.median_beginning_state
             number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
-            if f.state != beginning_state:
-                num_features_progressed += 1
+            if f.state == beginning_state:
+                num_features_in_beginning_state += 1
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
-            elif f.progression > number_of_dicided_state_changes_for_repetition and not self.config['ROBUST_COUNTING_MODE']:
-                self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
-                self.bad_repetition = True
-                num_features_progressed += 1
+            elif f.progression > number_of_dicided_state_changes_for_repetition:
+                num_features_progressed_too_far += 1
             elif f.progression == number_of_dicided_state_changes_for_repetition:
                 num_features_progressed += 1
 
-        if num_features_progressed < num_features_in_beginning_state: # TODO: This is a parameter to be tuned!!
+        # We calculate the number of features that have to have progressed in order to count this repetition
+        if num_features_progressed < num_features_to_progress(len(features.values())): # TODO: This is a parameter to be tuned!!
             increase_reps = False
+
+        if num_features_progressed_too_far > num_features_in_beginning_state and not self.config['ROBUST_COUNTING_MODE']:
+             self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+             self.bad_repetition = True
 
 
         # Look at every reference feature separately

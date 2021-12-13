@@ -176,7 +176,7 @@ class Worker(Thread):
                             pos_median = abs(np.median(positive_progresses_differences))
                         else:
                             pos_median = 0
-                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and not self.config['ROBUST_COUNTING_MODE']:
+                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences):
                             logy.debug("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                             self.bad_repetition = True
                             increase_reps = False
@@ -292,11 +292,6 @@ class Worker(Thread):
 
                 update_gui_features(self.gui, f)
                     
-            # Look at every reference feature separately
-            # for r in f.reference_feature_collection.reference_recording_features:
-            #     joint_difference = total_joint_difference(pose, reference_pose)
-            #     r.moving_average_joint_difference = r.moving_average_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + r * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
-
         last_progress = self.progress
 
         self.progress, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
@@ -336,6 +331,8 @@ class Worker(Thread):
             number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
             if f.state == beginning_state:
                 num_features_in_beginning_state += 1
+            else:
+                in_beginning_state = False
             if f.progression < number_of_dicided_state_changes_for_repetition:
                 increase_reps = False
             elif f.progression > number_of_dicided_state_changes_for_repetition:
@@ -347,44 +344,9 @@ class Worker(Thread):
         if num_features_progressed < num_features_to_progress(len(features.values())): # TODO: This is a parameter to be tuned!!
             increase_reps = False
 
-        if num_features_progressed_too_far > num_features_in_beginning_state and not self.config['ROBUST_COUNTING_MODE']:
+        if num_features_progressed_too_far > num_features_in_beginning_state:
              self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
              self.bad_repetition = True
-
-
-        # Look at every reference feature separately
-        # bad_repetition_yes = 0
-        # bad_repetition_no = 0
-        # increase_reps_yes = 0
-        # increase_reps_no = 0
-        # in_beginning_state_yes = 0
-        # in_beginning_state_no = 0
-
-        # for f in features.values():
-        #     for r in f.reference_feature_collection.reference_features:
-                
-        #         beginning_state = r.median_beginning_state
-        #         number_of_dicided_state_changes_for_repetition = r.number_of_dicided_state_changes
-
-        #         if f.state != beginning_state:
-        #             in_beginning_state_no += 1
-        #         else:
-        #             in_beginning_state_yes += 1
-
-        #         if f.progression < number_of_dicided_state_changes_for_repetition:
-        #             increase_reps_no += 1
-        #         elif f.progression > number_of_dicided_state_changes_for_repetition:
-        #             bad_repetition = True
-        #             bad_repetition_yes += 1
-        #             increase_reps_no += 1
-        #         else:
-        #             bad_repetition_no += 1
-        #             increase_reps_yes += 1
-
-        # bad_repetition_ratio = bad_repetition_yes/bad_repetition_no
-        # increase_reps_ratio = increase_reps_yes/increase_reps_no
-        # in_beginning_state_ratio = in_beginning_state_yes/in_beginning_state_no
-
 
         if in_beginning_state and self.bad_repetition:
             self.log_with_metadata(logy.info, "Bad repetition aborted. Resetting feature progressions and repetition data...")
@@ -395,7 +357,7 @@ class Worker(Thread):
             
             increase_reps = self.analyze_feature_progressions(features)
 
-        if self.bad_repetition and not self.config['ROBUST_COUNTING_MODE']:
+        if self.bad_repetition:
             increase_reps = False
 
         if increase_reps:
@@ -411,7 +373,6 @@ class Worker(Thread):
             self.alignments_this_rep = np.array([])
             self.progress_differences_this_rep = np.array([])
             self.progress = 0
-
 
         return increase_reps
 

@@ -16,6 +16,7 @@ from collections import deque
 import sys
 import os
 import logy
+import time
  
 from station_manager import StationManager, DEBUG_STATION_ID
 from backend.msg import Persons
@@ -110,8 +111,16 @@ class DataSetRecorder():
             self.active_set = current_set
 
         if (not self.set_list and not self.active_set)or not self._recording:
-            del self.station_manager # This spawns a routine that ends the camera node process
-            os.system("rosnode kill Bagfilerecorder")
+            try:
+                rp.logerr("Waiting for 10 seconds for last messagse to roll in before ending recording...")
+                time.sleep(10)
+                os.system("rosnode kill Bagfilerecorder &")
+                os.system("rosnode kill DataSetRecorder &")
+                del self.station_manager # This spawns a routine that ends the camera node process
+                rp.logerr("Ignore warning about Bagfilerecorder if present...")
+            except AttributeError:
+                pass
+            
     
 
 if __name__ == '__main__':
@@ -138,12 +147,6 @@ if __name__ == '__main__':
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, verbose=True)
 
     recorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
-
-    def signal_handler():
-        del recorder.station_manager
-        recorder._recording = False
-
-    rp.on_shutdown(signal_handler)
     
     rp.spin()
 

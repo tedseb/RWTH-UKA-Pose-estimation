@@ -144,6 +144,9 @@ class Validator():
         with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
             yaml.dump({k: v.tolist() for k,v in done_exercises.items()}, outfile)
 
+    def __del__(self):
+        self.create_report(None)
+
 
 if __name__ == '__main__':
     rp.init_node('Validator', anonymous=False)

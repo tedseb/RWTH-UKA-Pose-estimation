@@ -91,7 +91,7 @@ class WorkerHandler(QThread):
             rp.on_shutdown(kill_gui_hook)
             self.gui_handler.run(self.gui)
         else:
-            self.gui = None
+            self.gui = mock.MagicMock()
 
     @logy.catch_ros
     def callback(self, station_usage_data: Any) -> NoReturn:
@@ -138,11 +138,10 @@ class WorkerHandler(QThread):
             current_worker = self.workers.get(station_id, None)
 
             feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
-            if self.gui:
-                self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
+            self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
-                self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=mock.MagicMock(), pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+                self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
                 logy.debug("New worker started for spot with key " + str(spot_info_key))
 
         else:
@@ -154,8 +153,7 @@ class WorkerHandler(QThread):
                 logy.debug("Worker stopped for spot with key " + str(spot_info_key))
             else:
                 logy.info("Tried stopping non existent worker for spot with key " + str(spot_info_key))
-            if self.gui:
-                self.gui.update_available_spots(spot_name=station_id, active=False)
+            self.gui.update_available_spots(spot_name=station_id, active=False)
             self.spot_metadata_interface.delete(spot_info_key)
 
 

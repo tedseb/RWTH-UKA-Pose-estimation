@@ -590,7 +590,7 @@ class TestCollection:
             [3, 2, 0.15, 0.24],
             [4, 3, 0.18, 0.28],
         ]
-        self._detection_and_metrabs_speed(ros_env, station_data, 10)
+        self._detection_and_metrabs_speed(ros_env, station_data, 3)
         ros_env.logy.test(f"# OK", "test")
 
     def test_detection_and_metrabs_speed_2(self, ros_env):
@@ -606,7 +606,7 @@ class TestCollection:
             [16, 16, 0.5, 0.5],
             [17, 16, 0.5, 0.5],
         ]
-        self._detection_and_metrabs_speed(ros_env, station_data, 10, 2)
+        self._detection_and_metrabs_speed(ros_env, station_data, 3, 2)
         ros_env.logy.test(f"# OK", "test")
 
 if __name__ == '__main__':

@@ -114,9 +114,18 @@ def validation_objective_function(hps):
 if __name__ == '__main__':
     space = {
         'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.2, 0.5),
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.2, 0.5)
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.2, 0.5),
+        'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.hp_choice('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', 0.01, 0.05, 0.1, 0.2),
+        'REMOVE_JITTER_RANGE': hp.hp_choice('REMOVE_JITTER_RANGE', 4, 5, 6),
+        # 'JUMPY_PROGRESS_ALPHA': hp.hp_choice('JUMPY_PROGRESS_ALPHA', 2, 3, 4),
+        # 'JUMPY_PROGRESS_BETA': hp.hp_choice('JUMPY_PROGRESS_BETA', 3, 4, 5),
+        'TRUST_REGION_FILTER_FACTOR': hp.hp_choice('TRUST_REGION_FILTER_FACTOR', 1, 2, 4, 8),
+        'MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT': hp.hp_choice('MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT', 0.8, 0.9, 0.95),
+        # 'JOINT_DIFFERENCE_FADING_FACTOR': hp.uniform('JOINT_DIFFERENCE_FADING_FACTOR', 0.2, 0.5),
+        'NUM_FEATURE_TO_PROGRESS_ALPHA': hp.hp_choice('NUM_FEATURE_TO_PROGRESS_ALPHA', 3, 4, 5, 6),
+        'NUM_FEATURE_TO_PROGRESS_BETA': hp.hp_choice('NUM_FEATURE_TO_PROGRESS_BETA', 0.9, 0.1, 1.5),
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=4)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=224)
 
     rp.logerr(str(best_hps))

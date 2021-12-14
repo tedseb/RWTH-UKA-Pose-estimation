@@ -25,6 +25,7 @@ except ImportError:
     from src.algorithm.GUI import *
     from backend.msg import StationUsage
 
+from unittest import mock
 import signal
 import time
 from PyQt5.QtCore import QThread
@@ -55,7 +56,8 @@ class WorkerHandler(QThread):
     spot_metadata_interface_class: SpotMetaDataInterface = RedisSpotMetaDataInterface, 
     spot_queue_interface_class: SpotQueueInterface = RedisSpotQueueInterface,
     pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
-    features_interface_class: FeaturesInterface = RedisFeaturesInterface):
+    features_interface_class: FeaturesInterface = RedisFeaturesInterface,
+    enable_gui=False):
         super().__init__()
         self.config = config
 
@@ -81,12 +83,15 @@ class WorkerHandler(QThread):
         else:
             raise NotImplementedError("There is not database connection setup in the WorkerHandler for this PoseDefinitionAdapter type.")
 
-        self.gui_handler = GUIHandler()
-        self.gui = MotionAnaysisGUI()
-        def kill_gui_hook():
-            self.gui_handler.stop()
-        rp.on_shutdown(kill_gui_hook)
-        self.gui_handler.run(self.gui)
+        if enable_gui:
+            self.gui_handler = GUIHandler()
+            self.gui = MotionAnaysisGUI()
+            def kill_gui_hook():
+                self.gui_handler.stop()
+            rp.on_shutdown(kill_gui_hook)
+            self.gui_handler.run(self.gui)
+        else:
+            self.gui = None
 
     @logy.catch_ros
     def callback(self, station_usage_data: Any) -> NoReturn:
@@ -133,10 +138,11 @@ class WorkerHandler(QThread):
             current_worker = self.workers.get(station_id, None)
 
             feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
-            self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
+            if self.gui:
+                self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             if not current_worker:
-                self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+                self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=mock.MagicMock(), pose_definition_adapter_class=self.pose_definition_adapter.__class__)
                 logy.debug("New worker started for spot with key " + str(spot_info_key))
 
         else:
@@ -148,7 +154,8 @@ class WorkerHandler(QThread):
                 logy.debug("Worker stopped for spot with key " + str(spot_info_key))
             else:
                 logy.info("Tried stopping non existent worker for spot with key " + str(spot_info_key))
-            self.gui.update_available_spots(spot_name=station_id, active=False)
+            if self.gui:
+                self.gui.update_available_spots(spot_name=station_id, active=False)
             self.spot_metadata_interface.delete(spot_info_key)
 
 
@@ -162,6 +169,7 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true") # TODO: @sm This does not do anything now - is it even necessary?
     parser.add_argument("-a", "--ai", help="Name of AI to work with", type=str, default='metrabs')
     parser.add_argument("-c", "--configpath", help="Path to config file", type=str, default='/home/trainerai/trainerai-core/src/motion_analysis/config.yml')
+    parser.add_argument("-g", "--enablegui", help="Whether to enable the gui", default=0, type=int)
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
@@ -180,6 +188,6 @@ if __name__ == '__main__':
     with open(args.configpath, 'r') as infile:
         config = yaml.safe_load(infile)
 
-    spot_info_handler = WorkerHandler(config, pose_definition_adapter_class=pose_definition_adapter_class)
+    spot_info_handler = WorkerHandler(config, pose_definition_adapter_class=pose_definition_adapter_class, enable_gui=args.enablegui)
 
     rp.spin()

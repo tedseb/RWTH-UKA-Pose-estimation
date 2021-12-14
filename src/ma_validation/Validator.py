@@ -15,7 +15,10 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 import threading
+import signal
+import yaml
 
 import datetime
 
@@ -91,13 +94,35 @@ class Validator():
                 self.done_exercises[finished_set.exercise_id] = np.array([0, 0, 0, 0, 0])
 
             self.done_exercises[finished_set.exercise_id] = self.done_exercises[finished_set.exercise_id] + np.array([msg.reps, 0, positive_error + negative_error, positive_error, negative_error])
-        
+
         self.semaphore.release()
             
     def create_report(self, msg):
-        rows = list(self.done_exercises.keys())
-        columns = ["Total Repetitions", "Percent Counted", "Total Error", "Positive Error", " Negative Error"]
-        df = pd.DataFrame.from_dict(self.done_exercises, orient='index', columns=columns) # (np.random.randn(10, 4), columns=list('ABCD'))
+        done_exercises = self.done_exercises.copy()
+
+        tprs = []
+        fprs = []
+        
+        columns = ["Total Repetitions", "Percent Counted Correctly", "Total Error", "Positive Error", " Negative Error", "TPR", "FPR"]
+        for k in done_exercises.keys():
+            e = done_exercises[k]
+            tpr = (e[0] - e[4]) / e[0]
+            fpr = e[3] / e[0]
+            done_exercises[k][1] = 100 * ((e[0] - e[2]) / e[0])
+            done_exercises[k] = np.append(done_exercises[k], [tpr, fpr])
+
+            tprs.append(tpr)
+            fprs.append(fpr)
+
+        rows = list(done_exercises.keys())
+
+        if not rows:
+            rp.logerr("No exercise recorded, writing an empty yaml file.")
+            with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
+                yaml.dump({}, outfile)
+            return
+        
+        df = pd.DataFrame.from_dict(done_exercises, orient='index', columns=columns) # (np.random.randn(10, 4), columns=list('ABCD'))
         with PdfPages('/home/trainerai/trainerai-core/data/ma_validation_report.pdf') as pdf:
             fig, ax = plt.subplots()
             fig.patch.set_visible(False)
@@ -105,7 +130,7 @@ class Validator():
             ax.axis('tight')
             ax.table(cellText=df.values, colLabels=df.columns, loc='center', rowLabels=rows)
 
-            plt.title('Motion Analysis Validation Report \nby Exercise ID')
+            plt.title('Motion Analysis Validation Report\n TPR: ' + str(np.average(tprs)) + ' , FPR: ' + str(np.average(fprs)) )
             pdf.savefig()
             plt.close()
 
@@ -116,6 +141,11 @@ class Validator():
             d['CreationDate'] = datetime.datetime.today()
             d['ModDate'] = datetime.datetime.today()
 
+        with open('/home/trainerai/trainerai-core/data/validation_report.yml', 'w') as outfile:
+            yaml.dump({k: v.tolist() for k,v in done_exercises.items()}, outfile)
+
+    def __del__(self):
+        self.create_report(None)
 
 
 if __name__ == '__main__':

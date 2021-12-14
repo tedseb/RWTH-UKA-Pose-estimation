@@ -8,13 +8,11 @@ It is written and maintained by artur.niederfahrenhorst@rwth-aachen.de.
 
 try:
     import motion_analysis.src.algorithm.FeatureExtraction as FeatureExtractionModule
-    from motion_analysis.src.DataConfig import FEATURE_EXTRACTION_SERVER_PORT
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.ROSAdapters import *
 except ModuleNotFoundError:
     import src.algorithm.FeatureExtraction as FeatureExtractionModule
-    from src.DataConfig import FEATURE_EXTRACTION_SERVER_PORT
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.Features import *
     from src.ROSAdapters import *
@@ -82,7 +80,7 @@ async def analyze(websocket, path):
 
     await websocket.send(return_value)
 
-start_server = websockets.serve(analyze, "0.0.0.0", FEATURE_EXTRACTION_SERVER_PORT)
+start_server = websockets.serve(analyze, "0.0.0.0", 3002)
 
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()

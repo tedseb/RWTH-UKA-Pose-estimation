@@ -32,21 +32,21 @@ import math
 from abc import abstractmethod
 from itertools import combinations
 from typing import Tuple
-
+import logy
 import hashlib
 import numpy as np
 
 try:
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.AlgoUtils import *
     from motion_analysis.src.algorithm.Features import *
     from motion_analysis.src.ROSAdapters import *
 except (ModuleNotFoundError, ImportError):
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
     from src.algorithm.Features import *
-    from src.ROSAdapters import *
 
+X = 0
+Y = 1
+Z = 2
 
 class FeatureExtractorException(Exception):
     pass
@@ -98,7 +98,7 @@ def extract_height_of_joint(pose_array: np.ndarray, index: int) -> float:
     return pose_array[index][Z]
 
 
-def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter) -> float:
+def extract_height_of_body_core(pose_array: np.ndarray, pose_definition_adapter) -> float:
     """Compute the average height of pelvis and neck, representing the height of the body's core.
     
     Args:
@@ -199,7 +199,7 @@ def extract_acceleration(poses_array: np.ndarray, joint: int) -> float:
     raise NotImplementedError("Currently not part of the features of interest.")
 
 
-def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
+def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pose_definition_adapter) -> dict:
     """This method turns an exercise data dictionary into a dictionary of features.
 
     Features are specified according to the following structure:
@@ -218,12 +218,12 @@ def extract_feature_of_interest_specification_dictionary(hmi_features: dict, pos
             feature_hash = hashlib.md5(sorted(feature_strings).__repr__().encode()).digest()
             features_of_interest.update({feature_hash: {"type": FeatureType.JOINT_DISTANCE, "joints": f['value']}})
         else:
-            log("Unhandled feature type:" + str(f['type']))
+            logy.debug_throttle("Unhandled feature type:" + str(f['type']))
 
     return features_of_interest
 
 
-def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseDefinitionAdapter) -> dict:
+def extract_angles_of_interest(joint_names: list, pose_definition_adapter) -> dict:
     frozen_joint_names = frozenset(joint_names)
     
     exceptions = dict()
@@ -236,7 +236,7 @@ def extract_angles_of_interest(joint_names: list, pose_definition_adapter: PoseD
 
     
     if exceptions:
-        rp.logerr("Errors occured while parsing the provided exercise:" + str(exceptions))
+        logy.debug_throttle("Errors occured while parsing the provided exercise:" + str(exceptions))
     
     joint_hash = hashlib.md5(sorted(frozen_joint_names).__repr__().encode()).digest()
     features_of_interest[joint_hash] = {"type": FeatureType.ANGLE, "inner_joint": inner_joint, "outer_joints": outer_joints}

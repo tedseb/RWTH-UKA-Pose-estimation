@@ -15,15 +15,11 @@ import pymongo
 
 
 try:
-    from motion_analysis.src.DataConfig import *
-    from motion_analysis.src.DataUtils import *
-    from motion_analysis.src.algorithm.AlgoConfig import X, Y, Z
     from motion_analysis.src.algorithm.AlgoUtils import *
+    from motion_analysis.src.algorithm.FeatureExtraction import X, Y, Z
 except ImportError:
-    from src.DataConfig import *
-    from src.DataUtils import *
-    from src.algorithm.AlgoConfig import X, Y, Z
     from src.algorithm.AlgoUtils import *
+    from src.algorithm.FeatureExtraction import X, Y, Z
 
 try:
     from backend.msg import Bodypart

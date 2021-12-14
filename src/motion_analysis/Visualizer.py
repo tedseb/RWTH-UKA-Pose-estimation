@@ -4,21 +4,19 @@
 
 import rospy as rp
 import argparse
+import logy
+
 
 try:
     from motion_analysis.src.Worker import *
-    from motion_analysis.src.DataConfig import *
     from motion_analysis.src.InterCom import *
     from motion_analysis.src.DataUtils import *
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.FeatureExtraction import *
     from motion_analysis.src.algorithm.AlgoUtils import *
 except ImportError:
     from src.Worker import *
-    from src.DataConfig import *
     from src.InterCom import *
     from src.DataUtils import *
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.FeatureExtraction import *
     from src.algorithm.AlgoUtils import *
 
@@ -47,6 +45,7 @@ class Visualizer():
     def reference_callback(self, data):
         return self.frame_callback(data, self.reference_pub)
 
+    @logy.trace_time("visualizer:frame_callback", period=100)
     def frame_callback(self, data, publisher):
         idx = 0
         marker_array = MarkerArray()

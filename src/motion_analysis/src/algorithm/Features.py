@@ -38,14 +38,13 @@ from scipy.linalg import hankel
 from typing import List
 
 try:
-    from motion_analysis.src.algorithm.AlgoConfig import *
     from motion_analysis.src.algorithm.AlgoUtils import *
-    from motion_analysis.src.algorithm.logging import log
 except (ModuleNotFoundError, ImportError):
-    from src.algorithm.AlgoConfig import *
     from src.algorithm.AlgoUtils import *
-    from src.algorithm.logging import log
 
+X = 0
+Y = 1
+Z = 2
 
 # We need this to implement some loop logic further down this file
 class ContinueToOuterLoop(Exception):
@@ -76,11 +75,14 @@ class BaseFeature(ABC):
     Any type of feature is identified by a hash. This is usually a hashed string representation of an object.
     In the case of angles, that of an ordered dictionary containing the connected joints."""
     def __init__(self, \
-        feature_hash: str, \
-            specification_dict: object = {},
-                max_digitized_trajectory_length: int = DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
+        config: dict, \
+            feature_hash: str, \
+                specification_dict: object = {},
+                    max_digitized_trajectory_length: int = math.inf):
 
-        self.max_digitized_traj_len = np.int(np.min([DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE, max_digitized_trajectory_length]))
+        self.config = config
+
+        self.max_digitized_traj_len = np.int(np.min([self.config['DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE'], max_digitized_trajectory_length]))
 
         self.progression = 0
         self._values = np.array([])
@@ -93,7 +95,7 @@ class BaseFeature(ABC):
         self.errors = np.array([])
         self.progress_vector = np.array([])
         self.prediction = np.array([]) 
-            
+        
         self.feature_hash = feature_hash
         self.type = specification_dict["type"]
         # If there is anything else apart from the feature_hash to specify what feature this is, we specify it in this dict
@@ -104,7 +106,7 @@ class BaseFeature(ABC):
 
     def add_filter_value(self, value):
         try:
-            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - (TRUST_REGION_FILTER_FACTOR * self.resolution), min(value, self.filtered_value + (TRUST_REGION_FILTER_FACTOR * self.resolution))))
+            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution), min(value, self.filtered_value + (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution))))
         except IndexError as e:
             self.filtered_values = np.append(self.filtered_values, value)
 
@@ -122,7 +124,7 @@ class BaseFeature(ABC):
 
     @filtered_values.setter
     def filtered_values(self, filtered_values):
-        self._filtered_values = filtered_values[-FEATURE_TRAJECTORY_MAX_MEMORY_SIZE:]
+        self._filtered_values = filtered_values[-self.config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE']:]
 
     @property
     def digitized_value(self):
@@ -141,7 +143,7 @@ class BaseFeature(ABC):
 
     @values.setter
     def values(self, v):
-        self._values = v[-FEATURE_TRAJECTORY_MAX_MEMORY_SIZE:]
+        self._values = v[-self.config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE']:]
 
     @property
     def discretized_values(self):
@@ -157,7 +159,7 @@ class BaseFeature(ABC):
 
     @states.setter
     def states(self, s):
-        self._states = s[-STATES_TRAJECTORY_MAX_MEMORY_SIZE:]
+        self._states = s[-self.config['STATES_TRAJECTORY_MAX_MEMORY_SIZE']:]
 
     @abstractmethod
     def asdict(self):
@@ -170,12 +172,13 @@ class ReferenceRecordingFeature(BaseFeature):
     It stores all properties of a repetition that are of meaning to our algorithm.
     In order to identify the repetition it belongs to among all repetitions that we analyze, we hash the recording itself."""
     def __init__(self, \
-        feature_hash: str, \
-            exercise_id: str, \
-                recording: str, \
-                    pose_definition_adapter: PoseDefinitionAdapter,
-                        specification_dict: object = {}):
-        super().__init__(feature_hash, specification_dict, max_digitized_trajectory_length=np.inf)
+        config: dict, \
+            feature_hash: str, \
+                exercise_id: str, \
+                    recording: str, \
+                        pose_definition_adapter: PoseDefinitionAdapter,
+                            specification_dict: object = {}):
+        super().__init__(config, feature_hash, specification_dict, max_digitized_trajectory_length=np.inf)
         
         self.recording_hash = fast_hash(recording)
         self.recording = recording
@@ -220,8 +223,8 @@ class ReferenceRecordingFeature(BaseFeature):
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
-        self.lower_boundary = self.lowest_value + self.range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
-        self.upper_boundary = self.highest_value - self.range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
+        self.lower_boundary = self.lowest_value + self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER']
+        self.upper_boundary = self.highest_value - self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER']
         
         first_reference_feature_value = self.values[0]
         self.beginning_state = decide_feature_state(first_reference_feature_value, FeatureState.FEATURE_UNDECIDED, self.lower_boundary, self.upper_boundary)
@@ -231,7 +234,7 @@ class ReferenceRecordingFeature(BaseFeature):
                 self.hankel_tensor, \
                     self.feature_states_matrix, \
                         self.scale, \
-                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary)
+                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary, self.config)
         
         for value in self.values:
             self.add_filter_value(value)
@@ -304,11 +307,12 @@ class ReferenceRecordingFeature(BaseFeature):
 
 class ReferenceRecordingFeatureCollection(BaseFeature):
     def __init__(self, \
-        feature_hash: str, \
-            feature_specification: dict = {}, \
-                reference_data: List[tuple] = []):
+        config: dict, \
+            feature_hash: str, \
+                feature_specification: dict = {}, \
+                    reference_data: List[tuple] = []):
 
-        super().__init__(feature_hash, feature_specification, max_digitized_trajectory_length=np.inf)
+        super().__init__(config, feature_hash, feature_specification, max_digitized_trajectory_length=np.inf)
         self.reference_recording_features = list()
 
         for (exercise_id, recording, adapter) in reference_data:
@@ -322,7 +326,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         Args:
             recording: A recording, corresponding to a repetition of an exercise that we want to add
             pose_definition_adapter: A pose definition adapter that fits the recording"""
-        reference_feature = ReferenceRecordingFeature(self.feature_hash, exercise_id, recording, pose_definition_adapter, self.specification_dict)
+        reference_feature = ReferenceRecordingFeature(self.config, self.feature_hash, exercise_id, recording, pose_definition_adapter, self.specification_dict)
         self.reference_recording_features.append(reference_feature)
 
     def update_static_data(self):
@@ -343,15 +347,15 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
-        self.lower_boundary = self.lowest_value + self.range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER
-        self.upper_boundary = self.highest_value - self.range_of_motion * REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER
+        self.lower_boundary = self.lowest_value + self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER']
+        self.upper_boundary = self.highest_value - self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER']
 
         discrete_trajectories_tensor, \
             self.discretization_reference_trajectory_indices_tensor, \
                 self.hankel_tensor, \
                     self.feature_states_matrix, \
                         self.scale, \
-                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states(trajectories, self.range_of_motion, self.lower_boundary, self.upper_boundary)
+                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states(trajectories, self.range_of_motion, self.lower_boundary, self.upper_boundary, self.config)
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
@@ -404,10 +408,14 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
 
 class Feature(BaseFeature):
     def __init__(self, \
+    config: dict, \
         reference_feature_collection: ReferenceRecordingFeatureCollection, \
-                max_trajectory_length=FEATURE_TRAJECTORY_MAX_MEMORY_SIZE):
+                max_trajectory_length=None):
 
-        super().__init__(reference_feature_collection.feature_hash, reference_feature_collection.specification_dict, max_digitized_trajectory_length=max_trajectory_length)
+        max_trajectory_length = max_trajectory_length if max_trajectory_length else config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE']
+
+
+        super().__init__(config, reference_feature_collection.feature_hash, reference_feature_collection.specification_dict, max_digitized_trajectory_length=max_trajectory_length)
         self.reference_feature_collection = reference_feature_collection
         self.lower_boundary = reference_feature_collection.lower_boundary
         self.upper_boundary = reference_feature_collection.upper_boundary
@@ -426,7 +434,7 @@ class Feature(BaseFeature):
             # If this is the first value, extend with the nearest value on our scale
             self.discretized_values = np.append(self.discretized_values, scale[np.argmin(abs(scale - value))])
         
-        self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, REMOVE_JITTER_RANGE)
+        self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, self.config['REMOVE_JITTER_RANGE'])
 
         self.values = np.append(self.values, value)
         has_changed_progression = self.compute_new_feature_progression()
@@ -562,7 +570,7 @@ def remove_jitter_from_trajectory(trajectory, _range):
     return trajectory
 
 
-def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, range_of_motion, lower_boundary, upper_boundary):
+def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, range_of_motion, lower_boundary, upper_boundary, config):
     """Discritize a list of trajectories and compute their hankel tensor and features states.
 
     Args:
@@ -579,7 +587,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
         The scale that the discrete_trajectories_tensor was constructed with
     """
     # We compute the resampled values separately for each trajectory and turn them into hankel matrices
-    resolution = range_of_motion * FEATURE_TRAJECTORY_RESOLUTION_FACTOR
+    resolution = range_of_motion * config['FEATURE_TRAJECTORY_RESOLUTION_FACTOR']
     discrete_trajectories_tensor = []
     discretization_reference_trajectory_indices_tensor = [] # For every resampled value, we need an index to point us to the original pose
     hankel_tensor = [] # In the analysis algorithm, we need a hankel matrix of every resampled reference trajectory
@@ -602,7 +610,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
                     feature_states.append(feature_state)
                     last_feature_state = feature_state
 
-        discrete_values = remove_jitter_from_trajectory(discrete_values, REMOVE_JITTER_RANGE)
+        discrete_values = remove_jitter_from_trajectory(discrete_values, config['REMOVE_JITTER_RANGE'])
 
         discrete_trajectories_tensor.append(discrete_values)
         hankel_matrix = hankel(discrete_trajectories_tensor, np.roll(discrete_trajectories_tensor, -1))

@@ -17,31 +17,51 @@ class ResetTimer(Thread):
         self._args = args
         self._kwargs = kwargs
         self._finished = Event()
+        self._start = Event()
+        self._start.set()
         self._resetted = True
         self._reset_mutex = Lock()
+        self._stopped = False
+
+    def __del__(self):
+        self.stop()
+
+    def stop(self):
+        self._stopped = True
+        self._finished.set()
+        self._start.set()
+
+    def join(self):
+        self.stop()
+        super.join()
 
     def cancel(self):
         """Stop the timer if it hasn't finished yet"""
-        self.finished.set()
+        self._finished.set()
 
     def run(self):
+        while not self._stopped:
+            self._start.wait()
 
-        while self._resetted:
-            with self._reset_mutex:
-                self._resetted = False
-            self._finished.wait(self.interval)
+            while self._resetted:
+                with self._reset_mutex:
+                    self._resetted = False
+                self._finished.wait(self._interval)
 
-        if not self.finished.isSet():
-            self.function(*self._args, **self._kwargs)
-        self._finished.set()
+            if not self._finished.isSet():
+                self._function(*self._args, **self._kwargs)
+            self._finished.set()
+            self._start.clear()
 
     def reset(self, interval=None):
         """ Reset the timer """
 
         if interval:
-            self.interval = interval
+            self._interval = interval
 
-        self.resetted = True
+        self._resetted = True
         with self._reset_mutex:
-            self.finished.set()
-            self.finished.clear()
+            self._start.set()
+            self._start.clear()
+            self._finished.set()
+            self._finished.clear()

@@ -338,10 +338,11 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
 
         if (queue_size >= self.config['REDIS_QUEUE_SIZE_PANIC_BOUNDARY']):
             if (queue_size >= self.config['REDIS_MAXIMUM_QUEUE_SIZE']):
-                logy.debug_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.", throttel_time_ms=5000)
+                #logy.debug_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.", throttel_time_ms=5000)
                 self.redis_connection.ltrim(spot_queue_key, 0, self.config['REDIS_MAXIMUM_QUEUE_SIZE'])
             else:
-                logy.warning_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached.", throttel_time_ms=5000)
+                pass
+                # logy.warn_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached.", throttel_time_ms=5000)
         else:
             self.ma_validation_rate_control.publish(Int32(0))
         return 1

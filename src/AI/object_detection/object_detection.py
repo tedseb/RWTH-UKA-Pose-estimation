@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import sys
+import argparse
 from ctypes import resize
 import threading
 import collections
@@ -98,7 +100,7 @@ class ObjectDetectionPipeline:
                 if channel_info.cam_id in self._image_queues:
                     del self._image_queues[channel_info.cam_id]
 
-    #@logy.catch_thread_and_restart
+    @logy.catch_thread_and_restart
     def _object_detector_loop(self):
         '''
         This is a thread function which pull images from the queues.
@@ -135,24 +137,24 @@ class ObjectDetectionPipeline:
                     camera_ids.append(camera_id)
                     image_data.append(img_data)
 
-            if not images:
-                time.sleep(thread_wait_time)
-                continue
-
-            yolo_data_results = self.detect_objects(images, resize_factors)
-            if yolo_data_results is None:
-                return
-
-            for i, yolo_data in enumerate(yolo_data_results):
-                if yolo_data is None:
+                if not images:
+                    time.sleep(thread_wait_time)
                     continue
-                station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
-                #logy.warn(f"boxes = {station_boxes}")
-                logy.log_fps("publish_boxes")
-                self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
-                self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
-                self._publish_labels(yolo_data.labels, image_data[i])
-            logy.log_fps("object_detection_fps")
+
+                yolo_data_results = self.detect_objects(images, resize_factors)
+                if yolo_data_results is None:
+                    return
+
+                for i, yolo_data in enumerate(yolo_data_results):
+                    if yolo_data is None:
+                        continue
+                    station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
+                    #logy.warn(f"boxes = {station_boxes}")
+                    logy.log_fps("publish_boxes")
+                    self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
+                    self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
+                    self._publish_labels(yolo_data.labels, image_data[i])
+                logy.log_fps("object_detection_fps")
 
     @logy.trace_time("detect_objects")
     def detect_objects(self, imgs : List, resize_factors : Tuple) -> YoloData:
@@ -266,11 +268,22 @@ class ObjectDetectionPipeline:
         rospy.spin()
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--render", help="Draw and publish yolo images", action="store_true")
+
+    arg_count = len(sys.argv)
+    #print(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
 
     logy.basic_config(debug_level=logy.DEBUG, module_name="OD")
     rospy.init_node('object_detection', anonymous=True)
     rospy.set_param('param_server', yaml.dump({0: {}}))
-    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=True, check_station=True)
+    obj_detect = ObjectDetectionPipeline(device="cuda", threshold=0.5, renderer=args.render, check_station=True)
     signal.signal(signal.SIGTERM, obj_detect.shutdown)
     signal.signal(signal.SIGINT, obj_detect.shutdown)
     obj_detect.spin()

@@ -13,6 +13,7 @@ import traceback
 import neptune.new as neptune
 
 NOTSET = 0
+TEST = 5
 DEBUG = 10
 TRACING = 15
 INFO = 20
@@ -31,7 +32,8 @@ PIPE_WAIT_TIME = 0.5
 #Debug Levels
 MESSAGE_OUTPUT_LEVEL_TERMINAL = 50
 MESSAGE_OUTPUT_LEVEL_FILE = 90
-#0   [ERROR]:
+#0   #
+#5   [ERROR]:
 #10  [ERROR]::File:
 #20  [ERROR]::File:Line:
 #30  [ERROR]::Modul:File:Line::
@@ -45,6 +47,7 @@ MESSAGE_OUTPUT_LEVEL_FILE = 90
 #110 [ERROR]::Modul:File:Function:Line:
 #120 [ERROR]::Time::Modul:File:Function:Line:
 #130 [ERROR]::Time::File:Line:
+#140 [ERROR]::Function:
 
 FIFO = '/home/trainerai/logy_pipe'
 
@@ -95,7 +98,8 @@ class LogyBackend:
 
     #0=Modul, 1=File, 2=Function, 3=Line, 4=Time, 5=Msg
     _format_strings = {
-        0: ": {5}",
+        0: "{5}",
+        5: ": {5}",
         10: "::{1}: {5}",
         20: "::{1}:{3}: {5}",
         30: "::{0}:{1}:{3}: {5}",
@@ -108,7 +112,8 @@ class LogyBackend:
         100: "::{0}:{1}:{2}:{3}::{4}: {5}",
         110: "::{0}:{1}:{2}:{3}: {5}",
         120: "::{4}::{0}:{1}:{2}::{3} {5}",
-        130: "::{4}::{1}:{3}: {5}"
+        130: "::{4}::{1}:{3}: {5}",
+        140: "::{2}: {5}"
     }
 
     _format_colors = {
@@ -131,6 +136,7 @@ class LogyBackend:
             file_prefix=DEFAULT_FILE_PREFIX,
             pipe_wait_time=PIPE_WAIT_TIME,
             use_neptune=USE_NEPTUNE,
+            test_case = False,
             print_tags=[]):
 
         self._log_to_terminal = log_to_terminal
@@ -151,8 +157,16 @@ class LogyBackend:
         self._mean_data: Dict[MeanData] = {}
         self._var_data: Dict[VariableData] = {}
         self._tracing_data: Dict[VariableData] = {}
-        if self._log_to_file:
-            self._open_log_file(file_prefix)
+        self._test_case = test_case
+
+        if self._test_case:
+            self._log_to_file = True
+            self._log_to_file_level = TEST
+            self._message_output_level_file = 0
+            self._open_log_file(file_prefix + "_system_test")
+        else:
+            if self._log_to_file:
+                self._open_log_file(file_prefix)
 
         if self._use_neptune:
             self._log_message(" Logy: Log online with Neptune. neptune.ai", INFO)
@@ -338,6 +352,9 @@ class LogyBackend:
             log_message = self._format_message(data, self._message_output_level_file)
 
         if log_level >= self._log_to_file_level:
+            if self._test_case:
+                if not (data["tag"] == "test"):
+                    return
             self._log_msg_to_file(log_message, log_level)
 
     def _log_message(self, msg, log_level):
@@ -371,7 +388,9 @@ class LogyBackend:
 
     def _log_msg_to_file(self, msg: str, log_level: int):
         if self._log_to_file and self._log_file is not None:
-            level_str = f"[{self._level_to_name[log_level]}]"
+            level_str = ""
+            if log_level >= DEBUG:
+                level_str = f"[{self._level_to_name[log_level]}]"
             self._log_file.write(level_str + msg + "\n")
 
     def pipe_loop(self):
@@ -429,7 +448,7 @@ class LogyBackend:
             if self._error_occured < ERROR:
                 self._neptune_run["Info"] = {"State": "SUCCESS"}
 
-def main(start_neptune=False, tags=[], log_level_terminal="warning"):
+def main(start_neptune=False, tags=[], log_level_terminal="warning", test_case=False):
     try:
         os.mkfifo(FIFO)
     except OSError as oe:
@@ -437,17 +456,18 @@ def main(start_neptune=False, tags=[], log_level_terminal="warning"):
             raise
 
     level = _name_to_level[log_level_terminal]
-    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags, log_to_terminal_level=level)
+    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case)
     logger_backend.start_reading()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", "--neptune", help="Start with Neptune logging", action="store_true")
     parser.add_argument("-t", "--tag", type=str, help="All tags which should be printed on the terminal. e.g: 'msg frame'")
+    parser.add_argument("--test", help="Log to test files", action="store_true")
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
 
     arg_count = len(sys.argv)
-    print(sys.argv)
+    #print(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]
@@ -459,4 +479,5 @@ if __name__ == '__main__':
     if args.tag is not None and args.tag != "msg":
         tags = str(args.tag).split()
 
-    main(args.neptune, tags=tags, log_level_terminal=args.log_level)
+    test_case = args.test is not None
+    main(args.neptune, tags=tags, log_level_terminal=args.log_level, test_case=test_case)

@@ -23,7 +23,7 @@ def main():
     #demo_with_known_intrinsics_and_boxes()
     #image = tf.image.decode_jpeg(tf.io.read_file('./image.jpg'))
     image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-    model = tf.saved_model.load('./models/metrabs_multiperson_smpl')
+    model = tf.saved_model.load('./models/metrabs_multiperson_smpl_combined')
     test_single_image(model, image)
     test_multi_image(model, image)
 
@@ -39,7 +39,7 @@ def test_single_image(model, image):
     for i in range(2):
         print(f"Single Detection Boxes {i + 1}:")
         time_stamp = time.time()
-        pred = model.predict_single_image(image, intrinsics, person_boxes)
+        pred = model.predict_single_image(image, intrinsics) #, person_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
 
@@ -61,7 +61,7 @@ def _test_multi_image(model, image, count, repetitions = 2):
     for i in range(repetitions):
         print(f"Multi Detection ({images.shape}) {i + 1}:")
         time_stamp = time.time()
-        pred = model.predict_multi_image(images, intrinsics, ragged_boxes)
+        pred = model.predict_multi_image(images, intrinsics) #, ragged_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
 

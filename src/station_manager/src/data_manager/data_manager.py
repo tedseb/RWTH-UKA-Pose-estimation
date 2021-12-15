@@ -1,11 +1,12 @@
 from ast import literal_eval as make_tuple
-from typing import List, Tuple
+from typing import List, Set, Tuple
 from multiprocessing import Lock
 import psycopg2
 import copy
 import pymongo
+from .data_manager_interface import DataManagerInterface
 
-class DataManager():
+class DataManager(DataManagerInterface):
     def __init__(self):
         super().__init__()
 
@@ -87,7 +88,7 @@ class DataManager():
 
                 if row[1] not in frames:
                     frames[row[1]] = {}
-              
+
                 if row[3] is not None:
                     box_size = make_tuple("(" + row[3] + ")")
                     frame_list = [box_size[1][0], box_size[1][1], box_size[0][0], box_size[0][1]]
@@ -115,7 +116,7 @@ class DataManager():
 
             for row in table:
                 self._camera_infos[row[0]] = [row[1], row[2], row[3]]
-            
+
 
         except psycopg2.Error as error:
             print("Error while fetching data from PostgreSQL", error)
@@ -219,11 +220,15 @@ class DataManager():
         with self._station_camera_mutex:
             return copy.deepcopy(self._station_cameras[station_id])
 
+    def get_stations(self) -> Set:
+        station_set = set(s for s in self._station_cameras.keys())
+        return station_set
+
     def is_mongo_on(self):
         return self._mongo_is_on
 
     def get_exercises(self):
         return copy.deepcopy(self._exercises)
 
-    def get_exercises_on_station(self, station_id : int): 
+    def get_exercises_on_station(self, station_id : int):
         return copy.deepcopy(self._station_exercises[station_id])

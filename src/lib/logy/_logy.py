@@ -6,12 +6,14 @@ from typing import Dict
 import pickle
 import time
 import traceback
+import signal
 from filelock import FileLock
 
 FIFO = '/home/trainerai/logy_pipe'
 FIFO_LOCK = '/home/trainerai/logy_pipe.lock'
 
 NOTSET = 0
+TEST = 5
 DEBUG = 10
 INFO = 20
 WARNING = 30
@@ -93,6 +95,22 @@ class Singleton(type):
                 if not cls._instance:
                     cls._instance = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instance
+
+def time_out_handler(signum, frame):
+    raise TimeoutError
+
+class TimeOutHandler:
+    def __init__(self, time_out_ms : int):
+        self._time_out_ms = time_out_ms
+
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, time_out_handler)
+        #signal.alarm(self._time_out_ms / 1000)
+        signal.setitimer(signal.ITIMER_REAL, self._time_out_ms / 1000)
+
+    def __exit__(self, type, value, traceback):
+        #signal.alarm(0)
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 class LogyHandler:
     def __init__(self, logger, debug_level: int, module: str):
@@ -199,6 +217,9 @@ class LogyHandler:
         fps_last_time[1] = 1
         self._logger.send_tracing(name, fps, "fps", 4)
 
+    def test(self, msg: str, tag="test"):
+        self._send_msg(msg, tag, TEST, 3)
+
     def debug(self, msg: str, tag="msg"):
         self._send_msg(msg, tag, DEBUG, 3)
 
@@ -259,34 +280,52 @@ class Logy(metaclass=Singleton):
         self._lock = threading.Lock()
         self._root = LogyHandler(self, WARNING, "--")
         self._logger_dict = {}
+        self._pipe = None
+        self._last_pipe_try = 0
+        self._pipe_wait_time_s = 0.5
         self._open_pipe()
 
     def __del__(self):
         print("Destructor: Close Logy Writer")
-        trace = traceback.format_exc()
-        print(trace)
+        # trace = traceback.format_exc()
+        # print(trace)
         self._pipe.close()
 
     def _open_pipe(self) -> bool:
-        print("OPEN PIPE")
+        time_now = time.time()
+        if time_now - self._last_pipe_try <= self._pipe_wait_time_s:
+            return False
+
+        #print("OPEN PIPE")
         try:
             os.mkfifo(FIFO)
         except OSError as oe:
             if oe.errno != errno.EEXIST:
                 raise
 
+        timeout_ms = 2000
+        self._last_pipe_try = time_now + timeout_ms
+        #print("Try OPEN PIPE")
+
         try:
-            self._pipe =  open(FIFO, 'wb')
+            with TimeOutHandler(timeout_ms):
+                self._pipe = open(FIFO, 'wb')
+        except TimeoutError:
+            print("Timeout")
+            self._pipe = None
+            return False
         except OSError:
             print("Pipe Error")
+            self._pipe = None
             return False
         return not self._pipe.closed
 
     def _pipe_send(self, data: Dict):
-        if self._pipe.closed:
+        if self._pipe is None or self._pipe.closed:
             print("Pipe unexpectedly closed. Try to open file again")
             if not self._open_pipe():
                 return
+
         lock = FileLock(FIFO_LOCK)
         with lock:
             try:
@@ -365,6 +404,10 @@ def exception_hook(exctype, value, trace):
     critical("Logy Traceback Hook: \n" + traceback_string)
     sys.__excepthook__(exctype, value, trace)
 
+def test(msg: str, tag="test"):
+    logger = Logy()
+    logger._root._send_msg(msg, tag, TEST, 3)
+
 def debug(msg: str, tag="msg"):
     logger = Logy()
     logger._root._send_msg(msg, tag, DEBUG, 3)
@@ -430,7 +473,7 @@ def log_fps(name: str, period=50):
     logger = Logy()
     logger._root._log_fps(name, period)
 
-def trace_time(name, period=50, smoothing=0.9):
+def trace_time(name, period=50, smoothing=0.0):
     def trace_time_decorator(func):
         def _trace_time(*args, **kwargs):
             time_elapsed = time.time()

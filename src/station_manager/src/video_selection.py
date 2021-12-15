@@ -1,6 +1,6 @@
 import sys
 from typing import Callable
-from src.layouts import VideoSelectionUi
+from .layouts import VideoSelectionUi
 from .data_manager import DataManager
 from PyQt5.QtWidgets import QApplication, QMainWindow, QListWidgetItem, QDialog
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QObject

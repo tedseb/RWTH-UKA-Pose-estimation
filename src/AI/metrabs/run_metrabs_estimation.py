@@ -13,8 +13,8 @@ import time
 import rospy
 from sensor_msgs.msg import Image
 from backend.msg import ImageData, ChannelInfo
-from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
-from std_msgs.msg import Float32MultiArray
+from backend.msg import Person, Persons, Bodypart, Pixel, Bboxes
+from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 import logy
 import time
@@ -48,6 +48,8 @@ CONFIG = {
 
 class PoseEstimator():
     def __init__(self):
+
+        self.ready_signal = rospy.Publisher('/signals/metrabs_ready', Bool, queue_size=2)
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
         self.model = tf.saved_model.load(CONFIG["model_path"])
@@ -57,7 +59,7 @@ class PoseEstimator():
         # See the README for how to combine the YOLOv4 detector with our MeTRAbs code.
 
         # define a publisher to publish the 3D skeleton of multiple people
-        self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
+        self.publisher = rospy.Publisher('personsJS', Persons, queue_size=10)
         self.publisher_crop = {}
 
         self.subscriber_image = {}
@@ -73,9 +75,9 @@ class PoseEstimator():
         self._box_queues = {}
         self._thread_lock = Lock()
 
-        image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-        person_boxes = [np.array([100, 100, 100, 100], np.float32)]
-        self.start_ai([], np.stack([image]), [person_boxes])
+        self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
+        self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
+        self.start_ai([], np.stack([self._fake_image]), [self._fake_person_boxes], set())
 
         self._is_active = True
         self._ai_thread = threading.Thread(target=self.thread_handler)
@@ -185,133 +187,159 @@ class PoseEstimator():
     def thread_handler(self):
         logy.debug("Metrabs Thread is active")
         thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
+
         while(self._is_active):
-            boxes = []
-            images = []
-            data = []
-            with self._thread_lock:
-                for camera_id, queue in self._box_queues.items():
-                    if queue.empty():
-                        continue
+            with logy.TraceTime("matrabs_multi_image_before"):
+                boxes = []
+                images = []
+                data = []
+                with self._thread_lock:
+                    fake_images = set()
+                    for camera_id, queue in self._box_queues.items():
+                        if queue.empty():
+                            fake_images.add(camera_id)
+                            data.append((camera_id, None, None))
+                            images.append(self._fake_image)
+                            boxes.append(self._fake_person_boxes)
+                            #logy.warn("Queue Empty")
+                            continue
 
-                    box = queue.get()
-                    box_np = np.array(box.data).reshape(-1, 4)
-                    if box_np.size == 0:
-                        continue
+                        box = queue.get()
+                        box_np = np.array(box.data).reshape(-1, 4)
+                        if box_np.size == 0:
+                            fake_images.add(camera_id)
+                            data.append((camera_id, None, None))
+                            images.append(self._fake_image)
+                            boxes.append(self._fake_person_boxes)
+                            #logy.warn("Box Size 0")
+                            continue
 
-                    img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
-                    if img_data is None:
-                        continue
+                        img_data = self.get_next_image_in_queue(box.frame_num, camera_id)
+                        if img_data is None:
+                            fake_images.add(camera_id)
+                            data.append((camera_id, None, None))
+                            images.append(self._fake_image)
+                            boxes.append(self._fake_person_boxes)
+                            data.append((camera_id, None, None))
+                            continue
 
-                    if box.is_debug:
-                        debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
-                        if debug_info is None:
-                            logy.warn("The next Debug image is missing.")
-                            logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
-                        else:
-                            logy.debug(f"Received bboxes. Debug frame {box.debug_id}", tag="debug_frame")
-                            time_ms = time.time() * 1000
-                            time_ms = time_ms - debug_info[0]
-                            logy.log_avg("debug_frame_delay", time_ms)
-                            logy.log_mean("debug_frame_delay", time_ms)
+                        if box.is_debug:
+                            debug_info = self.get_next_debug_frame(box.debug_id, camera_id)
+                            if debug_info is None:
+                                logy.warn("The next Debug image is missing.")
+                                logy.warn("If you can see this message, there is something fundamental wrong in the image queue.")
+                            else:
+                                logy.debug(f"Received bboxes. Debug frame {box.debug_id}", tag="debug_frame")
+                                time_ms = time.time() * 1000
+                                time_ms = time_ms - debug_info[0]
+                                logy.log_avg("debug_frame_delay", time_ms)
+                                logy.log_mean("debug_frame_delay", time_ms)
 
-                    last_image = img_data.image
-                    height = last_image.height
-                    width = last_image.width
-                    image = np.frombuffer(last_image.data, dtype=np.uint8)
-                    image = image.reshape([height, width, 3])
-                    if width != AI_WIDTH or height != AI_HEIGHT:
-                        image = cv2.resize(image, (AI_WIDTH, AI_HEIGHT))
-                        w_factor = AI_WIDTH / width
-                        h_factor = AI_HEIGHT / height
-                        box_np[:, 0] *= w_factor
-                        box_np[:, 1] *= h_factor
-                        box_np[:, 2] *= w_factor
-                        box_np[:, 3] *= h_factor
+                        last_image = img_data.image
+                        height = last_image.height
+                        width = last_image.width
+                        image = np.frombuffer(last_image.data, dtype=np.uint8)
+                        image = image.reshape([height, width, 3])
+                        if width != AI_WIDTH or height != AI_HEIGHT:
+                            image = cv2.resize(image, (AI_WIDTH, AI_HEIGHT))
+                            w_factor = AI_WIDTH / width
+                            h_factor = AI_HEIGHT / height
+                            box_np[:, 0] *= w_factor
+                            box_np[:, 1] *= h_factor
+                            box_np[:, 2] *= w_factor
+                            box_np[:, 3] *= h_factor
 
-                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                    images.append(image)
-                    boxes.append(box_np.astype(np.float32))
-                    data.append((camera_id, box.stationID, last_image.header))
+                        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                        images.append(image)
+                        boxes.append(box_np.astype(np.float32))
+                        data.append((camera_id, box.stationID, last_image.header))
 
-            if not data:
-                time.sleep(thread_wait_time)
-                continue
+                if not data:
+                    time.sleep(thread_wait_time)
+                    continue
 
-            images = np.stack(images)
-            self.start_ai(data, images, boxes)
+                images = np.stack(images)
+                if images.shape[0] != len(self._box_queues):
+                    logy.warn(f"only {images.shape[0]} boxes but {len(self._box_queues)}. Queue: {fake_images}")
+            self.start_ai(data, images, boxes, fake_images)
 
-    def start_ai(self, data, images, boxes):
+    def start_ai(self, data, images, boxes, fake_images):
         ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
         logy.debug_throttle(f"{images.shape[0]}", 1000)
 
         with logy.TraceTime("matrabs_multi_image"):
             pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)
 
-        pred_output_list = pred_output_list.numpy()
+        with logy.TraceTime("matrabs_multi_image_after"):
+            pred_output_list = pred_output_list.numpy()
 
-        #logy.warn(f"RESULT: {pred_output_list}")
+            #logy.warn(f"RESULT: {pred_output_list}")
 
-        for i, info in enumerate(data):
-            camera_id = info[0]
-            station_ids = info[1]
-            image_boxes = boxes[i]
-            image = images[i]
+            for i, info in enumerate(data):
+                camera_id = info[0]
 
-            inc = 0
-            msg = Persons()
-            msg.header = info[2]
-            msg.persons = list()
-            cropped_images = []
+                if camera_id in fake_images:
+                    continue
+                station_ids = info[1]
+                image_boxes = boxes[i]
+                image = images[i]
 
-            if len(pred_output_list[i]) == 0:
-                rospy.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
-                continue
+                inc = 0
+                msg = Persons()
+                msg.header = info[2]
+                msg.persons = list()
+                cropped_images = []
 
-            for prediction_index, detection in enumerate(pred_output_list[i]):
+                if len(pred_output_list[i]) == 0:
+                    rospy.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
+                    continue
 
-                joints = detection
-                bb = image_boxes[prediction_index]
-                cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
-                cropped_images.append(cropped_image)
+                for prediction_index, detection in enumerate(pred_output_list[i]):
 
-                lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
-                person_msg = Person()
-                if len(station_ids) > 0:
-                    person_msg.stationID = int(station_ids[inc])
-                    person_msg.sensorID = station_ids[inc]
-                person_msg.bodyParts = [None]*lenPoints
+                    joints = detection
+                    bb = image_boxes[prediction_index]
+                    cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
+                    cropped_images.append(cropped_image)
 
-                for j in range(lenPoints):
-                    person_msg.bodyParts[j] = Bodypart()
+                    lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
+                    person_msg = Person()
+                    if len(station_ids) > 0:
+                        person_msg.stationID = int(station_ids[inc])
+                        person_msg.sensorID = station_ids[inc]
+                    person_msg.bodyParts = [None]*lenPoints
 
-                for j in range(lenPoints):
-                    person_msg.bodyParts[j].score = 0.8
-                    person_msg.bodyParts[j].pixel.x = joints[j, 0]
-                    person_msg.bodyParts[j].pixel.y = joints[j, 1]
-                    person_msg.bodyParts[j].point.x =joints[j, 0] / 400-6 # TODO: @sm Please describe what these number stand for
-                    person_msg.bodyParts[j].point.y =joints[j, 2] / 400-25
-                    person_msg.bodyParts[j].point.z = -joints[j, 1] / 400
-                inc=inc+1
-                msg.persons.append(person_msg)
+                    for j in range(lenPoints):
+                        person_msg.bodyParts[j] = Bodypart()
 
-            self.publisher.publish(msg)
+                    for j in range(lenPoints):
+                        person_msg.bodyParts[j].score = 0.8
+                        person_msg.bodyParts[j].pixel.x = joints[j, 0]
+                        person_msg.bodyParts[j].pixel.y = joints[j, 1]
+                        person_msg.bodyParts[j].point.x =joints[j, 0] / 400-6 # TODO: @sm Please describe what these number stand for
+                        person_msg.bodyParts[j].point.y =joints[j, 2] / 400-25
+                        person_msg.bodyParts[j].point.z = -joints[j, 1] / 400
+                    inc=inc+1
+                    msg.persons.append(person_msg)
 
-            if len(cropped_images) > 1:
-                max_h = 0
-                for img in cropped_images:
-                    max_h = max(max_h, img.shape[0])
+                self.publisher.publish(msg)
+
+                if len(cropped_images) > 1:
+                    max_h = 0
+                    for img in cropped_images:
+                        max_h = max(max_h, img.shape[0])
 
 
-                for i, img in enumerate(cropped_images):
-                    height_difference = max_h - img.shape[0]
-                    cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
+                    for i, img in enumerate(cropped_images):
+                        height_difference = max_h - img.shape[0]
+                        cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
 
-            # Concatenate images and convert them to ROS image format to display them later in rviz
+                # Concatenate images and convert them to ROS image format to display them later in rviz
 
-            img = cv2.hconcat(cropped_images)
-            image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
-            self.publisher_crop[camera_id].publish(image_message)
+                img = cv2.hconcat(cropped_images)
+                image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
+                pub = self.publisher_crop.get(camera_id)
+                if pub is not None:
+                    pub.publish(image_message)
 
         logy.log_fps("end_of_metrabs_loop")
 
@@ -322,4 +350,5 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
     signal.signal(signal.SIGINT, run_spin_obj.shutdown)
     logy.info("Pose Estimator is listening")
+    run_spin_obj.ready_signal.publish(True)
     rospy.spin()

@@ -1,1 +1,1 @@
-from src.server.server import ServerController, ServerSocket, ResponseAnswer
+from .server import ServerController, ServerSocket, SMResponse

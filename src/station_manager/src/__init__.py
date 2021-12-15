@@ -1,5 +1,5 @@
-from src.data_manager import DataManager
-from src.param_updater import CameraStationController
-from src.video_selection import VideoSelection
-from src.station_selection import StationSelection
-from src.utils import TwoWayDict
+from .data_manager import DataManager, DataManagerInterface
+from .param_updater import CameraStationController
+from .video_selection import VideoSelection
+from .utils import TwoWayDict
+from .station_manager_response import SMResponse

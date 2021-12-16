@@ -16,7 +16,7 @@ import pytest
 import logy
 import cv2
 sys.path.append('/home/trainerai/trainerai-core/')
-
+from gymy_tools import ThreadingTimeout
 #Station Manager
 #sys.path.append('/home/trainerai/trainerai-core/src/station_manager')
 from src.station_manager.src.station_manager import StationManager
@@ -325,16 +325,15 @@ class TestCollection:
         time.sleep(0.01)
         assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
 
-        try:
-            with logy.TimeOutHandler(6000):
-                while received_images == 0:
-                    time.sleep(0.01)
-                time.sleep(3)
-                assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
-                while not received_channel_info_stop:
-                    time.sleep(0.01)
-        except TimeoutError:
-            assert not "Time Out"
+        with ThreadingTimeout(6) as timeout:
+            while received_images == 0:
+                time.sleep(0.01)
+            time.sleep(3)
+            assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
+            while not received_channel_info_stop:
+                time.sleep(0.01)
+
+        assert timeout
 
         channel_sub.unregister()
         ros_env.logy.test(f"# Time for new channel: {received_channel_info_s * 1000:.2f}ms", "test")
@@ -378,12 +377,11 @@ class TestCollection:
         received_bbox_s = time.time()
         assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
 
-        try:
-            with logy.TimeOutHandler(10000):
-                while not received_bbox:
-                    time.sleep(0.01)
-        except TimeoutError:
-            assert not "Time Out"
+        with ThreadingTimeout(1) as timeout:
+            while not received_bbox:
+                time.sleep(0.01)
+
+        assert timeout
 
         assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
         bbox_sub.unregister()
@@ -408,7 +406,7 @@ class TestCollection:
 
         @logy.catch_ros
         def callback_new_skelton(msg: Persons):
-            print("Skeleton")
+            #print("Skeleton")
             nonlocal received_skeleton
             nonlocal received_skeleton_s
             if not received_skeleton:
@@ -429,12 +427,12 @@ class TestCollection:
         skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skelton)
         assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
 
-        try:
-            with logy.TimeOutHandler(20000):
-                while not received_skeleton:
-                    time.sleep(0.01)
-        except TimeoutError:
-            assert not "Time Out"
+
+        with ThreadingTimeout(1) as timeout:
+            while not received_skeleton:
+                time.sleep(0.01)
+        assert timeout
+
 
         assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
         skeleton_sub.unregister()

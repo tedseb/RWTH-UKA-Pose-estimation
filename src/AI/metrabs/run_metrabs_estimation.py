@@ -275,11 +275,14 @@ class PoseEstimator():
 
             #logy.warn(f"RESULT: {pred_output_list}")
 
-            for i, info in enumerate(data):
+            i = -1
+            for info in data:
                 camera_id = info[0]
 
                 if camera_id in fake_images:
                     continue
+
+                i += 1
                 station_ids = info[1]
                 image_boxes = boxes[i]
                 image = images[i]

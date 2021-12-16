@@ -2,7 +2,7 @@
 import os
 import numpy as np
 import cv2
-#import cv2
+import cv2
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
@@ -22,7 +22,10 @@ def main():
     #demo_with_just_an_image()
     #demo_with_known_intrinsics_and_boxes()
     #image = tf.image.decode_jpeg(tf.io.read_file('./image.jpg'))
-    image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
+    image = cv2.imread('./image.jpg')
+    image = cv2.resize(image, (AI_HEIGHT, AI_WIDTH))
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    #image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
     model = tf.saved_model.load('./models/metrabs_multiperson_smpl_combined')
     test_single_image(model, image)
     test_multi_image(model, image)
@@ -33,7 +36,6 @@ def test_single_image(model, image):
     person_boxes = np.array([670, 170, 200, 510], dtype=np.float32)
     intrinsics =  np.array([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], np.float32)
     person_boxes = [person_boxes]
-    print()
     intrinsics =  np.array([[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], np.float32)
 
     for i in range(2):
@@ -42,6 +44,7 @@ def test_single_image(model, image):
         pred = model.predict_single_image(image, intrinsics) #, person_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
+        print(f"- {len(pred[1])} Persons")
 
 
 def test_multi_image(model, image):
@@ -64,6 +67,7 @@ def _test_multi_image(model, image, count, repetitions = 2):
         pred = model.predict_multi_image(images, intrinsics) #, ragged_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
+        print(f"- {len(pred[1])} Persons")
 
 def multiply_images_and_boxes(array_len, image, person_boxes):
     images = []

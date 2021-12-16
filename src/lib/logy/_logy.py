@@ -8,6 +8,7 @@ import time
 import traceback
 import signal
 from filelock import FileLock
+from gymy_tools import ThreadingTimeout
 
 FIFO = '/home/trainerai/logy_pipe'
 FIFO_LOCK = '/home/trainerai/logy_pipe.lock'
@@ -95,22 +96,6 @@ class Singleton(type):
                 if not cls._instance:
                     cls._instance = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instance
-
-def time_out_handler(signum, frame):
-    raise TimeoutError
-
-class TimeOutHandler:
-    def __init__(self, time_out_ms : int):
-        self._time_out_ms = time_out_ms
-
-    def __enter__(self):
-        signal.signal(signal.SIGALRM, time_out_handler)
-        #signal.alarm(self._time_out_ms / 1000)
-        signal.setitimer(signal.ITIMER_REAL, self._time_out_ms / 1000)
-
-    def __exit__(self, type, value, traceback):
-        #signal.alarm(0)
-        signal.setitimer(signal.ITIMER_REAL, 0)
 
 class LogyHandler:
     def __init__(self, logger, debug_level: int, module: str):
@@ -308,7 +293,7 @@ class Logy(metaclass=Singleton):
         #print("Try OPEN PIPE")
 
         try:
-            with TimeOutHandler(timeout_ms):
+            with ThreadingTimeout(timeout_ms / 1000):
                 self._pipe = open(FIFO, 'wb')
         except TimeoutError:
             print("Timeout")

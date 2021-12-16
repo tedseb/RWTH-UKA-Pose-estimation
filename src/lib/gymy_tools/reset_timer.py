@@ -56,7 +56,7 @@ class ResetTimer(Thread):
     def reset(self, interval=None):
         """ Reset the timer """
 
-        if interval:
+        if interval is not None:
             self._interval = interval
 
         self._resetted = True

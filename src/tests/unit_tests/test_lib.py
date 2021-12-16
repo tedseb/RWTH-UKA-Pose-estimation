@@ -1,5 +1,6 @@
 from threading import Timer
-from gymy_tools import ResetTimer
+from gymy_tools import ResetTimer, time_out
+from gymy_tools import ThreadingTimeout, SignalTimeout
 import time
 
 
@@ -35,6 +36,8 @@ def test_reset_timer():
     time.sleep(test_time + 0.002)
     assert flag == True
     flag = False
+
+    # Restart same Timer after finishing
     timer.reset()
     time.sleep(test_time + 0.002)
     assert flag == True
@@ -60,3 +63,36 @@ def test_reset_timer():
     time.sleep(test_time + 0.002)
     assert flag == False
     timer.stop()
+
+def test_timeouts():
+    with ThreadingTimeout(0.1) as timeout:
+        time.sleep(0.2)
+    assert not timeout.not_interupted()
+    assert not timeout
+
+    with ThreadingTimeout(0.1) as timeout:
+        pass
+    assert timeout.not_interupted()
+    assert timeout
+
+    with ThreadingTimeout(0.1) as timeout:
+        timeout.cancel()
+        time.sleep(0.2)
+    assert timeout.not_interupted()
+    assert timeout
+
+    with SignalTimeout(0.1) as timeout:
+        time.sleep(0.2)
+    assert not timeout.not_interupted()
+    assert not timeout
+
+    with SignalTimeout(0.1) as timeout:
+        pass
+    assert timeout.not_interupted()
+    assert timeout
+
+    with SignalTimeout(0.1) as timeout:
+        timeout.cancel()
+        time.sleep(0.2)
+    assert timeout.not_interupted()
+    assert timeout

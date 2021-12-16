@@ -17,14 +17,16 @@ import random
 
 from std_msgs.msg import String
 from rospy.exceptions import ROSException
-from backend.msg import StationUsage, WeightColor, ChannelInfo
+from backend.msg import StationUsage, WeightColor, ChannelInfo, Bboxes
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from twisted.internet import reactor
 import time
+from gymy_tools import ResetTimer
 
 DEBUG_STATION_ID = 999
 MAX_STATIONS = 8
 CAMERA_CHANNEL_INFO = "/image/channel_{0}"
+PERSON_TIME = 10
 
 class ComputerWorkload:
     def __init__(self):
@@ -36,8 +38,8 @@ class ComputerWorkload:
 class StationManager():
 
     def __init__(self, camera_path, transform_node_path, station_selection_path, data_manager, verbose=False, debug_frames_ms=0, with_gui=True):
-        self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage , queue_size=5)
-        self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo , queue_size=5)
+        self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage, queue_size=5)
+        self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo, queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
         try:
             rospy.wait_for_service('ai/weight_detection', 3)
@@ -71,6 +73,9 @@ class StationManager():
         self._camera_process_mutex = Lock()
         self._param_updater_mutex = Lock()
 
+        self._use_person_detection = False
+        #self.start_person_detection()
+
         self._client_callbacks = {}
         self._server_controller = ServerController("ws://127.0.0.1:3030", self.set_client_callback)
         self._server_controller.register_callback(1, self.login_station_payload)
@@ -88,6 +93,47 @@ class StationManager():
     def start(self):
         logy.debug("Start StationManager")
         rospy.spin()
+
+
+    @logy.catch_thread
+    def person_time_out(self):
+        data = {}
+        data["station_id"] = self._next_person_time_out_station
+        response_json = json.dumps(data)
+        self._publisher_persons.publish(response_json)
+
+    @logy.catch_ros
+    def callback_bbox(self, box: Bboxes):
+        station_id = box.debug_id
+        if len(box.data) == 0:
+            return
+
+        if not self.__param_updater.is_station_valid(station_id):
+            return
+
+        #if station_id not in self._last_person_detected:
+        self._last_person_detected[station_id] = time.time()
+
+        if self._person_timer is None:
+            self._next_person_time_out_station = station_id
+            self._person_timer = ResetTimer(PERSON_TIME, self.person_time_out)
+            return
+
+        if station_id != self._next_person_time_out_station:
+            return
+
+        self._next_person_time_out_station = min(self._last_person_detected, key=self._last_person_detected.get)
+        elapsed_time = time.time() - self._last_person_detected[self._next_person_time_out_station]
+        self._person_timer.reset(PERSON_TIME - elapsed_time)
+        #logy.warn("received boxes")
+
+    def start_person_detection(self):
+        self._use_person_detection = True
+        self._last_person_detected = {}
+        self._person_timer = None
+        self._next_person_time_out_station = -1
+        rospy.Subscriber('bboxes', Bboxes, self.callback_bbox, queue_size=10)
+        self._publisher_persons = rospy.Publisher('/signal/person', String, queue_size=5)
 
     def set_client_callback(self, client_id, callback):
         logy.debug("Register Message Callback")
@@ -119,7 +165,6 @@ class StationManager():
             args = f"--disk {cam_info} -d {camera_id}"
         if self._verbose:
             args += " -v"
-
 
         args += f' --channel {new_channel_name}'
         args +=  f" --debug-frames {self._debug_frames_ms}"
@@ -254,6 +299,9 @@ class StationManager():
 
         with self._exercise_station_mutex:
             self.__active_stations.pop(user_id)
+
+        if self._use_person_detection:
+            self._last_person_detected.pop(station_id)
 
         return SMResponse(502, 1, {"station": station_id})
 

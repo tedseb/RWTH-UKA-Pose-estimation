@@ -74,7 +74,7 @@ class StationManager():
         self._param_updater_mutex = Lock()
 
         self._use_person_detection = False
-        self.start_person_detection()
+        #self.start_person_detection()
 
         self._client_callbacks = {}
         self._server_controller = ServerController("ws://127.0.0.1:3030", self.set_client_callback)

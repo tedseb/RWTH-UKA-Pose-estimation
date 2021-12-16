@@ -17,10 +17,11 @@ import sys
 import os
 import logy
 import time
- 
-from station_manager import StationManager, DEBUG_STATION_ID
-from backend.msg import Persons
 
+sys.path.append('/home/trainerai/trainerai-core/')
+from src.station_manager.src import DataManager
+from src.station_manager.src.station_manager import StationManager, DEBUG_STATION_ID
+ 
 from ma_validation.msg import MAValidationSetInfo
 from std_msgs.msg import Int32
 
@@ -142,9 +143,12 @@ if __name__ == '__main__':
 
     camera_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/infrastructure/CameraNode.py"
     transform_node_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/launch/static_transform.launch"
-    station_selection_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/src/station_selection.py"
+    station_selection_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/station_manager/station_selection.py"
 
-    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, verbose=True)
+    # Wait some time to initialize pose estimation
+    time.sleep(6)
+    data_manager = DataManager()    
+    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager, verbose=True, with_gui=False)
 
     recorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
     

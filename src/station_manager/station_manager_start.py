@@ -53,7 +53,8 @@ if __name__ == '__main__':
     #     print("set id =", payload["set_id"])
 
     # my_id = "id124"
-    # station_manager = StationManager(debug_mode=args.debug, verbose=args.verbose)
+    # data_manager = DataManager()
+    # station_manager = StationManager(debug_mode=args.debug, verbose=args.verbose, data_manager=data_manager)
     # station_manager.set_client_callback(my_id, repetition_callback)
     # station_manager.login_station(my_id, 2)
     # station_manager.start_exercise(my_id, 2, 105)

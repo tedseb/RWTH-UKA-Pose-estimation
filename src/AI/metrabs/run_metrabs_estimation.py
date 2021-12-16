@@ -51,8 +51,7 @@ class PoseEstimator():
 
         self.ready_signal = rospy.Publisher('/signals/metrabs_ready', Bool, queue_size=2)
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
-        rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
-        self.model = tf.saved_model.load(CONFIG["model_path"])
+        rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)       
 
         self.intrinsics = tf.constant([CONFIG.get("intrinsics")], dtype=tf.float32)
         # Use your detector of choice to obtain bounding boxes.
@@ -75,6 +74,7 @@ class PoseEstimator():
         self._box_queues = {}
         self._thread_lock = Lock()
 
+        self.model = tf.saved_model.load(CONFIG["model_path"])
         self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
         self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
         self.start_ai([], np.stack([self._fake_image]), [self._fake_person_boxes], set())

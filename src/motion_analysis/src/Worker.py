@@ -112,7 +112,7 @@ class Worker(Thread):
         self.start()
     
     def log_with_metadata(self, logger, msg):
-        logger("Spot:" + str(self.spot_key) + ":ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']) + str(msg))
+        logger("Spot:" + str(self.spot_key) + ": ExerciseName: " + str(self.spot_info_dict['exercise_data']['name']) + ": " + str(msg))
 
     @lru_cache(maxsize=1000)
     def get_exercise_data(self, spot_info_key, exercise_data_hash):

@@ -316,7 +316,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
             joints_with_timestame_bytes = self.redis_connection.rpoplpush(spot_queue_key, spot_past_queue_key)
             if not joints_with_timestame_bytes:
                 raise QueueEmpty
-            joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes) 
+            joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes)
             assert joints_with_timestamp
 
         except (KeyError, AssertionError):

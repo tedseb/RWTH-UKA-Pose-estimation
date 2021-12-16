@@ -13,6 +13,7 @@ TEST_SETUP_TIME_S = 20
 CAMERA_NODE_TIMEOUT_S = 10
 
 VALIDATION_REPORT_PATH = '/home/trainerai/trainerai-core/data/validation_report.yml'
+BEST_PARAMETERS_PATH = '/home/trainerai/trainerai-core/data/best_parameters.yml'
 VALIDATION_TEMP_CONFIG_PATH = '/tmp/ma_validation_config.yml'
 STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion_analysis/config.yml'
 VIDEO_TIMECODE_PATH = "/home/trainerai/trainerai-core/data/videos/timecodes.yml"
@@ -126,6 +127,11 @@ if __name__ == '__main__':
         'NUM_FEATURE_TO_PROGRESS_BETA': hp.choice('NUM_FEATURE_TO_PROGRESS_BETA', [0.9, 0.1, 1.5]),
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=224)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=100)
 
+    rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))
+    rp.logerr("Saving to " + str(BEST_PARAMETERS_PATH))
+
+    with open(BEST_PARAMETERS_PATH, 'w') as outfile:
+            config = yaml.dump(best_hps, outfile)

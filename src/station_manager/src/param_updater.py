@@ -34,6 +34,7 @@ class CameraStationController():
         if camera_id not in self._camera_station_frames:
             self._camera_station_frames[camera_id] = {}
         self._camera_station_frames[camera_id][station_id] = frame
+        self._stations.add(station_id)
 
     def get_involved_cameras(self) -> Set[int]:
         active_cameras = {int(cam) for cam in self._station_frame_parameters}

@@ -316,7 +316,7 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
             joints_with_timestame_bytes = self.redis_connection.rpoplpush(spot_queue_key, spot_past_queue_key)
             if not joints_with_timestame_bytes:
                 raise QueueEmpty
-            joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes) 
+            joints_with_timestamp = msgpack.unpackb(joints_with_timestame_bytes)
             assert joints_with_timestamp
 
         except (KeyError, AssertionError):
@@ -329,7 +329,6 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
         future_joints_with_timestamp_list = self.redis_connection.lrange(spot_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
         past_joints_with_timestamp_list = self.redis_connection.lrange(spot_past_queue_key, 0, self.config['REDIS_MAXIMUM_PAST_QUEUE_SIZE'])
 
-
         return past_joints_with_timestamp_list, joints_with_timestamp, future_joints_with_timestamp_list
 
     def enqueue(self, spot_key: str, data: Any) -> int:
@@ -339,10 +338,11 @@ class RedisSpotQueueInterface(RedisInterface, SpotQueueInterface):
 
         if (queue_size >= self.config['REDIS_QUEUE_SIZE_PANIC_BOUNDARY']):
             if (queue_size >= self.config['REDIS_MAXIMUM_QUEUE_SIZE']):
-                logy.debug_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.")
+                #logy.debug_throttle("Maximum Queue size for spot with key " + str(spot_key) + " reached. Removing first element.", throttel_time_ms=5000)
                 self.redis_connection.ltrim(spot_queue_key, 0, self.config['REDIS_MAXIMUM_QUEUE_SIZE'])
             else:
-                logy.warning_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached.", throttel_time_ms=3000)
+                pass
+                # logy.warn_throttle("Queue panic boundary for queue with key " + str(spot_key) + " reached.", throttel_time_ms=5000)
         else:
             self.ma_validation_rate_control.publish(Int32(0))
         return 1

@@ -7,6 +7,7 @@ import time
 from subprocess import Popen, PIPE
 import yaml
 import os
+import signal
 
 # Put estimates here on how much timebuffer the setup of the test should get and how long we need until the camera node starts and the evaluation begins
 TEST_SETUP_TIME_S = 20
@@ -31,7 +32,7 @@ def clean_files():
 
 def validation_objective_function(hps):
     status = STATUS_OK
-    rp.logerr("Starting Trial with the following parameters:\n " + str(hps) + "\n")
+    rp.logerr("Starting Trial with the following parameters:\n\n " + str(hps) + "\n")
     try:
         start_time = time.time()
         clean_files()
@@ -47,6 +48,8 @@ def validation_objective_function(hps):
             timecode_data = yaml.safe_load(stream)
         # Add some time tome to be sure that the system has enough time for the test setup and outputs a report file
         max_execution_time = timecode_data["sets"][-1]["t_to_s"] + TEST_SETUP_TIME_S + CAMERA_NODE_TIMEOUT_S 
+
+        rp.logerr("Trial will take approximately " + str(max_execution_time/60) + " minutes to finish.")
 
         process = Popen(['bash', '/home/trainerai/trainerai-core/src/ma_validation/exec_validation.sh', '-t', str(max_execution_time), '-c', VALIDATION_TEMP_CONFIG_PATH], stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
@@ -113,6 +116,15 @@ def validation_objective_function(hps):
     
 
 if __name__ == '__main__':
+    def handler(signum, frame):
+        import rospy as rp
+        rp.logerr("Interrupting optimization..")
+        os.system("rosnode kill Bagfileplayer")
+        os.system("rosnode kill Validator")
+        exit(0)
+
+    signal.signal(signal.SIGINT, handler)
+
     space = {
         'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.2, 0.5),
         'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.2, 0.5),
@@ -127,7 +139,7 @@ if __name__ == '__main__':
         'NUM_FEATURE_TO_PROGRESS_BETA': hp.choice('NUM_FEATURE_TO_PROGRESS_BETA', [0.9, 0.1, 1.5]),
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=100)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=3)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

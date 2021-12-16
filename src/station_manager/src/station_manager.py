@@ -74,7 +74,7 @@ class StationManager():
         self._param_updater_mutex = Lock()
 
         self._use_person_detection = False
-        #self.start_person_detection()
+        self.start_person_detection()
 
         self._client_callbacks = {}
         self._server_controller = ServerController("ws://127.0.0.1:3030", self.set_client_callback)
@@ -99,6 +99,7 @@ class StationManager():
     def person_time_out(self):
         data = {}
         data["station_id"] = self._next_person_time_out_station
+        data["person_active"] = False
         response_json = json.dumps(data)
         self._publisher_persons.publish(response_json)
 
@@ -301,7 +302,7 @@ class StationManager():
             self.__active_stations.pop(user_id)
 
         if self._use_person_detection:
-            self._last_person_detected.pop(station_id)
+            self._last_person_detected.pop(station_id, None)
 
         return SMResponse(502, 1, {"station": station_id})
 

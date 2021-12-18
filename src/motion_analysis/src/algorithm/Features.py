@@ -42,6 +42,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoUtils import *
 
+# In every coordinate vector, we find X,Y and Z at the following positions:
 X = 0
 Y = 1
 Z = 2

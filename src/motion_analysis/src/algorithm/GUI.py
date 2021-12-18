@@ -18,11 +18,12 @@ from pyqtgraph.graphicsItems.CurvePoint import CurveArrow
 def clamp(x): # Used only for formating color strings
     return max(0, min(x, 255))
 
+# We use a mixture of these two colors everywhere
 GYMY_GREEN = (73, 173, 51)
 GYMY_ORANGE = (247, 167, 11)
 
 class FeatureGraphsWidget(QWidget):
-    """ Implements a set a graphs that are displayed vertically on top of each other in our GUI to show us feature data."""
+    """ Implements a set of graphs that are displayed vertically on top of each other in our GUI to show us feature data."""
     update_user_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
     update_static_data = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, str, str)
     def __init__(self):
@@ -120,9 +121,11 @@ class FeatureGraphsWidget(QWidget):
         self.reference_plot_data_set = False
 
     def hasHeightForWidth(self):
+        """Always returns true in order to make pyQT ask for this widget hight for width."""
         return True
 
     def heightForWidth(self, w):
+        """Return width times 3, which is the height that we choose for our widget"""
         return w * 3
 
     @QtCore.pyqtSlot(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
@@ -190,6 +193,11 @@ class FeatureGraphsWidget(QWidget):
 
 
 class MotionAnaysisGUI(QMainWindow):
+    """
+    The MotionAnalysisGUI contains several widgets. One overall widget that displays the overall progress. And on top one widget per feature.
+    The widgets are updated for every step of the motion anaylsis by a worker thread.
+    The MotionAnalysisGUI furthermore offers a station selection field and a freeze button which freezes all graphs for closer inspection.
+    """
     update_signal = pyqtSignal()
     update_overall_data_signal = pyqtSignal(float, float, np.ndarray)
     def __init__(self):
@@ -270,6 +278,8 @@ class MotionAnaysisGUI(QMainWindow):
         self.create_feature_widgets()
 
         self.setFixedWidth(300)
+        
+        self.widgets_frozen = False
 
         self.show()
 
@@ -322,6 +332,10 @@ class MotionAnaysisGUI(QMainWindow):
         """ Set freeze flag for all feature widgets. """
         for fw in self.feature_widgets.values():
             fw.frozen = not fw.frozen
+        self.alignment_widget.setUpdatesEnabled(self.widgets_frozen)
+        self.overall_progress_vector_widget.setUpdatesEnabled(self.widgets_frozen)
+        self.progress_widget.setUpdatesEnabled(self.widgets_frozen)
+        self.widgets_frozen = not self.widgets_frozen
 
     def create_feature_widgets(self):
         """ Create all feature widgets inside a central QWidget container.
@@ -355,7 +369,6 @@ class MotionAnaysisGUI(QMainWindow):
 
         self.update()
         
-
     def start(self):
         if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
             QtGui.QApplication.instance().exec_()\

@@ -140,9 +140,8 @@ class WorkerHandler(QThread):
             feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
-            if not current_worker:
-                self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
-                logy.debug("New worker started for spot with key " + str(spot_info_key))
+            self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+            logy.debug("New worker started for spot with key " + str(spot_info_key))
 
         else:
             current_worker = self.workers.get(station_id, None)
@@ -152,7 +151,7 @@ class WorkerHandler(QThread):
                 del self.workers[station_id]
                 logy.debug("Worker stopped for spot with key " + str(spot_info_key))
             else:
-                logy.info("Tried stopping non existent worker for spot with key " + str(spot_info_key))
+                logy.error("Tried stopping non existent worker for spot with key " + str(spot_info_key))
             self.gui.update_available_spots(spot_name=station_id, active=False)
             self.spot_metadata_interface.delete(spot_info_key)
 

@@ -121,6 +121,7 @@ if __name__ == '__main__':
         rp.logerr("Interrupting optimization..")
         os.system("rosnode kill Bagfileplayer")
         os.system("rosnode kill Validator")
+        os.system("rosnode kill MotionAnalysis_WorkerHandler")
         exit(0)
 
     signal.signal(signal.SIGINT, handler)
@@ -139,7 +140,7 @@ if __name__ == '__main__':
         'NUM_FEATURE_TO_PROGRESS_BETA': hp.choice('NUM_FEATURE_TO_PROGRESS_BETA', [0.9, 0.1, 1.5]),
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=3)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=50)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

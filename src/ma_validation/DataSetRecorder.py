@@ -17,6 +17,7 @@ import sys
 import os
 import logy
 import time
+import signal
 
 sys.path.append('/home/trainerai/trainerai-core/')
 from src.station_manager.src import DataManager
@@ -111,7 +112,7 @@ class DataSetRecorder():
 
             self.active_set = current_set
 
-        if (not self.set_list and not self.active_set)or not self._recording:
+        if (not self.set_list and not self.active_set) or not self._recording:
             try:
                 rp.logerr("Waiting for 10 seconds for last messagse to roll in before ending recording...")
                 time.sleep(10)
@@ -126,7 +127,7 @@ class DataSetRecorder():
 
 if __name__ == '__main__':
     rp.init_node('DataSetRecorder', anonymous=False)
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Only one camera with QT selection", action="store_true")
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
@@ -151,6 +152,16 @@ if __name__ == '__main__':
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager, verbose=True, with_gui=False)
 
     recorder = DataSetRecorder(station_manager, input_video=args.input_video, input_timecodes=args.input_timecodes, output_file=args.output)
+
+    def handler(signum, frame):
+        import rospy as rp
+        os.system("rosnode kill Bagfilerecorder &")
+        os.system("rosnode kill DataSetRecorder &")
+        os.system("rosnode kill MotionAnalysis_WorkerHandler &")
+        time.sleep(2)
+        exit(0)
+
+    signal.signal(signal.SIGINT, handler)
     
     rp.spin()
 

@@ -67,7 +67,7 @@ def _test_multi_image(model, image, count, repetitions = 2):
         pred = model.predict_multi_image(images, intrinsics) #, ragged_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
-        print(f"- {len(pred[1])} Persons")
+        print(f"- {pred[1].shape} Persons")
 
 def multiply_images_and_boxes(array_len, image, person_boxes):
     images = []

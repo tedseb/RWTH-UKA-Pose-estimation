@@ -469,7 +469,7 @@ class TestCollection:
         system_data = [[0, 0], [0, 0] ,[0, 0], [0, 0]] #GPU Util, GPU Mem, CPU, RAM
         skeleton_sub = None
         bbox_sub = None
-        INITIAL_COUNT = 10
+        INITIAL_COUNT = 20
 
         nvidia_smi.nvmlInit()
         gp_count = nvidia_smi.nvmlDeviceGetCount()
@@ -494,8 +494,12 @@ class TestCollection:
                     return
             boxes = np.array(msg.data).reshape(-1, 4)
             elapsed_s = rospy.Time.now().to_sec() - msg.header.stamp.to_sec()
-            for _ in range(boxes.shape[0]):
+            if boxes.shape[0] == 0:
                 received_bbox_avg_s, received_bbox_num = self._compute_avg(received_bbox_avg_s, received_bbox_num, elapsed_s)
+            else:
+                for _ in range(boxes.shape[0]):
+                    received_bbox_avg_s, received_bbox_num = self._compute_avg(received_bbox_avg_s, received_bbox_num, elapsed_s)
+
 
         @logy.catch_ros
         def callback_new_skelton(msg: Persons):
@@ -560,8 +564,8 @@ class TestCollection:
             received_bbox_num = 0
             system_data = [[0, 0], [0, 0] ,[0, 0], [0, 0]]
 
-        bbox_sub = rospy.Subscriber('bboxes', Bboxes, callback_new_bbox, queue_size=10)
-        skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skelton)
+        bbox_sub = rospy.Subscriber('bboxes', Bboxes, callback_new_bbox, queue_size=50)
+        skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skelton, queue_size=50)
 
         for i, data in enumerate(station_data):
             initial_counts_bbox[data[1]] = 0
@@ -588,7 +592,7 @@ class TestCollection:
             [3, 2, 0.15, 0.24],
             [4, 3, 0.18, 0.28],
         ]
-        self._detection_and_metrabs_speed(ros_env, station_data, 3)
+        self._detection_and_metrabs_speed(ros_env, station_data, 10)
         ros_env.logy.test(f"# OK", "test")
 
     def test_detection_and_metrabs_speed_2(self, ros_env):
@@ -604,7 +608,7 @@ class TestCollection:
             [16, 16, 0.5, 0.5],
             [17, 16, 0.5, 0.5],
         ]
-        self._detection_and_metrabs_speed(ros_env, station_data, 3, 2)
+        self._detection_and_metrabs_speed(ros_env, station_data, 10, 2)
         ros_env.logy.test(f"# OK", "test")
 
 if __name__ == '__main__':

@@ -15,7 +15,6 @@ class IllegalAngleException(Exception):
     pass
 
 class PoseDefinitionAdapter():
-    @abstractmethod
     def __init__(self):
         self.normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_orientation_vector(self.normal_skelleton))
 
@@ -59,6 +58,7 @@ class PoseDefinitionAdapter():
         raise NotImplementedError("Work in progress.")
 
     def normalize_skelletons(self, recording: np.ndarray) -> np.ndarray:
+        """ Normalizes all skelletons in a recording and returns an array containing the normalized recording """
         new_recording = list()
         for pose_array in recording:
             new_recording.append(self.normalize_skelleton(pose_array))
@@ -80,7 +80,13 @@ class PoseDefinitionAdapter():
         # Roate skelleton, such that skelletons pelvises overlap
         x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
         y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
-        assert not np.array_equal(x, y)
+        if np.array_equal(x, y):
+            try:
+                import logy
+                logy.error("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+            except ImportError:
+                print("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+            raise ValueError("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
         _x = x / np.linalg.norm(x)
         cross_x_y = np.cross(x,y)
         _z = cross_x_y / np.linalg.norm(cross_x_y)
@@ -100,6 +106,7 @@ class PoseDefinitionAdapter():
         first_joint_idx = self.body_build_order[0][0]
         resized_skelleton[first_joint_idx] = np.copy(input_skelleton[first_joint_idx])
 
+        # We have defined an ordner in which to build skelletons joint by joint
         for joint_idxs in self.body_build_order:
             joint1_p1 = input_skelleton[joint_idxs[0]]
             joint2_p1 = input_skelleton[joint_idxs[1]]
@@ -114,6 +121,7 @@ class PoseDefinitionAdapter():
             point2_p1 = np.array([joint2_p1[0], joint2_p1[1], joint2_p1[2]])
             vec_joints_person1 = np.array(point2_p1 - point1_p1)
 
+            # We set the resized vector ontop of the coordinates from the new joint on which it sits
             new_vec_p1 = resize_len_vec1_to_vec2(vec_joints_person1, vec_joints_person2)
 
             base_joint = resized_skelleton[joint_idxs[0]]
@@ -175,8 +183,10 @@ class PoseDefinitionAdapter():
             Name of the inner joint
         """
         # TODO: Optimize this if it has to be done more often
+        # This code does what it is supposed to do, but is slow and dirty. It is only called once, when an exercise begins
         joint_idxs = set(self.joints_used[self.get_joint_index(j)] for j in joint_names)
 
+        # Recursive utility function
         def go_deeper(leaf, other_joints, building_blocks_left, found_joints):
             if found_joints == other_joints:
                 return found_joints
@@ -201,6 +211,8 @@ class PoseDefinitionAdapter():
 
         body_build_order = [(self.joints_used[idx_1], self.joints_used[idx_2]) for idx_1, idx_2 in self.body_build_order]
 
+        # We have three original joint idxs of which we need to find the inner one
+        # So we go through the skelleton recursively, joint by joint, from each one of them seperately in a tree DFS
         for joint in joint_idxs:
             total_found_leafs_no = 0
             other_joints = joint_idxs.copy()
@@ -215,13 +227,13 @@ class PoseDefinitionAdapter():
                     initial_building_blocks.remove((i, j))
                     leafs.add(i)
 
-        
             for l in leafs:
                 found_leafs = set()
                 if l in other_joints:
                     found_leafs.add(l)
                 found_leafs = go_deeper(l, other_joints, initial_building_blocks.copy(), found_leafs)
                 found_leafs_no = len(found_leafs)
+                # If the DFS returns a found leaf from two "sides", we know that this is the inner joint
                 if total_found_leafs_no == 1 and found_leafs_no == 1:
                     return self.get_joint_name(self.joints_used.index(joint))
                 total_found_leafs_no += found_leafs_no
@@ -339,7 +351,11 @@ def resize_len_vec1_to_vec2(vec1, vec2):
     length_vec2 = np.linalg.norm(vec2)
     return (length_vec2 / length_vec1) * vec1
     
-    
+
+
+
+# This is utility code I leave here for later so it does not get lost in the process. Use this as soon as we switch to quaternions.
+
 # from src/AI/spin/utils/geometry.py
 # def quat_to_rotmat(quat):
 #     """Convert quaternion coefficients to rotation matrix.

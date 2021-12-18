@@ -71,6 +71,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         super().__init__()
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
+        """ Returns an ndarray of skelletons, one per timestep """
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
 
         for idx_recording, step in enumerate(recording):
@@ -85,6 +86,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
 
 
     def pose_to_nd_array(self, pose: dict):
+        """ Returns an ndarray representing the input pose """
         array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
         for joint, coordinates in pose.items():
                 idx_step = self.get_joint_index(joint)
@@ -95,6 +97,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
 
 
     def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
+        """ Returns an ndarray of poses. """
         array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
 
         body_parts_used = [body_parts[i] for i in self.joints_used]
@@ -107,6 +110,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         return array
 
     def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
+        """ Returns an ndarray of poses. """
         # We need some dummy body parts that we do not actually use but are still part of the Person defined by SPIN
         body_parts = [Bodypart()] * len(self.joint_labels)
 
@@ -165,6 +169,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
         super().__init__()
 
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
+        """ Returns an ndarray of skelletons, one per timestep """
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
 
         for idx_recording, step in enumerate(recording):
@@ -179,6 +184,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
 
     def pose_to_nd_array(self, pose: dict):
+        """ Returns an ndarray representing the input pose """
         array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
         for joint, coordinates in pose.items():
                 idx_step = self.get_joint_index(joint)
@@ -189,6 +195,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
 
     def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
+        """ Returns an ndarray of poses. """
         array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
 
         body_parts_used = [body_parts[i] for i in self.joints_used]
@@ -202,6 +209,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
 
     def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
+        """ Returns an ndarray of poses. """
         # We need some dummy body parts that we do not actually use but are still part of the Person defined by SPIN
         body_parts = [Bodypart()] * len(self.joint_labels)
 

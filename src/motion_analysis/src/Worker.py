@@ -14,7 +14,7 @@ import time
 from functools import lru_cache
 from threading import Thread
 from traceback import format_exc
-from typing import NoReturn
+from typing import NoReturn, Dict
 
 import redis
 import numpy as np
@@ -85,9 +85,6 @@ class Worker(Thread):
         # Use the same interface class for these two, because they have the same needs to the interface 
         self.features_interface = features_interface_interface_class()
         
-        self.redis_connection = redis.StrictRedis(connection_pool=redis_connection_pool)
-
-        # This can be set to false by an external entity to stop the loop from running
         self.running = True
 
         self.user_exercise_state_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_EXERCISE_STATES'], String, queue_size=1000)  
@@ -101,7 +98,6 @@ class Worker(Thread):
         self.features = {}
 
         self.bad_repetition = False
-        self.moving_average_joint_difference = 0
 
         self.gui = gui
 
@@ -111,11 +107,12 @@ class Worker(Thread):
 
         self.start()
     
-    def log_with_metadata(self, logger, msg):
+    def log_with_metadata(self, logger, msg) -> NoReturn:
+        """ Helper function to log stuff under reference of the spot key and exercise name """
         logger("Spot:" + str(self.spot_key) + ": ExerciseName: " + str(self.spot_info_dict['exercise_data']['name']) + ": " + str(msg))
 
     @lru_cache(maxsize=1000)
-    def get_exercise_data(self, spot_info_key, exercise_data_hash):
+    def get_exercise_data(self, spot_info_key, exercise_data_hash) -> Dict:
         """Gets data on the exercise that is to be performed on the spot.
         
         This method uses lru caching because exercise information is usually obtained on every step, which makes
@@ -124,11 +121,11 @@ class Worker(Thread):
         return self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data"])
 
     def publish_pose(self, pose: np.ndarray, publisher):
-        ros_pose = self.pose_definition_adapter.ndarray_to_body_parts(pose)
+        """ Publish a pose as a BodyParts object in ROS. """
         msg = Person()
         msg.stationID = self.spot_key
         msg.sensorID = -1
-        msg.bodyParts = ros_pose
+        msg.bodyParts = self.pose_definition_adapter.ndarray_to_body_parts(pose)
         publisher.publish(msg)
 
     def run(self) -> NoReturn:
@@ -176,6 +173,7 @@ class Worker(Thread):
                             pos_median = abs(np.median(positive_progresses_differences))
                         else:
                             pos_median = 0
+                        # We do not want negative and positive progresses to relate to each other as follows: (If they do, we mark this repetition as bad)
                         if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences):
                             logy.debug("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                             self.bad_repetition = True
@@ -194,11 +192,13 @@ class Worker(Thread):
                     # Calculate a new reference pose mapping
                     reference_pose = self.calculate_reference_pose_mapping()
 
+                    # We calculate the differences between elements of our skelleton
+                    # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
                     delta = (pose - reference_pose).sum()
                     self.skelleton_deltas_since_rep_start.append(delta)
                     score = self.calculate_repetition_score()
 
-                    # Send info back to REST API
+                    # Send info back to App
                     if increase_reps:
                         score = self.calculate_repetition_score()
                         self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
@@ -214,7 +214,7 @@ class Worker(Thread):
                         }
                         publish_message(self.user_exercise_state_publisher, self.config['ROS_TOPIC_USER_EXERCISE_STATES'], user_state_data)
 
-                    # Publish poses on ROS
+                    # Publish poses on ROS to observe in RVIZ
                     self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
                     self.publish_pose(pose, self.user_skelleton_publisher)
 
@@ -243,7 +243,6 @@ class Worker(Thread):
         self.spot_info_dict = None
         self.features = {}
         self.bad_repetition = False
-        self.moving_average_joint_difference = 0
 
     @logy.trace_time("calculate_reference_pose_mapping", period=100)
     def calculate_reference_pose_mapping(self) -> np.ndarray:
@@ -344,10 +343,12 @@ class Worker(Thread):
         if num_features_progressed < num_features_to_progress(len(features.values())): # TODO: This is a parameter to be tuned!!
             increase_reps = False
 
-        if num_features_progressed_too_far > num_features_in_beginning_state:
+        # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
+        if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU']  > num_features_in_beginning_state:
              self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
              self.bad_repetition = True
 
+        # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
         if in_beginning_state and self.bad_repetition:
             self.log_with_metadata(logy.info, "Bad repetition aborted. Resetting feature progressions and repetition data...")
             for f in features.values():
@@ -366,6 +367,7 @@ class Worker(Thread):
                 f.progression = 0
             self.beginning_of_next_repetition_detected = True
 
+        # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
         if not in_beginning_state and self.beginning_of_next_repetition_detected:
             self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
             self.skelleton_deltas_since_rep_start = []
@@ -377,15 +379,25 @@ class Worker(Thread):
         return increase_reps
 
     def calculate_repetition_score(self):
+        """ This is a simple first approach to calculating the repetition score for a repetition. 
+        
+        TODO: Values have been chosen with few shots and should be improved heuristically! 
+        """
         x = self.skelleton_deltas_since_rep_start
         alpha = 1/20 # This has to be heuristically determined, as is depends on the size of the normal skelleton
         critical_freq = 0.01 # TODO: Choose heuristically!!
+
         # Filter scores in order to minimize impact of faulty reference skelleton predictions
         b, a = signal.butter(min(4, max(1, int(len(self.skelleton_deltas_since_rep_start)/4))), critical_freq, analog=False)
         x = signal.filtfilt(b, a, x, padlen=max(0, min(12, len(x) - 1)))
-        average_delta = np.average(x) # Try average and median here, see which one works better
+
+        average_delta = np.average(x) # TODO: Try average and median here, see which one works better
         delta_score = np.absolute(average_delta * alpha)
+
+        # We need our score to be between 0 and 1
         score = 100 * np.clip(1 - delta_score, 0, 1)
+
+        # TODO: Remove these scores. We log them all the time for now to let us choose parameters heuristically
         logy.log_mean("LowestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.min(self.skelleton_deltas_since_rep_start)))
         logy.log_mean("HighestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.max(self.skelleton_deltas_since_rep_start)))
         logy.log_mean("ExerciseScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(score))

@@ -153,6 +153,7 @@ class WorkerHandler(QThread):
             else:
                 logy.error("Tried stopping non existent worker for spot with key " + str(spot_info_key))
             self.gui.update_available_spots(spot_name=station_id, active=False)
+            self.gui.create_feature_widgets()
             self.spot_metadata_interface.delete(spot_info_key)
 
 

@@ -373,9 +373,6 @@ class MotionAnaysisGUI(QMainWindow):
         if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
             QtGui.QApplication.instance().exec_()\
 
-    def stop(self):
-        signal.signal(signal.SIGINT, interrupt)
-
 
 class GUIHandler(QThread):
     """ Since we need to handle the GUI from another thread that our workerhandler, we create this QThread to start and stop the GUI."""

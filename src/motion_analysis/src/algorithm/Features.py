@@ -593,6 +593,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
     discretization_reference_trajectory_indices_tensor = [] # For every resampled value, we need an index to point us to the original pose
     hankel_tensor = [] # In the analysis algorithm, we need a hankel matrix of every resampled reference trajectory
     feature_states_matrix = list()
+
     for trajectory in feature_trajectories:
         last_values = [trajectory[0]]
         last_feature_state = decide_feature_state(last_values[-1], None, lower_boundary, upper_boundary)

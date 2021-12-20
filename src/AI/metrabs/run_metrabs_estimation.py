@@ -22,13 +22,13 @@ import logging
 from multiprocessing import Lock
 logging.basicConfig(level='ERROR')
 
-from tensorflow.python.keras.backend import set_session
+# from tensorflow.python.keras.backend import set_session
 
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
-config.log_device_placement = True # to log device placement (on which device the operation ran)
-sess = tf.compat.v1.Session(config=config)
-set_session(sess)
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
+# config.log_device_placement = True # to log device placement (on which device the operation ran)
+# sess = tf.compat.v1.Session(config=config)
+# set_session(sess)
 
 import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')

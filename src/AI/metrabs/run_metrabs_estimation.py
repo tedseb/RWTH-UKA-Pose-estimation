@@ -43,14 +43,14 @@ AI_WIDTH = 1280
 import tensorflow as tf
 
 physical_devices = tf.config.list_physical_devices('GPU')
-if len(physical_devices) >= 1:
+if len(physical_devices) > 1:
     tf.config.set_visible_devices(physical_devices[1:],'GPU')
 #print(tf.config.get_visible_devices('GPU'))
 
 CONFIG = {
     'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
-    #'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
-    'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4'
+    'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
+    #'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4'
 }
 
 class PoseEstimator():
@@ -275,8 +275,8 @@ class PoseEstimator():
         logy.debug_throttle(f"{images.shape[0]}", 1000)
 
         with logy.TraceTime("matrabs_multi_image"):
-            #pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)
-            pred_output_list = self.model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=self.intrinsics,  skeleton='smpl_24')["poses3d"]
+            pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)
+            #pred_output_list = self.model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=self.intrinsics,  skeleton='smpl_24')["poses3d"]
 
         pred_output_list = pred_output_list.numpy()
 

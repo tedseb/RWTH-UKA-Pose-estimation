@@ -239,6 +239,9 @@ class ObjectDetectionPipeline:
     def _publish_boxes(self, station_boxes, old_img_data, camera_id : int):
         box_list_1d = []
         station_boxes = collections.OrderedDict(sorted(station_boxes.items()))
+        if not station_boxes:
+            return
+
         for box in station_boxes.values():
             box_list_1d.extend(box)
         box_msg  = Bboxes()

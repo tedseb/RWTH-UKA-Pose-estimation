@@ -174,7 +174,7 @@ class Worker(Thread):
                         else:
                             pos_median = 0
                         # We do not want negative and positive progresses to relate to each other as follows: (If they do, we mark this repetition as bad)
-                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences):
+                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and self.config ['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
                             logy.debug("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                             self.bad_repetition = True
                             increase_reps = False
@@ -184,7 +184,7 @@ class Worker(Thread):
                         reference_pose = self.calculate_reference_pose_mapping()
 
                     # If the feature alignment in this repetitions is too high, we do not count the repetition
-                    if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT']:
+                    if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
                         logy.debug("Feature missalignment during this repetition. Repetition falsified.")
                         increase_reps = False
                         self.alignments_this_rep = np.array([])
@@ -340,13 +340,13 @@ class Worker(Thread):
                 num_features_progressed += 1
 
         # We calculate the number of features that have to have progressed in order to count this repetition
-        if num_features_progressed < num_features_to_progress(len(features.values())): # TODO: This is a parameter to be tuned!!
+        if num_features_progressed < num_features_to_progress(len(features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']: # TODO: This is a parameter to be tuned!!
             increase_reps = False
 
         # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
-        if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU']  > num_features_in_beginning_state:
-             self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
-             self.bad_repetition = True
+        if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
+            self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+            self.bad_repetition = True
 
         # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
         if in_beginning_state and self.bad_repetition:

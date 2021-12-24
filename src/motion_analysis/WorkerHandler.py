@@ -138,24 +138,35 @@ class WorkerHandler(QThread):
             current_worker = self.workers.get(station_id, None)
 
             feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
-            self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
-
-            self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
-            logy.debug("New worker started for spot with key " + str(spot_info_key))
-
-        else:
-            current_worker = self.workers.get(station_id, None)
 
             if current_worker:
                 current_worker.running = False
                 del self.workers[station_id]
-                logy.debug("Worker stopped for spot with key " + str(spot_info_key))
+                self.spot_metadata_interface.delete(spot_info_key)    
+                self.gui.update_available_spots(spot_name=station_id, active=False)
+
+            self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+            self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
+
+            logy.warn("New worker started for spot with key " + str(spot_info_key))
+            logy.warn("Current Workers: " + str(self.workers))
+            logy.warn("Current Worker: " + str(current_worker))
+
+        else:
+            current_worker = self.workers.get(station_id, None)
+
+            logy.warn("Current Workers: " + str(self.workers))
+            logy.warn("Current Worker: " + str(current_worker))
+
+            if current_worker:
+                current_worker.running = False
+                del self.workers[station_id]
+                self.spot_metadata_interface.delete(spot_info_key)
+                self.gui.update_available_spots(spot_name=station_id, active=False)
+                logy.warn("Worker stopped for spot with key " + str(spot_info_key))
             else:
                 logy.error("Tried stopping non existent worker for spot with key " + str(spot_info_key))
-            self.gui.update_available_spots(spot_name=station_id, active=False)
-            self.gui.create_feature_widgets()
-            self.spot_metadata_interface.delete(spot_info_key)
-
+            
 
 if __name__ == '__main__':
     # initialize ros node

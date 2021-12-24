@@ -105,7 +105,7 @@ def validation_objective_function(hps):
         status = STATUS_FAIL
 
     return {
-        'loss': -score,
+        'loss': -1.0 * score,
         'status': status,
         # -- store other results like this
         'time_faster_than_max_execution_time': max_execution_time - (time.time() - start_time),
@@ -129,18 +129,18 @@ if __name__ == '__main__':
     space = {
         'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.2, 0.5),
         'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.2, 0.5),
-        'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.choice('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', [0.01, 0.05, 0.1, 0.2]),
-        'REMOVE_JITTER_RANGE': hp.choice('REMOVE_JITTER_RANGE', [4, 5, 6]),
-        # 'JUMPY_PROGRESS_ALPHA': hp.choice('JUMPY_PROGRESS_ALPHA', [2, 3, 4]),
-        # 'JUMPY_PROGRESS_BETA': hp.choice('JUMPY_PROGRESS_BETA', [3, 4, 5]),
-        'TRUST_REGION_FILTER_FACTOR': hp.choice('TRUST_REGION_FILTER_FACTOR', [1, 2, 4, 8]),
-        'MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT': hp.choice('MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT', [0.8, 0.9, 0.95]),
+        'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.uniform('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', 0.001, 0.3),
+        'REMOVE_JITTER_RANGE': hp.quniform('REMOVE_JITTER_RANGE', 3, 7, 1),
+        # 'JUMPY_PROGRESS_ALPHA': hp.quniform('JUMPY_PROGRESS_ALPHA', 2, 4),
+        # 'JUMPY_PROGRESS_BETA': hp.quniform('JUMPY_PROGRESS_BETA', 3, 5),
+        'TRUST_REGION_FILTER_FACTOR': hp.quniform('TRUST_REGION_FILTER_FACTOR', 1, 8, 1),
+        'MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT': hp.uniform('MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT', 0.6, 0.99),
         # 'JOINT_DIFFERENCE_FADING_FACTOR': hp.uniform('JOINT_DIFFERENCE_FADING_FACTOR', [0.2, 0.5]),
-        'NUM_FEATURE_TO_PROGRESS_ALPHA': hp.choice('NUM_FEATURE_TO_PROGRESS_ALPHA', [3, 4, 5, 6]),
-        'NUM_FEATURE_TO_PROGRESS_BETA': hp.choice('NUM_FEATURE_TO_PROGRESS_BETA', [0.9, 0.1, 1.5]),
+        'NUM_FEATURE_TO_PROGRESS_ALPHA': hp.uniform('NUM_FEATURE_TO_PROGRESS_ALPHA', 3, 6),
+        'NUM_FEATURE_TO_PROGRESS_BETA': hp.uniform('NUM_FEATURE_TO_PROGRESS_BETA', 0.1, 1.5),
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=50)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=224)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

@@ -324,8 +324,6 @@ class Worker(Thread):
 
         reference_frame_index = int(len(recording) * self.progress)
 
-        rp.logerr(progress_estimate)
-
         reference_pose = recording[reference_frame_index]
 
         self.showroom_reference_frame_number_publisher.publish(reference_frame_index)

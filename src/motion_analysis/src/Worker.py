@@ -329,7 +329,7 @@ class Worker(Thread):
         reference_pose = recording[reference_frame_index]
 
         self.showroom_reference_frame_number_publisher.publish(reference_frame_index)
-        self.showroom_reference_progress_publisher.publish(self.progress)
+        self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
 
         return reference_pose
 

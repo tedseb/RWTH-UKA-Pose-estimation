@@ -19,7 +19,7 @@ from typing import NoReturn, Dict
 import redis
 import numpy as np
 import rospy as rp
-from std_msgs.msg import String
+from std_msgs.msg import String, Int16
 from unittest import mock
 from scipy import signal
 import logy
@@ -88,7 +88,10 @@ class Worker(Thread):
         self.running = True
 
         self.user_exercise_state_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_EXERCISE_STATES'], String, queue_size=1000)  
-        self.user_correction_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_CORRECTIONS'], String, queue_size=1000)  
+        self.user_correction_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_CORRECTIONS'], String, queue_size=1000)
+
+        self.showroom_reference_progress_publisher = rp.Publisher(self.config['SHOW_ROOM_REFERENCE_PROGRESS_TOPIC'], Int16, queue_size=1000)
+        self.showroom_reference_frame_number_publisher =  rp.Publisher(self.config['SHOW_ROOM_REFERENCE_FRAME_NUMBER_TOPIC'], Int16, queue_size=1000)
 
         self.predicted_skelleton_publisher = rp.Publisher("motion_analysis_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("motion_analysis_input", Person, queue_size=1000)
@@ -100,6 +103,9 @@ class Worker(Thread):
         self.bad_repetition = False
 
         self.gui = gui
+
+        self.t = None
+        self.progress_velocity = 0
 
         self.spot_info_dict = None
 
@@ -152,6 +158,8 @@ class Worker(Thread):
 
                     # Extract feature states
                     pose = present_joints_with_timestamp['used_joint_ndarray']
+                    self.last_t = self.t if self.t else present_joints_with_timestamp['ros_timestamp']
+                    self.t = present_joints_with_timestamp['ros_timestamp']
 
                     pose = self.pose_definition_adapter.normalize_skelleton(pose)
 
@@ -293,14 +301,35 @@ class Worker(Thread):
                     
         last_progress = self.progress
 
-        self.progress, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
+        progress_estimate, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
+        
+        # We try to calculate a progress velocity here and never use the estimated progress directly but update it based on a dacaying velocityyyyyy
+        if self.t - self.last_t:
+            delta = 0.5 # We always have to be lower than 50% progress delta
+            for rep_term in [0, 1, -1]: # The three repetitions terms let us see what happens if our progression would reach into the next repetition, this repetition or a previous repetition
+                delta_candidate = progress_estimate + rep_term - self.progress
+                if abs(delta) > abs(delta_candidate):
+                    delta = delta_candidate
+                    
+            self.progress_velocity = self.progress_velocity * self.config['PROGRESS_VELOCITY_EPSILON'] + (delta / (self.t - self.last_t)) * (1 - self.config['PROGRESS_VELOCITY_EPSILON'])
+        else:
+            self.progress_velocity = 0
+
+        self.progress = (self.progress + (self.t - self.last_t) * self.progress_velocity) % 1
 
         self.alignments_this_rep = np.append(self.alignments_this_rep, self.alignment)
         self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, self.progress - last_progress)
 
         update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector)
 
-        reference_pose = recording[int(len(recording) * self.progress)]
+        reference_frame_index = int(len(recording) * self.progress)
+
+        rp.logerr(progress_estimate)
+
+        reference_pose = recording[reference_frame_index]
+
+        self.showroom_reference_frame_number_publisher.publish(reference_frame_index)
+        self.showroom_reference_progress_publisher.publish(self.progress)
 
         return reference_pose
 

@@ -202,7 +202,7 @@ class Worker(Thread):
 
                     # We calculate the differences between elements of our skelleton
                     # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
-                    delta = (pose - reference_pose).sum()
+                    delta = self.pose_definition_adapter.pose_delta(pose, reference_pose)
                     self.skelleton_deltas_since_rep_start.append(delta)
                     score = self.calculate_repetition_score()
 

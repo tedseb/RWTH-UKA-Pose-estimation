@@ -82,7 +82,6 @@ class WorkerHandler(QThread):
             self.hmiExercises = db.spin_hmiExercises
         else:
             raise NotImplementedError("There is not database connection setup in the WorkerHandler for this PoseDefinitionAdapter type.")
-
         if enable_gui:
             self.gui_handler = GUIHandler()
             self.gui = MotionAnaysisGUI()
@@ -170,7 +169,7 @@ class WorkerHandler(QThread):
 
 if __name__ == '__main__':
     # initialize ros node
-    logy.basic_config(debug_level=logy.DEBUG, module_name="MA")
+    # logy.basic_config(debug_level=logy.DEBUG, module_name="MA")
     rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 

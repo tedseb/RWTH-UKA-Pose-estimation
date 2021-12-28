@@ -38,6 +38,22 @@ class UnknownAngleException(FeatureExtractorException):
 
 class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
     """This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper."""
+
+    # We define weights for joints that should overlap with expert joints. Each key corresponds to the name of the joint in the joint_labels array, the value is the weight.
+    joint_weights = {
+        'L_Ankle': 20,
+        'R_Ankle': 20,
+        'L_Knee': 50,
+        'R_Knee': 50,
+        'L_Wrist': 20,
+        'R_Wrist': 20,
+        'L_Elbow': 50,
+        'R_Elbow': 50,
+        'Head': 50,
+        'L_Shoulder': 100,
+        'R_Shoulder': 100,
+    }
+
     def __init__(self):
         # The indices of the joints that we use (of all the joints from the spin paper)
         self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
@@ -129,6 +145,22 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
     This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper.
     The Adapter is considered legacy, because we use the Metrabs code now by default.
     """
+
+    # We define weights for joints that should overlap with expert joints. Each key corresponds to the name of the joint in the joint_labels array, the value is the weight.
+    joint_weights = {
+        'OP_L_Ankle': 20,
+        'OP_R_Ankle': 20,
+        'OP_L_Knee': 50,
+        'OP_R_Knee': 50,
+        'OP_L_Wrist': 20,
+        'OP_R_Wrist': 20,
+        'OP_L_Elbow': 50,
+        'OP_R_Elbow': 50,
+        'Nose': 50,
+        'OP_L_Shoulder': 100,
+        'OP_R_Shoulder': 100,
+    }
+
     def __init__(self):
         # The indices of the joints that we use (of all the joints from the spin paper)
         self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43]

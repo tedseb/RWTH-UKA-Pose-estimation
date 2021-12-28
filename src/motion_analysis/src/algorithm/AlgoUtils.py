@@ -240,7 +240,19 @@ class PoseDefinitionAdapter():
 
 
         raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")
-                
+
+    def pose_delta(self, pose_a: np.ndarray, pose_b: np.ndarray):
+        """Calculate a difference between two poses, based on the weights of the respective joints."""
+
+        weights = 0
+        delta = 0
+        for joint_name, weight in self.joint_weights.items():
+            joint_index = self.joints_used_labels.index(joint_name)
+            delta += np.abs(np.linalg.norm(pose_a[joint_index] - pose_b[joint_index])) * weight
+            weights += weight
+
+        return delta / weights
+         
 
 def map_progress_to_vector(progress: float):
     """ Calculate the cartesian represenation of a progress as a unit vector.

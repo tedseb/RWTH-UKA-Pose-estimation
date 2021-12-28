@@ -84,17 +84,12 @@ def validation_objective_function(hps):
             rp.logerr("Validation report empty. Something went wrong!")
             status = STATUS_FAIL
 
-        tpr_by_fpr = 0
         num_exercises = 0
+        total_score = 0
         for name, exercise in report.items():
-            tpr = exercise[5]
-            fpr = exercise[6]
-            if exercise[6] != 0:
-                tpr_by_fpr +=  exercise[5] / exercise[6]
-            else:
-                tpr_by_fpr += exercise[5]
+            total_score += exercise[1]
             num_exercises += 1
-        score = tpr_by_fpr / min(num_exercises, 1)
+        score = total_score / min(num_exercises, 1)
 
         clean_files()
     except Exception as e:

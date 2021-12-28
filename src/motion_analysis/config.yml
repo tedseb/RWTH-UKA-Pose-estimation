@@ -14,8 +14,8 @@ ROS_SKELLETON_DEFINITION: 'skelleton_name'
 ROS_MOTION_ANALYSIS_INPUT_VISUALIZER_TOPIC: "motion_analysis_input_markers"
 ROS_MOTION_ANALYSIS_REFERENCE_POSE_VISUALIZER_TOPIC: "motion_analysis_reference_prediction_markers"
 
-SHOW_ROOM_REFERENCE_FRAME_NUMBER_CHANNEL: "showroom_reference_frame" # Number of the frame in the original recording
-SHOW_ROOM_REFERENCE_PROGRESS: "showroom_reference_prgoress" # Number between 0 and 100 that represents the progress
+SHOW_ROOM_REFERENCE_FRAME_NUMBER_TOPIC: "showroom_reference_frame" # Number of the frame in the original recording
+SHOW_ROOM_REFERENCE_PROGRESS_TOPIC: "showroom_reference_progress" # Number between 0 and 100 that represents the progress
 
 REDIS_MAXIMUM_QUEUE_SIZE: 1000
 REDIS_QUEUE_SIZE_PANIC_BOUNDARY: 200
@@ -78,3 +78,5 @@ NUM_FEATURE_TO_PROGRESS_BETA: 0.9
 
 ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK: True
 NUM_FEATURES_PROGRESSED_TOO_FAR_MU: 1
+
+PROGRESS_VELOCITY_EPSILON: 0.6

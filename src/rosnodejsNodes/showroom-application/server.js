@@ -79,12 +79,14 @@ app.get('/api/coordinates/dict', (req, res) => {
 if (args['rosnodejs'] === 'on') {
     console.log("rosnodejs usage is on");
     const rosnodejs = require('rosnodejs');
+    rosnodejs.initNode('/showroom');
     const nh = rosnodejs.nh;
     const std_msgs = rosnodejs.require('std_msgs');
-    const int16 = std_msgs.msg.int16;
-    const StringMsg = std_msgs.String;
+    console.log(std_msgs);
+    const int16 = std_msgs.msg.Int16;
+    const StringMsg = std_msgs.msg.String;
     rosnodejs.initNode('/showroom');
-    const skeleton_coordinates = nh.subscrie('/fused_skelleton', 'backend/Persons', (msg) => {
+    const skeleton_coordinates = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
         let pose = {};
         let bodyParts = msg.persons[0]['bodyParts'];
         skeleton.used.forEach(index => {
@@ -100,8 +102,8 @@ if (args['rosnodejs'] === 'on') {
                 ws.send(JSON.stringify(pose));
             }
         });
-    });
-    const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
+    }); 
+  const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
         //TODO: send message using websocket
         websockets.forEach(ws => {
             if (ws.readyState === ws_1.default.OPEN) {

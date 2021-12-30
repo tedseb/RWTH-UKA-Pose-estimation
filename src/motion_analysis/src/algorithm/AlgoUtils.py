@@ -241,8 +241,26 @@ class PoseDefinitionAdapter():
 
         raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")
 
-    def pose_delta(self, pose_a: np.ndarray, pose_b: np.ndarray):
+    @abstractmethod
+    def normal_bone_length(self, pose: np.ndarray) -> float:
+        """Return the length of a bone that (hopefully) does not change.
+        
+        In order to calculate a meaningful pose delta, and corrections, we need to normalize distances.
+        We require that there exists a bone, i.e. connection between two joints, that does not change between
+        different instances of peoples skelletons.
+
+        Args:
+            pose: An np.ndarray representing a skelleton
+
+        Return:
+            The normal-bone-length for this skelleton
+        """
+        raise NotImplementedError("This is an interface, it should not be called directly.")
+
+    def pose_delta(self, pose_a: np.ndarray, pose_b: np.ndarray) -> float:
         """Calculate a difference between two poses, based on the weights of the respective joints."""
+
+        # Careful! This method introduces a difference between deltas from different Pose Definition Adapters. This difference can only be overcome by adding a factor to the normal bone length.
 
         weights = 0
         delta = 0
@@ -251,7 +269,7 @@ class PoseDefinitionAdapter():
             delta += np.abs(np.linalg.norm(pose_a[joint_index] - pose_b[joint_index])) * weight
             weights += weight
 
-        return delta / weights
+        return delta / (weights * np.linalg.norm(self.normal_bone_length(pose_a)) * np.linalg.norm(self.normal_bone_length(pose_b)))
          
 
 def map_progress_to_vector(progress: float):
@@ -350,11 +368,11 @@ def update_gui_features(gui, feature):
                             np.array(feature.prediction))
 
 
-def update_gui_progress(gui, progress, alignment, progress_alignment_vector):
+def update_gui_progress(gui, progress, alignment, progress_alignment_vector, score, last_score):
     """ Update a gui regarding overall parameters. """
     if not gui:
         return
-    gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
+    gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]), int(score), int(last_score))
 
 
 

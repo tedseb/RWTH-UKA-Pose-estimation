@@ -139,6 +139,9 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         
         return body_parts
 
+    def normal_bone_length(self, pose: np.ndarray) -> float:
+        return np.abs(np.linalg.norm(pose[self.joint_labels.index('L_Back')] - pose[self.joint_labels.index('M_Back')]))
+
 
 class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
     """
@@ -253,3 +256,6 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
             body_parts[used_index] = b
         
         return body_parts
+
+    def normal_bone_length(self, pose: np.ndarray) -> float:
+        return np.abs(np.linalg.norm(pose[self.joint_labels.index('Pelvis_MPII')] - pose[self.joint_labels.index('Spine_HM')]))

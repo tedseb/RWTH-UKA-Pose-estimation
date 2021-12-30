@@ -94,8 +94,6 @@ def validation_objective_function(hps):
         clean_files()
     except Exception as e:
         score = 0
-        tpr = 0
-        fpr = 1
         rp.logerr("Trial error: " + str(e))
         status = STATUS_FAIL
 
@@ -105,8 +103,6 @@ def validation_objective_function(hps):
         # -- store other results like this
         'time_faster_than_max_execution_time': max_execution_time - (time.time() - start_time),
         'evaluation_time': time.time() - start_time,
-        'tpr': tpr,
-        'fpr': fpr
         }
     
 
@@ -135,7 +131,7 @@ if __name__ == '__main__':
         'NUM_FEATURE_TO_PROGRESS_BETA': hp.uniform('NUM_FEATURE_TO_PROGRESS_BETA', 0.1, 1.5),
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=224)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=100)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

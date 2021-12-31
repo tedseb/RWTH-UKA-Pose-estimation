@@ -436,5 +436,4 @@ class Worker(Thread):
         logy.log_mean("HighestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.max(self.skelleton_deltas_since_rep_start)))
         logy.log_mean("ExerciseScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(score))
 
-        rp.logerr(score)
         return score

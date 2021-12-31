@@ -130,14 +130,20 @@ class PoseDefinitionAdapter():
         return resized_skelleton
 
 
-    def normalize_skelleton_position(self, input_skelleton):
-        """Returns a skelleton with the pelvis at (0, 0, 0)."""
+    def normalize_skelleton_position(self, input_skelleton, new_central_joint_idx=None):
+        """Returns a skelleton such that the position of the central joint is at (0, 0, 0).
+        
+        By default, the central joint is the pelvis, i.e. self.central_joint_idx."""
+
+        if new_central_joint_idx is None:
+            new_central_joint_idx = self.central_joint_idx
+
         reoriented_skelleton = np.copy(input_skelleton)
         # Move skelleton to 0/0/0 by substracting coordinates of central joint from all joints
         for joint_idx in range(len(reoriented_skelleton)):
-            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[self.central_joint_idx][0]
-            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[self.central_joint_idx][1]
-            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[self.central_joint_idx][2]
+            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[new_central_joint_idx][0]
+            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[new_central_joint_idx][1]
+            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[new_central_joint_idx][2]
 
         return reoriented_skelleton
 

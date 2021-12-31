@@ -217,7 +217,6 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
         
         return array
 
-
     def pose_to_nd_array(self, pose: dict):
         """ Returns an ndarray representing the input pose """
         array = np.ndarray(shape=[len(self.joints_used), 3], dtype=np.float16)
@@ -227,7 +226,6 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
                 array[idx_step][Y] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
                 array[idx_step][Z] = coordinates['z'] 
         return array
-
 
     def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
         """ Returns an ndarray of poses. """
@@ -241,7 +239,6 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
             array[idx][Z] = bodyPart.point.y
 
         return array
-
 
     def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
         """ Returns an ndarray of poses. """

@@ -16,7 +16,7 @@ class IllegalAngleException(Exception):
 
 class PoseDefinitionAdapter():
     def __init__(self):
-        self.normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_orientation_vector(self.normal_skelleton))
+        self.pelvis_normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_pelvis_orientation_vector(self.normal_skelleton))
 
     @abstractmethod
     def poses_to_ndarray(self, poses: object) -> np.ndarray:
@@ -71,28 +71,46 @@ class PoseDefinitionAdapter():
     def get_joint_name(self, joint_idx: int):
         return self.joints_used_labels[joint_idx]
 
-    def calculate_orientation_vector(self, input_skelleton):
-        """Returns the orientation of the skelleton's pelvis.
+    # def calculate_pelvis_orientation_vector(self, input_skelleton):
+    #     """Returns the orientation of the skelleton's pelvis.
 
-        Calculateas the orientation of the pelvis joint connections of the skelleton.
-        The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
+    #     Calculateas the orientation of the pelvis joint connections of the skelleton.
+    #     The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
+    #     """
+        # x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
+        # y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
+        # if np.array_equal(x, y):
+        #     try:
+        #         import logy
+        #         logy.error("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+        #     except ImportError:
+        #         print("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+        #     raise ValueError("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+        # _x = x / np.linalg.norm(x)
+        # cross_x_y = np.cross(x,y)
+        # _z = cross_x_y / np.linalg.norm(cross_x_y)
+        # cross__z_x = np.cross(_z,x)
+        # _y = cross__z_x / np.linalg.norm(cross__z_x)
+        # return  np.stack([_x, _y, _z])
+
+    def calculate_orientation_vector(self, input_skelleton, upper_joint_idx, left_joint_idx, right_joint_idx):
+        """Returns the orientation of the the skelleton according to three given joints that form a normal plane.
+
+        The returned orientation is the vector representing the normal vector of two of the joint connections.
         """
-        # Roate skelleton, such that skelletons pelvises overlap
-        x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
-        y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
-        if np.array_equal(x, y):
-            try:
-                import logy
-                logy.error("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
-            except ImportError:
-                print("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
-            raise ValueError("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
-        _x = x / np.linalg.norm(x)
-        cross_x_y = np.cross(x,y)
-        _z = cross_x_y / np.linalg.norm(cross_x_y)
-        cross__z_x = np.cross(_z,x)
-        _y = cross__z_x / np.linalg.norm(cross__z_x)
-        return  np.stack([_x, _y, _z])
+        v_up_left = np.array(input_skelleton[upper_joint_idx] - input_skelleton[left_joint_idx])
+        v_left_right = np.array(input_skelleton[left_joint_idx] - input_skelleton[right_joint_idx])
+        v_up_right = np.array(input_skelleton[upper_joint_idx] - input_skelleton[right_joint_idx])
+
+        # We need two unit vectors
+        r_z = -(v_up_left + 0.5 * v_left_right)
+        r_z = r_z / np.linalg.norm(r_z) 
+        r_y = np.cross(v_up_left, v_up_right)
+        r_y = r_y / np.linalg.norm(r_y)
+        r_x = np.cross(r_y, r_z)
+
+        return  np.stack([r_x, r_y, r_z])
+
 
     def normalize_skelleton_size(self, input_skelleton):
         """Stretch all vectors of person to the same length as the vectors in normal_skelleton
@@ -147,11 +165,11 @@ class PoseDefinitionAdapter():
 
         return reoriented_skelleton
 
-    def normalize_skelleton_orientation(self, input_skelleton):
+    def normalize_pelvis_orientation(self, input_skelleton):
         """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
         reoriented_skelleton = np.copy(input_skelleton)
-        reoriented_skelleton_rotation_matrix = self.calculate_orientation_vector(reoriented_skelleton)
-        rotation_matrix_to_normal_orientation = np.matmul(self.normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+        reoriented_skelleton_rotation_matrix = self.calculate_pelvis_orientation_vector(reoriented_skelleton)
+        rotation_matrix_to_normal_orientation = np.matmul(self.pelvis_normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
 
         for joint_idx in range(len(reoriented_skelleton)):
             reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix_to_normal_orientation)
@@ -175,7 +193,7 @@ class PoseDefinitionAdapter():
         """Utility method to normalize size, position and orientation of skelleton."""
         skelleton = self.normalize_skelleton_size(input_skelleton)
         skelleton = self.normalize_skelleton_position(skelleton)
-        skelleton = self.normalize_skelleton_orientation(skelleton)
+        skelleton = self.normalize_pelvis_orientation(skelleton)
         return skelleton
 
     def find_inner_joint(self, joint_names):
@@ -261,6 +279,16 @@ class PoseDefinitionAdapter():
         Return:
             The normal-bone-length for this skelleton
         """
+        raise NotImplementedError("This is an interface, it should not be called directly.")
+
+    @abstractmethod
+    def calculate_chest_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's chest"""
+        raise NotImplementedError("This is an interface, it should not be called directly.")
+
+    @abstractmethod
+    def calculate_pelvis_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's pelvis"""
         raise NotImplementedError("This is an interface, it should not be called directly.")
 
     def pose_delta(self, pose_a: np.ndarray, pose_b: np.ndarray) -> float:

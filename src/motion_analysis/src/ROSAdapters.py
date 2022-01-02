@@ -142,6 +142,13 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
     def normal_bone_length(self, pose: np.ndarray) -> float:
         return np.abs(np.linalg.norm(pose[self.joint_labels.index('L_Back')] - pose[self.joint_labels.index('M_Back')]))
 
+    def calculate_chest_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's chest"""
+        return self.calculate_orientation_vector(pose, self.joint_labels.index("Neck"), self.joint_labels.index("L_Shoulder"), self.joint_labels.index("R_Shoulder"))
+
+    def calculate_pelvis_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's pelvis"""
+        return self.calculate_orientation_vector(pose, self.joint_labels.index("M_Hip"), self.joint_labels.index("L_Hip"), self.joint_labels.index("R_Hip"))
 
 class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
     """
@@ -256,3 +263,11 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
     def normal_bone_length(self, pose: np.ndarray) -> float:
         return np.abs(np.linalg.norm(pose[self.joint_labels.index('Pelvis_MPII')] - pose[self.joint_labels.index('Spine_HM')]))
+
+    def calculate_chest_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's chest"""
+        raise NotImplementedError
+
+    def calculate_pelvis_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's pelvis"""
+        raise NotImplementedError

@@ -17,6 +17,7 @@ class IllegalAngleException(Exception):
 class PoseDefinitionAdapter():
     def __init__(self):
         self.pelvis_normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_pelvis_orientation_vector(self.normal_skelleton))
+        self.chest_normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_chest_orientation_vector(self.normal_skelleton))
 
     @abstractmethod
     def poses_to_ndarray(self, poses: object) -> np.ndarray:
@@ -147,7 +148,6 @@ class PoseDefinitionAdapter():
 
         return resized_skelleton
 
-
     def normalize_skelleton_position(self, input_skelleton, new_central_joint_idx=None):
         """Returns a skelleton such that the position of the central joint is at (0, 0, 0).
         
@@ -165,16 +165,25 @@ class PoseDefinitionAdapter():
 
         return reoriented_skelleton
 
+    def normalize_chest_orientation(self, input_skelleton):
+        """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
+        reoriented_skelleton_rotation_matrix = self.calculate_chest_orientation_vector(input_skelleton)
+        rotation_matrix_to_normal_orientation = np.matmul(self.chest_normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+        return self._normalize_orientation(input_skelleton, rotation_matrix_to_normal_orientation)
+
     def normalize_pelvis_orientation(self, input_skelleton):
         """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
-        reoriented_skelleton = np.copy(input_skelleton)
-        reoriented_skelleton_rotation_matrix = self.calculate_pelvis_orientation_vector(reoriented_skelleton)
+        reoriented_skelleton_rotation_matrix = self.calculate_pelvis_orientation_vector(input_skelleton)
         rotation_matrix_to_normal_orientation = np.matmul(self.pelvis_normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+        return self._normalize_orientation(input_skelleton, rotation_matrix_to_normal_orientation)
 
-        for joint_idx in range(len(reoriented_skelleton)):
-            reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix_to_normal_orientation)
+    def _normalize_orientation(self, input_skelleton, rotation_matrix):
+        reoriented_skelleton = np.copy(input_skelleton)
+        for joint_idx in range(len(input_skelleton)):
+            reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix)
 
         return reoriented_skelleton
+
 
     def skelleton_coherency_test(self):
         """Check whether all joints are connected."""

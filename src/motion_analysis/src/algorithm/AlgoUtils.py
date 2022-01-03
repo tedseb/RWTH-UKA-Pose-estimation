@@ -16,10 +16,10 @@ class IllegalAngleException(Exception):
 
 class PoseDefinitionAdapter():
     def __init__(self):
-        self.pelvis_normal_orientation_matrix_transpose = np.matrix.transpose(np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+        self.pelvis_normal_orientation_matrix = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         # np.matrix.transpose(self.calculate_pelvis_orientation_vector(self.normal_skelleton))
 
-        self.chest_normal_orientation_matrix_transpose = np.matrix.transpose(np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+        self.chest_normal_orientation_matrix = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         # np.matrix.transpose(self.calculate_chest_orientation_vector(self.normal_skelleton))
 
     @abstractmethod
@@ -107,11 +107,11 @@ class PoseDefinitionAdapter():
         v_up_right = np.array(input_skelleton[upper_joint_idx] - input_skelleton[right_joint_idx])
 
         # We need orthogonal unit vectors
-        r_z = -(v_up_left + 0.5 * v_left_right)
-        r_z = r_z / np.linalg.norm(r_z) 
-        r_y = np.cross(v_up_left, v_up_right)
-        r_y = r_y / np.linalg.norm(r_y)
-        r_x = np.cross(r_y, r_z)
+        r_y = (v_up_left + 0.5 * v_left_right)
+        r_y = r_y / np.linalg.norm(r_y) 
+        r_z = np.cross(v_up_left, v_up_right)
+        r_z = r_z / np.linalg.norm(r_z)
+        r_x = np.cross(r_z, r_y)
 
         return  np.stack([r_x, r_y, r_z])
 
@@ -171,13 +171,13 @@ class PoseDefinitionAdapter():
     def normalize_chest_orientation(self, input_skelleton):
         """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
         reoriented_skelleton_rotation_matrix = self.calculate_chest_orientation_vector(input_skelleton)
-        rotation_matrix_to_normal_orientation = np.matmul(self.chest_normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+        rotation_matrix_to_normal_orientation = np.matmul(self.chest_normal_orientation_matrix, np.matrix.transpose(reoriented_skelleton_rotation_matrix))
         return self._reorient(input_skelleton, rotation_matrix_to_normal_orientation)
 
     def normalize_pelvis_orientation(self, input_skelleton):
         """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
         reoriented_skelleton_rotation_matrix = self.calculate_pelvis_orientation_vector(input_skelleton)
-        rotation_matrix_to_normal_orientation = np.matmul(self.pelvis_normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+        rotation_matrix_to_normal_orientation = np.matmul(self.pelvis_normal_orientation_matrix, np.matrix.transpose(reoriented_skelleton_rotation_matrix))
         return self._reorient(input_skelleton, rotation_matrix_to_normal_orientation)
 
     def _reorient(self, input_skelleton, rotation_matrix):

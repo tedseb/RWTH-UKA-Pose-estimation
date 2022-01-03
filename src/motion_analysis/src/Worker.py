@@ -163,11 +163,6 @@ class Worker(Thread):
                     self.last_t = self.t if self.t else present_joints_with_timestamp['ros_timestamp']
                     self.t = present_joints_with_timestamp['ros_timestamp']
 
-                    chest_orientation_normal = self.pose_definition_adapter.normalize_chest_orientation(pose)
-                    chest_position_normal = self.pose_definition_adapter.normalize_skelleton_position(pose, 12)
-                    self.publish_pose(chest_position_normal, self.predicted_skelleton_publisher)
-                    self.publish_pose(pose, self.user_skelleton_publisher)
-
                     pose = self.pose_definition_adapter.normalize_skelleton(pose)
 
                     for f in self.features.values():
@@ -232,8 +227,8 @@ class Worker(Thread):
                         publish_message(self.user_exercise_state_publisher, self.config['ROS_TOPIC_USER_EXERCISE_STATES'], user_state_data)
 
                     # Publish poses on ROS to observe in RVIZ
-                    # self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
-                    # self.publish_pose(pose, self.user_skelleton_publisher)
+                    self.publish_pose(reference_pose, self.predicted_skelleton_publisher)
+                    self.publish_pose(pose, self.user_skelleton_publisher)
 
                     # Corrections are not part of the beta release, we therefore leave them out and never send user correction messages
                     correction = None

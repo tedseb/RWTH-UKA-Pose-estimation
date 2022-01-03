@@ -1,56 +1,50 @@
 #!/usr/bin/env python3
+import os
+import signal
+import time
+import threading
+from multiprocessing import Lock
 import numpy as np
 import cv2
-import os
-from multiprocessing import Lock
-import signal
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-import tensorflow as tf
-import time
 import rospy
 from sensor_msgs.msg import Image
 from backend.msg import ImageData, ChannelInfo
-from backend.msg import Person, Persons, Bodypart, Pixel, Bboxes
+from backend.msg import Person, Persons, Bodypart, Bboxes
 from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 import logy
-import time
-import threading
-import logging
-from multiprocessing import Lock
-logging.basicConfig(level='ERROR')
-
-from tensorflow.python.keras.backend import set_session
-
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
-config.log_device_placement = True # to log device placement (on which device the operation ran)
-sess = tf.compat.v1.Session(config=config)
-set_session(sess)
-
 import matplotlib.pyplot as plt
-plt.switch_backend('TkAgg')
-from mpl_toolkits.mplot3d import Axes3D
-
 from gymy_tools import Queue
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
 
 THREAD_WAIT_TIME_MS = 20 #40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
 AI_WIDTH = 1280
+AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4
 
-import tensorflow as tf
+if
+# from tensorflow.python.keras.backend import set_session
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth = False # dynamically grow the memory used on the GPU
+# config.log_device_placement = True # to log device placement (on which device the operation ran)
+# sess = tf.compat.v1.Session(config=config)
+# set_session(sess)
 
-#physical_devices = tf.config.list_physical_devices('GPU')
-#if len(physical_devices) > 1:
-#    tf.config.set_visible_devices(physical_devices[1:],'GPU')
-#print(tf.config.get_visible_devices('GPU'))
+physical_devices = tf.config.list_physical_devices('GPU')
+if len(physical_devices) > 1:
+    physical_devices = physical_devices[1:]
+
+tf.config.set_visible_devices(physical_devices,'GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+plt.switch_backend('TkAgg')
 
 CONFIG = {
     'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
-    'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
-    #'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4'
+    #'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl' # /home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl_combined
+    'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4'
 }
 
 class PoseEstimator():
@@ -81,9 +75,13 @@ class PoseEstimator():
         self._box_queues = {}
         self._thread_lock = Lock()
 
+        #img = cv2.imread('../data/ted_image.jpg')
+        #box = [680.0, 180.0, 180.0, 490.0]
         self.model = tf.saved_model.load(CONFIG["model_path"])
         self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
         self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
+        self._fake_image = cv2.imread('/home/trainerai/trainerai-core/src/AI/metrabs/image.jpg')
+        self._fake_person_boxes = [np.array([680.0, 180.0, 180.0, 490.0], np.float32)]
         self.start_ai([], np.stack([self._fake_image]), [self._fake_person_boxes], set())
 
         self._is_active = True
@@ -134,6 +132,7 @@ class PoseEstimator():
     @logy.catch_ros
     def callback_setImage(self, msg: ImageData):
         camera_id = int(msg.image.header.frame_id[3:])
+
         #logy.debug_throttle("Received Image", 2000)
         #logy.warn(f"Get image {msg.frame_num}")
         if msg.is_debug:
@@ -153,7 +152,7 @@ class PoseEstimator():
         bbox_num = box_frame_number
         next_img_num = queue[0].frame_num
         if next_img_num > box_frame_number:
-            logy.debug(f"Queue empty num={next_img_num}, box={bbox_num}? next in queue {queue[1].frame_num}")
+            logy.debug(f"Image not in queu. Img={next_img_num}, box={bbox_num}")
 
         while next_img_num <= bbox_num:
             img_data = queue.get()
@@ -186,6 +185,7 @@ class PoseEstimator():
     @logy.catch_ros
     def callback_regress(self, body_bbox_list_station: Bboxes):
         camera_id = int(body_bbox_list_station.header.frame_id[3:])
+        #logy.warn(f"test {camera_id}, {self._box_queues}")
         if camera_id in self._box_queues:
                 self._box_queues[camera_id].put(body_bbox_list_station)
                 logy.log_fps("new_box_received", 100)
@@ -227,7 +227,7 @@ class PoseEstimator():
                         images.append(self._fake_image)
                         boxes.append(self._fake_person_boxes)
                         data.append((camera_id, None, None))
-                        #logy.warn(f"Box Size 0, {camera_id}")
+                        #logy.warn(f"No Image, {camera_id}")
                         continue
 
                     if box.is_debug:
@@ -275,8 +275,8 @@ class PoseEstimator():
         logy.debug_throttle(f"{images.shape[0]}", 1000)
 
         with logy.TraceTime("matrabs_multi_image"):
-            pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)
-            #pred_output_list = self.model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=self.intrinsics,  skeleton='smpl_24')["poses3d"]
+            #pred_output_list = self.model.predict_multi_image(images, self.intrinsics, ragged_boxes)
+            pred_output_list = self.model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=self.intrinsics,  skeleton='smpl_24')["poses3d"]
 
         pred_output_list = pred_output_list.numpy()
 
@@ -345,7 +345,6 @@ class PoseEstimator():
                     cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
 
             # Concatenate images and convert them to ROS image format to display them later in rviz
-
             img = cv2.hconcat(cropped_images)
             image_message = self.opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
             pub = self.publisher_crop.get(camera_id)

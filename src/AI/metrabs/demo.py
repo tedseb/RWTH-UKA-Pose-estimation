@@ -22,12 +22,15 @@ def main():
     #demo_with_just_an_image()
     #demo_with_known_intrinsics_and_boxes()
     #image = tf.image.decode_jpeg(tf.io.read_file('./image.jpg'))
-    image = cv2.imread('./image.jpg')
+    #image = cv2.imread('./image.jpg')
+    image = cv2.imread('./ted_orhan_image.jpg')
+
     image = cv2.resize(image, (AI_HEIGHT, AI_WIDTH))
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     #image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
-    model = tf.saved_model.load('./models/metrabs_multiperson_smpl_combined')
-    test_single_image(model, image)
+    model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl') #_combined')
+    #model = tf.saved_model.load('/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4') #_combined')
+    #test_single_image(model, image)
     test_multi_image(model, image)
 
 def test_single_image(model, image):
@@ -41,7 +44,7 @@ def test_single_image(model, image):
     for i in range(2):
         print(f"Single Detection Boxes {i + 1}:")
         time_stamp = time.time()
-        pred = model.predict_single_image(image, intrinsics) #, person_boxes)
+        pred = model.predict_single_image(image, intrinsics, person_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
         print(f"- {len(pred[1])} Persons")
@@ -54,20 +57,24 @@ def test_multi_image(model, image):
     _test_multi_image(model, image, 8)
     _test_multi_image(model, image, 16)
 
-def _test_multi_image(model, image, count, repetitions = 2):
+def _test_multi_image(model, image, count, repetitions = 4):
     print()
     intrinsics =  tf.constant([[[1962, 0, 540], [0, 1969, 960], [0, 0, 1]]], dtype=tf.float32)
-    #person_boxes = np.array([670, 170, 200, 510], dtype=np.float32)
-    person_boxes = np.array([670, 170, 200, 510], np.float32)
-    images, ragged_boxes = multiply_images_and_boxes(count, image.copy(), [person_boxes.copy()])
+    person_boxes = np.array([670, 170, 200, 510], dtype=np.float32)
+    person_boxes1 = np.array([210, 100, 150, 340], np.float32)
+    person_boxes2 = np.array([820, 90, 210, 600], np.float32)
+    images, ragged_boxes = multiply_images_and_boxes(count, image.copy(), [person_boxes1.copy(), person_boxes2.copy()])
+    #images, ragged_boxes = multiply_images_and_boxes(count, image.copy(), [person_boxes.copy()])
 
     for i in range(repetitions):
         print(f"Multi Detection ({images.shape}) {i + 1}:")
         time_stamp = time.time()
-        pred = model.predict_multi_image(images, intrinsics) #, ragged_boxes)
+        #pred = model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=intrinsics, skeleton='smpl_24')
+        pred = model.predict_multi_image(images, intrinsics, ragged_boxes)
         time_stamp = (time.time() - time_stamp) * 1000
         print(f"- TIME: {time_stamp} ms")
-        print(f"- {pred[1].shape} Persons")
+        #print(f"- {pred[1].shape} Persons")
+
 
 def multiply_images_and_boxes(array_len, image, person_boxes):
     images = []

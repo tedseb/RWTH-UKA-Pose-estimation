@@ -10,7 +10,8 @@ import roslaunch
 import rospy
 from typing import List, Tuple, Set, Dict
 from std_msgs.msg import Bool
-from backend.msg import ImageData, ChannelInfo, LabelsCameraID, Bboxes, Persons, Bboxes
+from sensor_msgs.msg import Image
+from backend.msg import ImageData, ChannelInfo, ImageData, Bboxes, Persons, Bboxes
 from dataclasses import dataclass
 import pytest
 import logy
@@ -35,7 +36,7 @@ class LocalDataManager(DataManagerInterface):
             0 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
             1 : ["langhantel_ted", 0, "gTux94rB92w"],
             2 : ["deadlift_ted", 0, "O9wJvxWMiBg"],
-            3 : ["military_ted", 0, "Uv9qwcALYKU"],
+            3 : ["military_ted", 0, "O9wJvxWMiBg"],
             10 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
             12 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
             14 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
@@ -47,7 +48,7 @@ class LocalDataManager(DataManagerInterface):
             1 : ["Orhan", [CameraFrame(0, [1091, 65, 1672, 1058])]],
             2 : ["langhantel", [CameraFrame(1, [562, 100, 871, 693])]],
             3 : ["deadlift", [CameraFrame(2, [645, 160, 1018, 701])]],
-            4 : ["military", [CameraFrame(3, [669, 152, 985, 667])]],
+            4 : ["military", [CameraFrame(3, [645, 160, 1018, 701])]],
             10 : ["Ted_1", [CameraFrame(10, [249, 68, 650, 708])]],
             11 : ["Orhan_1", [CameraFrame(10, [1091, 65, 1672, 1058])]],
             12 : ["Ted_2", [CameraFrame(12, [249, 68, 650, 708])]],
@@ -128,17 +129,6 @@ class LocalDataManager(DataManagerInterface):
         return False
 
 class GymyEnviroment:
-
-    _LAUNCH_FILES = [
-        ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
-        #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
-        ['infrastructure', 'mobile_server.launch'],
-        ['metrabs', 'metrabs.launch', 'log_level:=debug'],
-        ['object_detection', 'object_detection.launch', 'render:=False'],
-        #['motion_analysis', 'motion_analysis_dev.launch', 'log_level:=debug'],
-        ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
-    ]
-
     def __init__(self) -> None:
         self._valid = False
         self._metrabs_ready = False
@@ -155,10 +145,10 @@ class GymyEnviroment:
         if msg:
             self._metrabs_ready = True
 
-    def warm_up(self):
+    def warm_up(self, launchfiles):
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         ros_launch_files = []
-        for args in self._LAUNCH_FILES:
+        for args in launchfiles:
             roslaunch_file = roslaunch.rlutil.resolve_launch_arguments(args)[0]
             if len(args) >= 2:
                 roslaunch_args = args[2:]
@@ -194,15 +184,37 @@ class GymyEnviroment:
     def is_valid(self):
         return self._valid
 
-@pytest.fixture(scope="module")
+LAUNCH_FILES_ALL = [
+    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
+    #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
+    #['infrastructure', 'mobile_server.launch'],
+    ['metrabs', 'metrabs.launch', 'log_level:=debug'],
+    ['object_detection', 'object_detection.launch', 'render:=False'],
+    #['motion_analysis', 'motion_analysis_dev.launch', 'log_level:=debug'],
+    #['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
+]
+
+LAUNCH_FILES_METRABS = [
+    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
+    ['metrabs', 'metrabs.launch', 'log_level:=debug'],
+    ['object_detection', 'object_detection.launch', 'render:=False']
+]
+
+@pytest.fixture(scope="class")
 def ros_env():
     env = GymyEnviroment()
-    env.warm_up()
+    env.warm_up(LAUNCH_FILES_ALL)
+    return env
+
+@pytest.fixture(scope="class")
+def ros_env_metrabs():
+    env = GymyEnviroment()
+    env.warm_up(LAUNCH_FILES_METRABS)
     return env
 
 def _ros_env():
     env = GymyEnviroment()
-    env.warm_up()
+    env.warm_up(LAUNCH_FILES_ALL)
     return env
 
 class TestCollection:
@@ -610,6 +622,92 @@ class TestCollection:
         ]
         self._detection_and_metrabs_speed(ros_env, station_data, 10, 2)
         ros_env.logy.test(f"# OK", "test")
+
+class TestCollection2:
+    def test_metrabs_speed(self, ros_env_metrabs):
+        #img = cv2.imread('../data/ted_image.jpg')
+        #box = [680.0, 180.0, 180.0, 490.0]
+        img = cv2.imread('../data/ted_orhan_image.jpg')
+        box = [210, 100, 150, 340, 820, 90, 210, 600]
+        INITIAL_COUNT = 10
+        WAIT_TIME = 0.040 # 25 fps
+        NUM_SAMPLES = 300
+        NUM_CAMERAS = 4
+        NUM_STATIONS_PER_CAMERA = 2
+
+        publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=10)
+        publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo, queue_size=5)
+        img_pubs = []
+        for i in range(NUM_CAMERAS):
+            publisher_channel_info.publish(ChannelInfo(f'image/channel_{i}', i, i, True))
+            img_pubs.append(rospy.Publisher(f'image/channel_{i}', ImageData, queue_size=1))
+
+
+        received_skeleton_num = 0
+        initial_counts_skeleton = {i : 0 for i in range(NUM_CAMERAS)} # start with test if each camera sends min. INITIAL_COUNT frames
+        initial_time_skeleton = 0
+
+        @logy.catch_ros
+        def callback_new_skeleton(msg: Persons):
+            nonlocal initial_counts_skeleton
+            nonlocal received_skeleton_num
+            nonlocal initial_time_skeleton
+            camera_id = int(msg.header.frame_id[3:])
+            # Before test, all cameras must send min INITIAL_COUNT images
+            for i, initial_count in initial_counts_skeleton.items():
+                if initial_count <= INITIAL_COUNT:
+                    if i != camera_id:
+                        return
+                    if initial_count == INITIAL_COUNT:
+                        initial_time_skeleton = time.time()
+                    initial_counts_skeleton[i] += 1
+                    return
+            for _ in msg.persons:
+                received_skeleton_num += 1
+
+        skeleton_sub = rospy.Subscriber('personsJS', Persons, callback_new_skeleton, queue_size=50)
+
+        start_time = time.time()
+        for sample_idx in range(NUM_SAMPLES):
+            loop_time = time.time()
+            for i, img_pub in enumerate(img_pubs):
+                ros_image = Image()
+                ros_image.header.stamp = rospy.Time.now()
+                ros_image.encoding = "bgr8"
+                ros_image.data = np.array(img, dtype=np.uint8).tobytes()
+                ros_image.height, ros_image.width = img.shape[:-1]
+                ros_image.step = img.shape[-1] * img.shape[0]
+                msg = ImageData()
+                msg.image = ros_image
+                msg.is_debug = False
+                msg.frame_num = sample_idx
+                ros_image.header.frame_id = f"dev{i}"
+                img_pub.publish(msg)
+
+            if sample_idx >= 1:
+                for i in range(NUM_CAMERAS):
+                    box_list_1d = box
+                    box_msg  = Bboxes()
+                    #box_msg.header.stamp = old_img_data.image.header.stamp #Will be important for data fusion: Use current time or older stamp from CameraNode
+                    box_msg.frame_num = sample_idx - 1
+                    box_msg.data = box_list_1d
+                    box_msg.is_debug = False
+                    box_msg.header.frame_id = f"dev{i}"
+                    box_msg.stationID = list(range(i * 10, i * 10 + NUM_STATIONS_PER_CAMERA))
+                    box_msg.sensorID = [i]
+                    publisher_boxes.publish(box_msg)
+            elapsed_s = time.time() - loop_time
+            time.sleep(WAIT_TIME - elapsed_s)
+
+        avg_fps_publishing = (NUM_SAMPLES / (time.time() - start_time))
+        avg_fps_skeleton = (received_skeleton_num / (time.time() - initial_time_skeleton)) / (NUM_STATIONS_PER_CAMERA * NUM_CAMERAS)
+        ros_env_metrabs.logy.test(f"\n####  Detection / Metrabs Speed test (one station / Camera) ####", "test")
+        ros_env_metrabs.logy.test(f"# fps publishing: {avg_fps_publishing:.2f}fps".ljust(45) + f"N={NUM_SAMPLES}")
+        ros_env_metrabs.logy.test(f"# fps skeleton avg: {avg_fps_skeleton:.2f}fps".ljust(45) + f"N={received_skeleton_num}")
+        ros_env_metrabs.logy.test(f"# OK", "test")
+
+        publisher_channel_info.publish(ChannelInfo('image/channel_0', 0, 1, False))
+        skeleton_sub.unregister()
 
 if __name__ == '__main__':
 

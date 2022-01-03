@@ -91,7 +91,7 @@ class Worker(Thread):
         self.user_correction_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_CORRECTIONS'], String, queue_size=1000)
 
         self.showroom_reference_progress_publisher = rp.Publisher(self.config['SHOW_ROOM_REFERENCE_PROGRESS_TOPIC'], Int16, queue_size=1000)
-        self.showroom_reference_frame_number_publisher =  rp.Publisher(self.config['SHOW_ROOM_REFERENCE_FRAME_NUMBER_TOPIC'], Int16, queue_size=1000)
+        self.showroom_reference_frame_time_publisher =  rp.Publisher(self.config['SHOW_ROOM_REFERENCE_FRAME_TIME_TOPIC'], Int16, queue_size=1000)
 
         self.predicted_skelleton_publisher = rp.Publisher("motion_analysis_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("motion_analysis_input", Person, queue_size=1000)
@@ -328,7 +328,7 @@ class Worker(Thread):
 
         reference_pose = recording[reference_frame_index]
 
-        self.showroom_reference_frame_number_publisher.publish(reference_frame_index)
+        self.showroom_reference_frame_time_publisher.publish(self.spot_info_dict["exercise_data"]["video_frame_idxs"][reference_frame_index])
         self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
 
         return reference_pose

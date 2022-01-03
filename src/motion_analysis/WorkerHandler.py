@@ -110,7 +110,7 @@ class WorkerHandler(QThread):
                 return
 
             # TODO: In the future: Possibly use multiple recordings
-            recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+            recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
             recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
             recordings = [recording]
@@ -126,7 +126,8 @@ class WorkerHandler(QThread):
 
             # Set all entries that are needed by the handler threads later on
             exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
-            del exercise_data['features'] # We replace features with their specification dictionary
+            exercise_data['video_frame_idxs'] = video_frame_idxs
+            del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
 

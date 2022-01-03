@@ -200,11 +200,15 @@ class PoseDefinitionAdapter():
         rp.logerr(f"Total number of joints: {len(already_added_nodes)}")
         rp.logerr(already_added_nodes)
 
-    def normalize_skelleton(self, input_skelleton):
+    def normalize_skelleton(self, input_skelleton, is_pelvis_center=True):
         """Utility method to normalize size, position and orientation of skelleton."""
         skelleton = self.normalize_skelleton_size(input_skelleton)
-        skelleton = self.normalize_skelleton_position(skelleton)
-        skelleton = self.normalize_pelvis_orientation(skelleton)
+        if is_pelvis_center:
+            skelleton = self.normalize_skelleton_position(skelleton, new_central_joint_idx=self.center_of_pelvis_idx)
+            skelleton = self.normalize_pelvis_orientation(skelleton)
+        else:
+            skelleton = self.normalize_skelleton_position(skelleton, new_central_joint_idx=self.center_of_chest_idx)
+            skelleton = self.normalize_chest_orientation(skelleton)
         return skelleton
 
     def find_inner_joint(self, joint_names):

@@ -64,14 +64,13 @@ wss.on('connection', (ws, req) => {
     let query = url_parts.query;
     console.log(query);
     websockets.push(ws);
-    ws.send("Connection established");
 });
 // WebServer
 app.use(express.static(process.cwd() + '/webtarget'));
 app.get('/', (req, res) => {
     res.sendFile(process.cwd() + '/webtarget/index.html');
 });
-app.get('/api/coordinates/dict', (req, res) => {
+app.get('/api/connections/dict', (req, res) => {
     console.log(skeleton);
     res.send(skeleton);
 });
@@ -85,7 +84,6 @@ if (args['rosnodejs'] === 'on') {
     console.log(std_msgs);
     const int16 = std_msgs.msg.Int16;
     const StringMsg = std_msgs.msg.String;
-    rosnodejs.initNode('/showroom');
     const skeleton_coordinates = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
         let pose = {};
         let bodyParts = msg.persons[0]['bodyParts'];
@@ -98,12 +96,10 @@ if (args['rosnodejs'] === 'on') {
             pose[skeleton.labels[index]] = point;
         });
         websockets.forEach(ws => {
-            if (ws.readyState === ws_1.default.OPEN) {
-                ws.send(JSON.stringify(pose));
-            }
+            ws.send(JSON.stringify(pose));
         });
-    }); 
-  const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
+    });
+    const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
         //TODO: send message using websocket
         websockets.forEach(ws => {
             if (ws.readyState === ws_1.default.OPEN) {
@@ -131,7 +127,7 @@ if (args['rosnodejs'] === 'on') {
         const data = msg['data'];
         websockets.forEach(client => {
             if (client.readyState === ws_1.default.OPEN) {
-                client.send(data);
+                //client.send(data);
             }
             ;
         });
@@ -140,9 +136,12 @@ if (args['rosnodejs'] === 'on') {
         const data = msg['data'];
         websockets.forEach(client => {
             if (client.readyState === ws_1.default.OPEN) {
-                client.send(data);
+                //client.send(data);
             }
             ;
         });
     });
+}
+else {
+    console.log("rosnodejs is off");
 }

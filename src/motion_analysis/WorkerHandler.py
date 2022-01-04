@@ -148,15 +148,12 @@ class WorkerHandler(QThread):
             self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
-            logy.warn("New worker started for spot with key " + str(spot_info_key))
-            logy.warn("Current Workers: " + str(self.workers))
-            logy.warn("Current Worker: " + str(current_worker))
-
+            logy.info("New worker started for spot with key " + str(spot_info_key))
+            logy.info("Current Workers: " + str(self.workers))
         else:
             current_worker = self.workers.get(station_id, None)
 
-            logy.warn("Current Workers: " + str(self.workers))
-            logy.warn("Current Worker: " + str(current_worker))
+            logy.info("Current Workers: " + str(self.workers))
 
             if current_worker:
                 current_worker.running = False

@@ -8,6 +8,11 @@ from subprocess import Popen, PIPE
 import yaml
 import os
 import signal
+import pymongo
+
+
+mongo_client = pymongo.MongoClient("mongodb://mongoadmin:secret@host.docker.internal:27888/?authSource=admin") # Careful! This value is also set in the motion analysis config and might lead to inconsistency!
+db = mongo_client.trainerai
 
 # Put estimates here on how much timebuffer the setup of the test should get and how long we need until the camera node starts and the evaluation begins
 TEST_SETUP_TIME_S = 20
@@ -19,6 +24,8 @@ VALIDATION_TEMP_CONFIG_PATH = '/tmp/ma_validation_config.yml'
 STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion_analysis/config.yml'
 VIDEO_TIMECODE_PATH = "/home/trainerai/trainerai-core/data/videos/timecodes.yml"
 
+best_scores = dict()
+exercises_db = db.exercises
 
 def clean_files():
     try:
@@ -93,8 +100,15 @@ def validation_objective_function(hps):
         num_exercises = 0
         total_score = 0
         for name, exercise in report.items():
-            total_score += exercise[1]
+            score = exercise[1]
+            total_score += score
             num_exercises += 1
+
+            exercise_data = exercises_db.find_one({"name": name})
+            if score > exercise_data.get("optimized_config_score", 0):
+                exercises_db.find_one({"name": name})
+                exercises_db.update_one({'_id': exercise_data['_id']},{'$set': {'optimized_config_score': score, "optimized_config": config}}, upsert=False)
+
         score = total_score / min(num_exercises, 1)
 
         clean_files()
@@ -169,7 +183,7 @@ if __name__ == '__main__':
         
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=244)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=2)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

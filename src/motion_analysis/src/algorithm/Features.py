@@ -730,7 +730,7 @@ def compute_number_of_decided_state_changes(feature_states_array):
     """Compute how often the state of a feature has changed between HIGH and LOW.
     
     Args:
-        median_feature_states_array: An array holding feature states that vary according between HIGH and LOW, but may also be UNDECIDED.
+        feature_states_array: An array holding feature states that vary according between HIGH and LOW, but may also be UNDECIDED.
         
     Returns:
         An intiger corresponding to the number of decided state changes"""

@@ -105,9 +105,20 @@ class WorkerHandler(QThread):
         if station_usage_data.isActive:
             exercise_data = self.exercises.find_one({"name": station_usage_data.exerciseName})
 
+            rp.logerr(exercise_data)
+
             if exercise_data is None:
                 logy.error("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
                 return
+            
+            optimized_config = exercise_data.get("optimized_config", None)
+            optimized_config_score = exercise_data.get("optimized_config_score", None)
+            if optimized_config:
+                config = optimized_config
+                logy.info("Starting exercise with optimized config and score " + str(optimized_config_score))
+            else:
+                config = self.config
+                logy.warning("Starting exercise without optimized config. Optimize for this exercise or import data to exercise DB!")
 
             # TODO: In the future: Possibly use multiple recordings
             recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
@@ -118,10 +129,10 @@ class WorkerHandler(QThread):
 
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
-            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(self.config, c) for c in reference_recording_feature_collections}
+            features_dict = {c.feature_hash: Feature(config, c) for c in reference_recording_feature_collections}
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
@@ -145,7 +156,7 @@ class WorkerHandler(QThread):
                 self.spot_metadata_interface.delete(spot_info_key)    
                 self.gui.update_available_spots(spot_name=station_id, active=False)
 
-            self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+            self.workers[station_id] = Worker(config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             logy.info("New worker started for spot with key " + str(spot_info_key))

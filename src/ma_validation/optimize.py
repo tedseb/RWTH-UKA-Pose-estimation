@@ -10,9 +10,8 @@ import os
 import signal
 import pymongo
 
-
-mongo_client = pymongo.MongoClient("mongodb://mongoadmin:secret@host.docker.internal:27888/?authSource=admin") # Careful! This value is also set in the motion analysis config and might lead to inconsistency!
-db = mongo_client.trainerai
+mongo_client = pymongo.MongoClient("mongodb://mongoadmin:secret@localhost:27888/?authSource=admin") # Careful! This value is also set in the motion analysis config and might lead to inconsistency!
+exercises_db = mongo_client.trainerai.exercises
 
 # Put estimates here on how much timebuffer the setup of the test should get and how long we need until the camera node starts and the evaluation begins
 TEST_SETUP_TIME_S = 20
@@ -25,7 +24,6 @@ STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion_analysis/confi
 VIDEO_TIMECODE_PATH = "/home/trainerai/trainerai-core/data/videos/timecodes.yml"
 
 best_scores = dict()
-exercises_db = db.exercises
 
 def clean_files():
     try:
@@ -54,8 +52,9 @@ def validation_objective_function(hps):
         with open(STANDARD_CONFIG_PATH, 'r') as infile:
             config = yaml.safe_load(infile)
         config.update(hps)
+
         with open(VALIDATION_TEMP_CONFIG_PATH, 'w') as outfile:
-            config = yaml.dump(config, outfile)
+            yaml.dump(config, outfile)
 
         with open(VIDEO_TIMECODE_PATH) as stream:
             timecode_data = yaml.safe_load(stream)
@@ -100,13 +99,12 @@ def validation_objective_function(hps):
         num_exercises = 0
         total_score = 0
         for name, exercise in report.items():
+            name = str(name)
             score = exercise[1]
             total_score += score
             num_exercises += 1
-
             exercise_data = exercises_db.find_one({"name": name})
-            if score > exercise_data.get("optimized_config_score", 0):
-                exercises_db.find_one({"name": name})
+            if exercise_data and score > exercise_data.get("optimized_config_score", 0):
                 exercises_db.update_one({'_id': exercise_data['_id']},{'$set': {'optimized_config_score': score, "optimized_config": config}}, upsert=False)
 
         score = total_score / min(num_exercises, 1)
@@ -183,7 +181,7 @@ if __name__ == '__main__':
         
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=2)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=12)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

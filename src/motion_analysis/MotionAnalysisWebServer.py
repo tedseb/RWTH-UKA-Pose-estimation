@@ -52,7 +52,7 @@ async def analyze(websocket, path):
 
         elif data["extraction_method"] == "reference_features":
             exercise_data = yaml.safe_load(data["exercise_data"])
-            recording = adapter.recording_to_ndarray(data["recording"])
+            recording, _ = adapter.recording_to_ndarray(data["recording"])
             recordings_and_adapters = [(recording, adapter)]
             feature_of_interest_specification = FeatureExtractionModule.extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data, pose_definition_adapter=adapter)
             reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(feature_hash, feature_specification, recordings_and_adapters) for feature_hash, feature_specification in feature_of_interest_specification.items()]
@@ -63,7 +63,7 @@ async def analyze(websocket, path):
         
         elif data["extraction_method"] == "motion_analysis":
             exercise_data = yaml.safe_load(data["exercise_data"])
-            reference_recording = adapter.recording_to_ndarray(data["reference_recording"])
+            reference_recording, _ = adapter.recording_to_ndarray(data["reference_recording"])
             recording = adapter.recording_to_ndarray(data["recording"])
             recordings_and_adapters = [(reference_recording, adapter)]
             feature_of_interest_specification = FeatureExtractionModule.extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data, pose_definition_adapter=adapter)

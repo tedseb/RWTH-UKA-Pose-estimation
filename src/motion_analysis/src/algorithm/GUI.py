@@ -199,7 +199,7 @@ class MotionAnaysisGUI(QMainWindow):
     The MotionAnalysisGUI furthermore offers a station selection field and a freeze button which freezes all graphs for closer inspection.
     """
     update_signal = pyqtSignal()
-    update_overall_data_signal = pyqtSignal(float, float, np.ndarray)
+    update_overall_data_signal = pyqtSignal(float, float, np.ndarray, int, int)
     def __init__(self):
         self.app = QtGui.QApplication([])
         super().__init__()
@@ -213,6 +213,14 @@ class MotionAnaysisGUI(QMainWindow):
         self.overall_progress_vector_widget = pg.PlotWidget(title="overall_progress_vector")
         self.overall_progress_vector_widget.setAspectLocked()
 
+        self.score_widget = QProgressBar(self)
+        self.score_widget.setMaximum(100)
+        self.score_widget.setFormat('Current repetition score: %p%')
+
+        self.last_score_widget = QProgressBar(self)
+        self.last_score_widget.setMaximum(100)
+        self.last_score_widget.setFormat('Last repetition score: %p%')
+
         self.progress_widget = QProgressBar(self)
         self.progress_widget.setMaximum(100)
         self.progress_widget.setFormat('Repetition progress: %p%')
@@ -221,6 +229,8 @@ class MotionAnaysisGUI(QMainWindow):
         style = "QProgressBar::chunk \
             {{background-color: {};}} \
             text-align: center;".format(hex_color)
+        self.score_widget.setStyleSheet(style)
+        self.last_score_widget.setStyleSheet(style)
         self.progress_widget.setStyleSheet(style)
         
         self.alignment_widget = QProgressBar(self)
@@ -234,6 +244,8 @@ class MotionAnaysisGUI(QMainWindow):
         
         controls_layout.addWidget(self.overall_progress_vector_widget)
         # controls_layout.addWidget(self.overall_errors_widget)
+        controls_layout.addWidget(self.score_widget)
+        controls_layout.addWidget(self.last_score_widget)
         controls_layout.addWidget(self.progress_widget)
         controls_layout.addWidget(self.alignment_widget)
 
@@ -283,20 +295,42 @@ class MotionAnaysisGUI(QMainWindow):
 
         self.show()
 
-    @QtCore.pyqtSlot(float, float, np.ndarray)
-    def _update_overall_data(self, progress, alignment, progress_alignment_vector):
+    @QtCore.pyqtSlot(float, float, np.ndarray, int, int)
+    def _update_overall_data(self, progress, alignment, progress_alignment_vector, score, last_score):
         self._progress_vector_x = np.array([0, progress_alignment_vector[0]])
         self._progress_vector_y = np.array([0, progress_alignment_vector[1]])
+
+        # Set alignment widget
         pen_color = tuple(np.array(GYMY_ORANGE) * (1 - alignment) + np.array(GYMY_GREEN) * alignment)
         self.overall_progress_vector_curve.setData(self._progress_vector_x, self._progress_vector_y, pen = pen_color)
-        self.progress_widget.setValue(progress * 100)
-        
         hex_color = "#{0:02x}{1:02x}{2:02x}".format(clamp(int(pen_color[0])), clamp(int(pen_color[1])), clamp(int(pen_color[2])))
         style = "QProgressBar::chunk \
             {{background-color: {};}} \
             text-align: center;".format(hex_color)
         self.alignment_widget.setStyleSheet(style)
         self.alignment_widget.setValue(alignment * 100)
+
+        # Set repetition score
+        pen_color = tuple(np.array(GYMY_ORANGE) * (1 - score/100) + np.array(GYMY_GREEN) * score/100)
+        hex_color = "#{0:02x}{1:02x}{2:02x}".format(clamp(int(pen_color[0])), clamp(int(pen_color[1])), clamp(int(pen_color[2])))
+        style = "QProgressBar::chunk \
+            {{background-color: {};}} \
+            text-align: center;".format(hex_color)
+        self.score_widget.setStyleSheet(style)
+        self.score_widget.setValue(score)
+
+        # Set last repeitition score
+        pen_color = tuple(np.array(GYMY_ORANGE) * (1 - last_score/100) + np.array(GYMY_GREEN) * last_score/100)
+        hex_color = "#{0:02x}{1:02x}{2:02x}".format(clamp(int(pen_color[0])), clamp(int(pen_color[1])), clamp(int(pen_color[2])))
+        style = "QProgressBar::chunk \
+            {{background-color: {};}} \
+            text-align: center;".format(hex_color)
+        self.last_score_widget.setStyleSheet(style)
+        self.last_score_widget.setValue(last_score)
+
+
+        self.progress_widget.setValue(progress * 100)
+
 
     def update_available_spots(self, spot_name, active, feature_hashes=[]):
         """When a spot goes active and has an exercise, update the available spots for our drop down menu."""
@@ -334,6 +368,8 @@ class MotionAnaysisGUI(QMainWindow):
             fw.frozen = not fw.frozen
         self.alignment_widget.setUpdatesEnabled(self.widgets_frozen)
         self.overall_progress_vector_widget.setUpdatesEnabled(self.widgets_frozen)
+        self.score_widget.setUpdatesEnabled(self.widgets_frozen)
+        self.last_score_widget.setUpdatesEnabled(self.widgets_frozen)
         self.progress_widget.setUpdatesEnabled(self.widgets_frozen)
         self.widgets_frozen = not self.widgets_frozen
 

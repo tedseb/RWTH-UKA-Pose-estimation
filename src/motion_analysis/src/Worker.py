@@ -91,7 +91,7 @@ class Worker(Thread):
         self.user_correction_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_CORRECTIONS'], String, queue_size=1000)
 
         self.showroom_reference_progress_publisher = rp.Publisher(self.config['SHOW_ROOM_REFERENCE_PROGRESS_TOPIC'], Int16, queue_size=1000)
-        self.showroom_reference_frame_number_publisher =  rp.Publisher(self.config['SHOW_ROOM_REFERENCE_FRAME_NUMBER_TOPIC'], Int16, queue_size=1000)
+        self.showroom_reference_frame_time_publisher =  rp.Publisher(self.config['SHOW_ROOM_REFERENCE_FRAME_TIME_TOPIC'], Int16, queue_size=1000)
 
         self.predicted_skelleton_publisher = rp.Publisher("motion_analysis_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("motion_analysis_input", Person, queue_size=1000)
@@ -103,6 +103,8 @@ class Worker(Thread):
         self.bad_repetition = False
 
         self.gui = gui
+
+        self.last_score = 0
 
         self.t = None
         self.progress_velocity = 0
@@ -202,13 +204,15 @@ class Worker(Thread):
 
                     # We calculate the differences between elements of our skelleton
                     # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
-                    delta = (pose - reference_pose).sum()
+                    delta = self.pose_definition_adapter.pose_delta(pose, reference_pose)
                     self.skelleton_deltas_since_rep_start.append(delta)
                     score = self.calculate_repetition_score()
 
+                    update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector, score, self.last_score)
+
                     # Send info back to App
                     if increase_reps:
-                        score = self.calculate_repetition_score()
+                        self.last_score = score
                         self.spot_info_dict['repetitions'] = int(self.spot_info_dict['repetitions']) + 1
                         user_state_data = {
                             'station_id': self.spot_key,
@@ -320,13 +324,11 @@ class Worker(Thread):
         self.alignments_this_rep = np.append(self.alignments_this_rep, self.alignment)
         self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, self.progress - last_progress)
 
-        update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector)
-
         reference_frame_index = int(len(recording) * self.progress)
 
         reference_pose = recording[reference_frame_index]
 
-        self.showroom_reference_frame_number_publisher.publish(reference_frame_index)
+        self.showroom_reference_frame_time_publisher.publish(self.spot_info_dict["exercise_data"]["video_frame_idxs"][reference_frame_index])
         self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
 
         return reference_pose
@@ -382,6 +384,7 @@ class Worker(Thread):
                 f.progression = 0
             self.bad_repetition = False
             self.beginning_of_next_repetition_detected = True
+            self.skelleton_deltas_since_rep_start = []
             
             increase_reps = self.analyze_feature_progressions(features)
 
@@ -405,27 +408,32 @@ class Worker(Thread):
 
         return increase_reps
 
-    def calculate_repetition_score(self):
+    def calculate_repetition_score(self): # TODO: This should be placed in the Algorithm file, but for now needs quite a lot of data from the Worker object so we leave it here
         """ This is a simple first approach to calculating the repetition score for a repetition. 
         
         TODO: Values have been chosen with few shots and should be improved heuristically! 
         """
         x = self.skelleton_deltas_since_rep_start
-        alpha = 1/20 # This has to be heuristically determined, as is depends on the size of the normal skelleton
-        critical_freq = 0.01 # TODO: Choose heuristically!!
+        alpha = 1/40 # This has to be heuristically determined, as is depends on the size of the normal skelleton
+        critical_freq = 0.3 # TODO: Choose heuristically!!
 
         # Filter scores in order to minimize impact of faulty reference skelleton predictions
         b, a = signal.butter(min(4, max(1, int(len(self.skelleton_deltas_since_rep_start)/4))), critical_freq, analog=False)
         x = signal.filtfilt(b, a, x, padlen=max(0, min(12, len(x) - 1)))
 
-        average_delta = np.average(x) # TODO: Try average and median here, see which one works better
+        average_delta = np.median(x) # TODO: Try average and median here, see which one works better
         delta_score = np.absolute(average_delta * alpha)
 
+        delta_score = np.clip(1 - delta_score, 0, 1)
+
+        delta_score = np.power(delta_score, 3)
+
         # We need our score to be between 0 and 1
-        score = 100 * np.clip(1 - delta_score, 0, 1)
+        score = 100 * delta_score
 
         # TODO: Remove these scores. We log them all the time for now to let us choose parameters heuristically
         logy.log_mean("LowestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.min(self.skelleton_deltas_since_rep_start)))
         logy.log_mean("HighestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.max(self.skelleton_deltas_since_rep_start)))
         logy.log_mean("ExerciseScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(score))
+
         return score

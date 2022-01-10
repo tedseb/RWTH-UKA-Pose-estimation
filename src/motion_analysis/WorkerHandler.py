@@ -103,39 +103,63 @@ class WorkerHandler(QThread):
         logy.debug("Updating info for spot with key: " + str(spot_info_key))
 
         if station_usage_data.isActive:
-            exercise_data = self.exercises.find_one({"name": station_usage_data.exerciseName})
+            exercise_data_list = self.exercises.find({"name": station_usage_data.exerciseName})
 
-            if exercise_data is None:
+            if not exercise_data_list:
                 logy.error("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
                 return
-            
-            optimized_config = exercise_data.get("optimized_config", None)
-            optimized_config_score = exercise_data.get("optimized_config_score", None)
-            if optimized_config:
-                config = optimized_config
-                logy.info("Starting exercise with optimized config and score " + str(optimized_config_score))
-            else:
-                config = self.config
-                logy.warn("Starting exercise without optimized config. Optimize for this exercise or import data to exercise DB!")
 
-            # TODO: In the future: Possibly use multiple recordings
-            recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
-            recording = self.pose_definition_adapter.normalize_skelletons(recording)
+            recordings_dict = {}
+            video_frame_idx_dict = {}
+            reference_recording_feature_collections = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
+            for exercise_data in exercise_data_list:
+                # See if we can reference this exercise with an optimize config
+                optimized_config = exercise_data.get("optimized_config", None)
+                if optimized_config:
+                    config = optimized_config
+                else:
+                    config = self.config
+                    logy.warn_throttle("One or more exercise data entries with are without optimized config. Optimize for this exercise or import data to exercise DB!", throttel_time_ms=500)
+                
+                feature_hashes_to_go = set(reference_recording_feature_collections.keys())
 
-            recordings = [recording]
-            feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
+                recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+                recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
-            # For now, we have the same pose definition adapter for all recordings
-            reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
-            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+                recording_hash = fast_hash(recording)
+                recordings_dict[recording_hash] = recording
+                video_frame_idx_dict[recording_hash] = video_frame_idxs
+
+                feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
+
+                for feature_hash, feature_specification in feature_of_interest_specification.items():
+                    if feature_hash in reference_recording_feature_collections.keys():
+                        if feature_hash in feature_hashes_to_go:
+                            feature_hashes_to_go.remove(feature_hash)
+                        else:
+                            logy.error("Multiple recordings for one exercise have different feature specifications! Aborting recording analysis.")
+                    elif feature_hashes_to_go: # This means that the first recording has already initialized the reference features and we have feature hashes to go, but another recording omits the feature
+                        logy.error("Multiple recordings for one exercise have different feature specifications! Aborting recording analysis.")
+                    
+                    # On anaylsis of the first recording, we add the reference feature collection
+                    if not reference_recording_feature_collections.get(feature_hash):
+                        # We use the general config for the collection
+                        # Featuers added later will use their respective optimized recording configs
+                        reference_recording_feature_collections[feature_hash] = ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification)
+
+                    # Add this recording to the reference recording feature collections, we use the same pose definition adapter for all recordings for now
+                    reference_recording_feature_collections[feature_hash].add_recording(exercise_data["name"], recording_hash, recording, self.pose_definition_adapter, config)
+
+            for r in reference_recording_feature_collections.values():
+                r.update_static_data()
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(config, c) for c in reference_recording_feature_collections}
+            features_dict = {c.feature_hash: Feature(self.config, c) for c in reference_recording_feature_collections.values()}
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
-            exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
-            exercise_data['video_frame_idxs'] = video_frame_idxs
+            exercise_data['recordings'] = recordings_dict
+            exercise_data['video_frame_idxs'] = video_frame_idx_dict
             del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections

@@ -309,25 +309,21 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
     def __init__(self, \
         config: dict, \
             feature_hash: str, \
-                feature_specification: dict = {}, \
-                    reference_data: List[tuple] = []):
+                feature_specification: dict = {}):
 
         super().__init__(config, feature_hash, feature_specification, max_digitized_trajectory_length=np.inf)
-        self.reference_recording_features = list()
-
-        for (exercise_id, recording, adapter) in reference_data:
-            self.add_recording(exercise_id, recording, adapter)
-
-        self.update_static_data()
+        self.reference_recording_features = dict()
         
-    def add_recording(self, exercise_id, recording: np.ndarray, pose_definition_adapter):
+    def add_recording(self, exercise_id, recording_hash, recording: np.ndarray, pose_definition_adapter, config=None):
         """Add a recording and thus a reference feature to this collection.
         
         Args:
             recording: A recording, corresponding to a repetition of an exercise that we want to add
             pose_definition_adapter: A pose definition adapter that fits the recording"""
-        reference_feature = ReferenceRecordingFeature(self.config, self.feature_hash, exercise_id, recording, pose_definition_adapter, self.specification_dict)
-        self.reference_recording_features.append(reference_feature)
+        if not config:
+            config = self.config
+        reference_feature = ReferenceRecordingFeature(config, self.feature_hash, exercise_id, recording, pose_definition_adapter, self.specification_dict)
+        self.reference_recording_features[recording_hash] = reference_feature
 
     def update_static_data(self):
         """(Re-)Calculate the information that we find in this reference feature collection's trajectories."""
@@ -335,7 +331,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         highest_values = []
         recording_lengths = []
         # The values here are each lists of feature values of pose trajectories
-        trajectories = [rf.values for rf in self.reference_recording_features]
+        trajectories = [rf.values for rf in self.reference_recording_features.values()]
         for trajectory in trajectories:
             lowest_values.append(np.amin(trajectory))
             highest_values.append(np.amax(trajectory))
@@ -365,7 +361,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
         self.median_trajectory, self.median_trajectory_feature_states, self.median_trajectory_discretization_ranges = compute_median_discrete_trajectory_median_feature_states_and_reference_trajectory_fractions(discrete_trajectories_tensor, self.discretization_reference_trajectory_indices_tensor, self.lower_boundary, self.upper_boundary, recording_lengths)
         # TODO: Check wether median_reference_trajectory_feature_states match the median state trajectory
 
-        beginning_states = [r.beginning_state for r in self.reference_recording_features]
+        beginning_states = [r.beginning_state for r in self.reference_recording_features.values()]
         self.median_beginning_state = np.median(beginning_states)
         
     # def predict(self, feature: BaseFeature, pose: np.ndarray):
@@ -401,7 +397,7 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
             "median_trajectory_feature_states": self.median_trajectory_feature_states, 
             "median_trajectory_discretization_ranges": self.median_trajectory_discretization_ranges,
             "median_beginning_state": self.median_beginning_state,
-            "reference_features": {r.recording_hash: r.asdict() for r in self.reference_recording_features}
+            "reference_features": {r.recording_hash: r.asdict() for r in self.reference_recording_features.values()}
         }
 
 
@@ -613,15 +609,20 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
         discrete_values = remove_jitter_from_trajectory(discrete_values, config['REMOVE_JITTER_RANGE'])
 
         discrete_trajectories_tensor.append(discrete_values)
-        hankel_matrix = hankel(discrete_trajectories_tensor, np.roll(discrete_trajectories_tensor, -1))
+        hankel_matrix = hankel(discrete_values, np.roll(discrete_values, -1))
         hankel_matrix = np.roll(hankel_matrix, -1, axis=0) # The first column of the hankel matrix represents the last frame of the recording
+        hankel_matrix = np.array(hankel_matrix, dtype=np.float16)
         hankel_tensor.append(hankel_matrix)
+
+        feature_trajectory_indices = np.array(feature_trajectory_indices, dtype=np.int16)
         discretization_reference_trajectory_indices_tensor.append(feature_trajectory_indices)
+
+        feature_states = np.array(feature_states, dtype=np.int8)
         feature_states_matrix.append(feature_states)
 
-    hankel_tensor = np.asarray(hankel_tensor, dtype=np.float16)
-    feature_states_matrix = np.asarray(feature_states_matrix, dtype=np.int8)
-    discretization_reference_trajectory_indices_tensor = np.asarray(discretization_reference_trajectory_indices_tensor, dtype=np.int16)
+    hankel_tensor = np.asarray(hankel_tensor, dtype=object)
+    feature_states_matrix = np.asarray(feature_states_matrix, dtype=object)
+    discretization_reference_trajectory_indices_tensor = np.asarray(discretization_reference_trajectory_indices_tensor, dtype=object)
 
     scale = set()
     for t in discrete_trajectories_tensor:
@@ -679,28 +680,37 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
         The median feature states
         The discretization ranges
     """
+    import rospy as rp
     # Construction of a median feature trajectory
     discretization_ranges = list() # Tells us where in the overall reference trajectory this resampled median value lies as a fraction
     all_feature_values_array = np.array(discrete_trajectories_tensor)
     median_trajectory = list()
     median_length = np.int(np.median([len(values) for values in discrete_trajectories_tensor]))
     for i in range(median_length):
-        median_resampled_values_reference_trajectory_fraction_from = np.average([discretization_reference_trajectory_indices_tensor[j, i]/recording_lengths[j] for j in range(len(recording_lengths))])
-        median_resampled_values_reference_trajectory_fraction_to = np.average([discretization_reference_trajectory_indices_tensor[j, (i + 1) % len(discretization_reference_trajectory_indices_tensor[j])]/recording_lengths[j] for j in range(len(recording_lengths))])
-        median_feature_value = np.median(all_feature_values_array[:, i])
-        while not np.where(all_feature_values_array[:, i] != median_feature_value):
-            bad_feature_state_indices = np.where(all_feature_values_array[:, i] != median_feature_value)
+        median_resampled_values_reference_trajectory_fraction_from = np.average([discretization_reference_trajectory_indices_tensor[j][i]/recording_lengths[j] for j in range(len(recording_lengths))])
+        median_resampled_values_reference_trajectory_fraction_to = np.average([discretization_reference_trajectory_indices_tensor[j][(i + 1) % len(discretization_reference_trajectory_indices_tensor[j])]/recording_lengths[j] for j in range(len(recording_lengths))])
+        median_feature_value = np.median([a[i] for a in all_feature_values_array])
+        done = False
+        while not done:
+            values = np.array([a[i] for a in all_feature_values_array])
+            done = np.where(np.isclose(values, median_feature_value))
+            bad_feature_state_indices = np.where(np.isclose(values, median_feature_value)) # Same as variable "done"
             # Modify trajectories that differ such that they stay useful
             for bad_feature_state_index in bad_feature_state_indices:
-                if len(all_feature_values_array[:, i][bad_feature_state_index]) > median_length:
+                if len(values[bad_feature_state_index]) > median_length:
                     # We cut parts of longer trajectories
-                    np.delete(all_feature_values_array[:, i], bad_feature_state_index)
-                elif len(all_feature_values_array[:, i][bad_feature_state_index]) == median_length:
+                    np.delete(values[bad_feature_state_index], i)
+                elif len(all_feature_values_array[bad_feature_state_index]) == median_length:
                     # We change values in trajectories of adequate length
-                    all_feature_values_array[bad_feature_state_index, i] = median_feature_value
+                    all_feature_values_array[bad_feature_state_index][i] = median_feature_value
                 else:
                     # We add "dummy" parts to shorter trajectories
-                    np.insert(all_feature_values_array[:, i], bad_feature_state_index, median_feature_value)
+                    try:
+                        np.insert(values[bad_feature_state_index], i, median_feature_value)
+                    except IndexError: # This means we try to insert at the end
+                        rp.logerr(values[bad_feature_state_index])
+                        rp.logerr(median_feature_value)
+                        all_feature_values_array[bad_feature_state_index] = np.append(all_feature_values_array[bad_feature_state_index], median_feature_value)
         median_trajectory.append(median_feature_value)
         discretization_ranges.append({"median_resampled_values_reference_trajectory_fraction_from": median_resampled_values_reference_trajectory_fraction_from, \
             "median_resampled_values_reference_trajectory_fraction_to": median_resampled_values_reference_trajectory_fraction_to})

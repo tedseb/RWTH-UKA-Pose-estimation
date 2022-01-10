@@ -15,7 +15,6 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from sklearn.metrics import roc_curve, auc, roc_auc_score
 import threading
 import signal
 import yaml
@@ -61,6 +60,7 @@ class Validator():
 
     def ma_validation_set_callback(self, msg):
         self.semaphore.acquire()
+
         if msg.start:
             self.last_set = self.active_set
             self.last_set_reps = self.active_set_reps

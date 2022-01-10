@@ -82,7 +82,6 @@ class WorkerHandler(QThread):
             self.hmiExercises = db.spin_hmiExercises
         else:
             raise NotImplementedError("There is not database connection setup in the WorkerHandler for this PoseDefinitionAdapter type.")
-
         if enable_gui:
             self.gui_handler = GUIHandler()
             self.gui = MotionAnaysisGUI()
@@ -109,9 +108,18 @@ class WorkerHandler(QThread):
             if exercise_data is None:
                 logy.error("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
                 return
+            
+            optimized_config = exercise_data.get("optimized_config", None)
+            optimized_config_score = exercise_data.get("optimized_config_score", None)
+            if optimized_config:
+                config = optimized_config
+                logy.info("Starting exercise with optimized config and score " + str(optimized_config_score))
+            else:
+                config = self.config
+                logy.warn("Starting exercise without optimized config. Optimize for this exercise or import data to exercise DB!")
 
             # TODO: In the future: Possibly use multiple recordings
-            recording = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+            recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
             recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
             recordings = [recording]
@@ -119,15 +127,16 @@ class WorkerHandler(QThread):
 
             # For now, we have the same pose definition adapter for all recordings
             reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
-            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(self.config, c) for c in reference_recording_feature_collections}
+            features_dict = {c.feature_hash: Feature(config, c) for c in reference_recording_feature_collections}
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
             exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
-            del exercise_data['features'] # We replace features with their specification dictionary
+            exercise_data['video_frame_idxs'] = video_frame_idxs
+            del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
 
@@ -145,18 +154,15 @@ class WorkerHandler(QThread):
                 self.spot_metadata_interface.delete(spot_info_key)    
                 self.gui.update_available_spots(spot_name=station_id, active=False)
 
-            self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+            self.workers[station_id] = Worker(config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
-            logy.warn("New worker started for spot with key " + str(spot_info_key))
-            logy.warn("Current Workers: " + str(self.workers))
-            logy.warn("Current Worker: " + str(current_worker))
-
+            logy.info("New worker started for spot with key " + str(spot_info_key))
+            logy.info("Current Workers: " + str(self.workers))
         else:
             current_worker = self.workers.get(station_id, None)
 
-            logy.warn("Current Workers: " + str(self.workers))
-            logy.warn("Current Worker: " + str(current_worker))
+            logy.info("Current Workers: " + str(self.workers))
 
             if current_worker:
                 current_worker.running = False
@@ -170,7 +176,7 @@ class WorkerHandler(QThread):
 
 if __name__ == '__main__':
     # initialize ros node
-    logy.basic_config(debug_level=logy.DEBUG, module_name="MA")
+    # logy.basic_config(debug_level=logy.DEBUG, module_name="MA")
     rp.init_node('Motion_Analysis_WorkerHandler', anonymous=False)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 

@@ -8,6 +8,10 @@ from subprocess import Popen, PIPE
 import yaml
 import os
 import signal
+import pymongo
+
+mongo_client = pymongo.MongoClient("mongodb://mongoadmin:secret@localhost:27888/?authSource=admin") # Careful! This value is also set in the motion analysis config and might lead to inconsistency!
+exercises_db = mongo_client.trainerai.exercises
 
 # Put estimates here on how much timebuffer the setup of the test should get and how long we need until the camera node starts and the evaluation begins
 TEST_SETUP_TIME_S = 20
@@ -19,6 +23,7 @@ VALIDATION_TEMP_CONFIG_PATH = '/tmp/ma_validation_config.yml'
 STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion_analysis/config.yml'
 VIDEO_TIMECODE_PATH = "/home/trainerai/trainerai-core/data/videos/timecodes.yml"
 
+best_scores = dict()
 
 def clean_files():
     try:
@@ -37,12 +42,19 @@ def validation_objective_function(hps):
         start_time = time.time()
         clean_files()
         
+        old_hps = hps.copy()
+        for key, value in old_hps.items():
+            if type(value) is dict:
+                hps.update(value)
+                del hps[key]
+
         # Read standard config and write new config to temporary file
         with open(STANDARD_CONFIG_PATH, 'r') as infile:
             config = yaml.safe_load(infile)
         config.update(hps)
+
         with open(VALIDATION_TEMP_CONFIG_PATH, 'w') as outfile:
-            config = yaml.dump(config, outfile)
+            yaml.dump(config, outfile)
 
         with open(VIDEO_TIMECODE_PATH) as stream:
             timecode_data = yaml.safe_load(stream)
@@ -84,23 +96,22 @@ def validation_objective_function(hps):
             rp.logerr("Validation report empty. Something went wrong!")
             status = STATUS_FAIL
 
-        tpr_by_fpr = 0
         num_exercises = 0
+        total_score = 0
         for name, exercise in report.items():
-            tpr = exercise[5]
-            fpr = exercise[6]
-            if exercise[6] != 0:
-                tpr_by_fpr +=  exercise[5] / exercise[6]
-            else:
-                tpr_by_fpr += exercise[5]
+            name = str(name)
+            score = exercise[1]
+            total_score += score
             num_exercises += 1
-        score = tpr_by_fpr / min(num_exercises, 1)
+            exercise_data = exercises_db.find_one({"name": name})
+            if exercise_data and score > exercise_data.get("optimized_config_score", 0):
+                exercises_db.update_one({'_id': exercise_data['_id']},{'$set': {'optimized_config_score': score, "optimized_config": config}}, upsert=False)
+
+        score = total_score / min(num_exercises, 1)
 
         clean_files()
     except Exception as e:
         score = 0
-        tpr = 0
-        fpr = 1
         rp.logerr("Trial error: " + str(e))
         status = STATUS_FAIL
 
@@ -110,8 +121,6 @@ def validation_objective_function(hps):
         # -- store other results like this
         'time_faster_than_max_execution_time': max_execution_time - (time.time() - start_time),
         'evaluation_time': time.time() - start_time,
-        'tpr': tpr,
-        'fpr': fpr
         }
     
 
@@ -127,20 +136,52 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, handler)
 
     space = {
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.2, 0.5),
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.2, 0.5),
-        'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.uniform('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', 0.001, 0.3),
-        'REMOVE_JITTER_RANGE': hp.quniform('REMOVE_JITTER_RANGE', 3, 7, 1),
-        # 'JUMPY_PROGRESS_ALPHA': hp.quniform('JUMPY_PROGRESS_ALPHA', 2, 4),
-        # 'JUMPY_PROGRESS_BETA': hp.quniform('JUMPY_PROGRESS_BETA', 3, 5),
+        'num_features_to_progress': hp.choice('num_features_to_progress',
+        [
+        {
+            'ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK': True,
+            'NUM_FEATURE_TO_PROGRESS_ALPHA': hp.uniform('NUM_FEATURE_TO_PROGRESS_ALPHA', 3, 6),
+            'NUM_FEATURE_TO_PROGRESS_BETA': hp.uniform('NUM_FEATURE_TO_PROGRESS_BETA', 0.1, 1.5),
+        },
+        {
+            'ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK': False
+        }
+        ]),
+
+        'num_features_progress_too_far': hp.choice('num_features_progress_too_far',
+        [
+        {
+            'ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK': True,
+            'NUM_FEATURES_PROGRESSED_TOO_FAR_MU': hp.uniform('NUM_FEATURES_PROGRESSED_TOO_FAR_MU', 0.3, 3),
+        },
+        {
+            'ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK': False
+        }
+        ]),
+        
+        'feature_alignment_check': hp.choice('feature_alignment_check',
+        [
+        {
+            'ENABLE_FEATURE_ALIGNMENT_CHECK': True,
+            'MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT': hp.uniform('MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT', 0.6, 0.9),
+        },
+        {
+            'ENABLE_FEATURE_ALIGNMENT_CHECK': False
+        }
+        ]),
+
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.3, 0.45),
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.3, 0.45),
+        'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.uniform('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', 0.03, 0.3),
+        'REMOVE_JITTER_RANGE': hp.quniform('REMOVE_JITTER_RANGE', 2, 7, 1),
+        'JUMPY_PROGRESS_ALPHA': hp.uniform('JUMPY_PROGRESS_ALPHA', 2, 4),
+        'JUMPY_PROGRESS_BETA': hp.uniform('JUMPY_PROGRESS_BETA', 3, 5),
         'TRUST_REGION_FILTER_FACTOR': hp.quniform('TRUST_REGION_FILTER_FACTOR', 1, 8, 1),
-        'MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT': hp.uniform('MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT', 0.6, 0.99),
-        # 'JOINT_DIFFERENCE_FADING_FACTOR': hp.uniform('JOINT_DIFFERENCE_FADING_FACTOR', [0.2, 0.5]),
-        'NUM_FEATURE_TO_PROGRESS_ALPHA': hp.uniform('NUM_FEATURE_TO_PROGRESS_ALPHA', 3, 6),
-        'NUM_FEATURE_TO_PROGRESS_BETA': hp.uniform('NUM_FEATURE_TO_PROGRESS_BETA', 0.1, 1.5),
+        'JOINT_DIFFERENCE_FADING_FACTOR': hp.uniform('JOINT_DIFFERENCE_FADING_FACTOR', 0.4, 0.9),
+        
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=224)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=12)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))
@@ -148,3 +189,8 @@ if __name__ == '__main__':
 
     with open(BEST_PARAMETERS_PATH, 'w') as outfile:
             config = yaml.dump(best_hps, outfile)
+
+
+
+# First optimization result:
+# 'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': 0.020262548446549, 'MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT': 0.801023013123205, 'NUM_FEATURE_TO_PROGRESS_ALPHA': 4.629802767809281, 'NUM_FEATURE_TO_PROGRESS_BETA': 1.4004525185220782, 'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': 0.310037868625595, 'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': 0.24742207775295433, 'REMOVE_JITTER_RANGE': 4.0, 'TRUST_REGION_FILTER_FACTOR': 5.0

@@ -46,6 +46,10 @@ else {
         connections: config.ownpose.connections
     };
 }
+// local usage
+let websocketCache = [];
+let start = Date.now();
+let getDelta = () => { return Date.now() - start; };
 // Parameters and Constants:
 const PORT = config.PORT;
 const app = express();
@@ -74,6 +78,22 @@ app.get('/api/connections/dict', (req, res) => {
     console.log(skeleton);
     res.send(skeleton);
 });
+app.get('/api/websocket/cache', (req, res) => {
+    res.send(JSON.stringify(websocketCache));
+});
+if (args['isolated'] === 'on') {
+    console.log("isolated is on");
+    const loadWebsSoc = require('./websocket.json');
+    console.log(loadWebsSoc[0]);
+    console.log(typeof loadWebsSoc);
+    loadWebsSoc.forEach(delta => {
+        "Hi";
+        let todo = () => {
+            websockets.forEach(ws => ws.send(JSON.stringify(JSON.parse(delta['message']))));
+        };
+        let timer = setTimeout(todo, delta['date']);
+    });
+}
 // rosnodejs
 if (args['rosnodejs'] === 'on') {
     console.log("rosnodejs usage is on");
@@ -95,30 +115,31 @@ if (args['rosnodejs'] === 'on') {
             };
             pose[skeleton.labels[index]] = point;
         });
+        websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(pose) });
         websockets.forEach(ws => {
             ws.send(JSON.stringify(pose));
         });
     });
     const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
         //TODO: send message using websocket
+        let res = {
+            usage: 'reference_progress',
+            data: msg
+        };
+        websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
         websockets.forEach(ws => {
-            if (ws.readyState === ws_1.default.OPEN) {
-                let res = {
-                    usage: 'reference_progress',
-                    data: msg
-                };
-                ws.send(JSON.stringify(res));
-            }
+            ws.send(JSON.stringify(res));
         });
     });
     const showroom_reference_frame = nh.subscribe('showroom_reference_frame', int16, (msg) => {
         //TODO: send message using websocket
+        let res = {
+            usage: 'reference_frame',
+            data: msg
+        };
+        websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
         websockets.forEach(ws => {
             if (ws.readyState === ws_1.default.OPEN) {
-                let res = {
-                    usage: 'reference_frame',
-                    data: msg
-                };
                 ws.send(JSON.stringify(res));
             }
         });

@@ -297,7 +297,6 @@ class ReferenceRecordingFeature(BaseFeature):
             "beginning_state": self.beginning_state,
             "discretization_reference_trajectory_indices_tensor": self.discretization_reference_trajectory_indices_tensor, 
             "hankel_tensor": self.hankel_tensor, 
-            "feature_state_matrix" : self.feature_states_matrix,
             "number_of_dicided_state_changes": self.number_of_dicided_state_changes,
             "median_trajectory": self.median_trajectory, 
             "median_trajectory_feature_states": self.median_trajectory_feature_states, 
@@ -397,7 +396,6 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
             "scale": self.scale,
             "discretization_reference_trajectory_indices_tensor": self.discretization_reference_trajectory_indices_tensor, 
             "hankel_tensor": self.hankel_tensor, 
-            "feature_state_matrix" : self.feature_states_matrix,
             "number_of_dicided_state_changes": self.number_of_dicided_state_changes,
             "median_trajectory": self.median_trajectory, 
             "median_trajectory_feature_states": self.median_trajectory_feature_states, 
@@ -730,7 +728,7 @@ def compute_number_of_decided_state_changes(feature_states_array):
     """Compute how often the state of a feature has changed between HIGH and LOW.
     
     Args:
-        median_feature_states_array: An array holding feature states that vary according between HIGH and LOW, but may also be UNDECIDED.
+        feature_states_array: An array holding feature states that vary according between HIGH and LOW, but may also be UNDECIDED.
         
     Returns:
         An intiger corresponding to the number of decided state changes"""

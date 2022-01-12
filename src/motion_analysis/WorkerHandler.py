@@ -109,8 +109,8 @@ class WorkerHandler(QThread):
                 logy.error("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
                 return
 
-            recordings_dict = {}
-            video_frame_idx_dict = {}
+            recordings = []
+            video_frame_idcs = []
             reference_recording_feature_collections = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
             for exercise_data in exercise_data_list:
                 # See if we can reference this exercise with an optimize config
@@ -126,9 +126,8 @@ class WorkerHandler(QThread):
                 recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
                 recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
-                recording_hash = fast_hash(recording)
-                recordings_dict[recording_hash] = recording
-                video_frame_idx_dict[recording_hash] = video_frame_idxs
+                recordings.append(recording)
+                video_frame_idcs.append(video_frame_idxs)
 
                 feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
 
@@ -148,7 +147,7 @@ class WorkerHandler(QThread):
                         reference_recording_feature_collections[feature_hash] = ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification)
 
                     # Add this recording to the reference recording feature collections, we use the same pose definition adapter for all recordings for now
-                    reference_recording_feature_collections[feature_hash].add_recording(exercise_data["name"], recording_hash, recording, self.pose_definition_adapter, config)
+                    reference_recording_feature_collections[feature_hash].add_recording(exercise_data["name"], recording, self.pose_definition_adapter, config)
 
             for r in reference_recording_feature_collections.values():
                 r.update_static_data()
@@ -158,8 +157,8 @@ class WorkerHandler(QThread):
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
-            exercise_data['recordings'] = recordings_dict
-            exercise_data['video_frame_idxs'] = video_frame_idx_dict
+            exercise_data['recordings'] = recordings
+            exercise_data['video_frame_idxs'] = video_frame_idcs
             del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
             exercise_data['reference_feature_collections'] = reference_recording_feature_collections
@@ -169,8 +168,7 @@ class WorkerHandler(QThread):
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
             current_worker = self.workers.get(station_id, None)
-
-            feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
+            feature_hashes = reference_recording_feature_collections.keys()
 
             if current_worker:
                 current_worker.running = False

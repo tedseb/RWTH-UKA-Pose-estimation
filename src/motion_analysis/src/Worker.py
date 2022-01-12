@@ -23,6 +23,7 @@ from std_msgs.msg import String, Int16
 from unittest import mock
 from scipy import signal
 import logy
+import pandas as pd
 
 from backend.msg import Person
 
@@ -190,9 +191,6 @@ class Worker(Thread):
                             increase_reps = False
                             self.alignments_this_rep = np.array([])
                         
-                        # Calculate a new reference pose mapping
-                        reference_pose = self.calculate_reference_pose_mapping()
-
                     # If the feature alignment in this repetitions is too high, we do not count the repetition
                     if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
                         logy.debug("Feature missalignment during this repetition. Repetition falsified.")
@@ -200,11 +198,9 @@ class Worker(Thread):
                         self.alignments_this_rep = np.array([])
                     
                     # Calculate a new reference pose mapping
-                    reference_pose = self.calculate_reference_pose_mapping()
+                    reference_pose, delta = self.calculate_reference_pose_mapping(pose)
 
-                    # We calculate the differences between elements of our skelleton
-                    # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
-                    delta = self.pose_definition_adapter.pose_delta(pose, reference_pose)
+                    
                     self.skelleton_deltas_since_rep_start.append(delta)
                     score = self.calculate_repetition_score()
 
@@ -257,8 +253,77 @@ class Worker(Thread):
         self.bad_repetition = False
 
     @logy.trace_time("calculate_reference_pose_mapping", period=100)
-    def calculate_reference_pose_mapping(self) -> np.ndarray:
+    def calculate_reference_pose_mapping(self, pose) -> np.ndarray:
         """Calculate the pose in the reference trajectory that we think our user is most probably in.
+
+        This method measures the similarity between the recent feature_trajectory of a user and the vectors
+        inside separate hankel matrices per recording.
+
+        Returns:
+            pose: The reference pose that we think the user is in
+            smallest_delta: The smallest delta we could find, i.e. how good is the pose of our user
+
+        """
+        recordings = self.spot_info_dict['exercise_data']['recordings']
+
+        predicted_indices = [[] for h in recordings]
+        median_resampled_values_reference_trajectory_fractions = [[] for h in recordings]
+        progress_vectors = [[] for h in recordings]
+
+        for h, f in self.features.items():
+            # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
+            discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
+            hankel_tensor_2 = f.reference_feature_collection.hankel_tensor
+            discrete_feature_trajectory = np.array(f.discretized_values)
+
+            for recording_idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
+                errors = trajectory_distance(hankel_tensor_1, discrete_feature_trajectory, 100, 1)
+                prediction = np.argmin(errors)
+                index = discretization_reference_trajectory_indices_tensor[recording_idx][prediction]
+                median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.reference_recording_features[recording_idx].median_trajectory_discretization_ranges[prediction]
+                feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+                progress_vector = map_progress_to_vector(feature_progress)
+                progress_vectors[recording_idx].append(progress_vector)
+                median_resampled_values_reference_trajectory_fractions[recording_idx].append(median_resampled_values_reference_trajectory_fraction_dict)
+                predicted_indices[recording_idx].append(index)
+
+            # For now, these are only for visualization and se we simply set the errors in the feature to the errors for the last recording. Our GUI does not permit anything else
+            f.errors = errors
+            f.progress_vector = progress_vector
+            f.prediction = prediction
+
+            update_gui_features(self.gui, f)
+
+        smallest_delta = np.inf
+        best_reference_pose = None
+        best_reference_frame_index = 0
+
+        # For a set of progress vectors (one set per recording), we look for the one that leads us to a minimal delta, i.e. the best expert pose
+        for idx, vectors in enumerate(progress_vectors):
+            recording = recordings[idx]
+            progress_estimate, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=vectors)
+            self.alignments_this_rep = np.append(self.alignments_this_rep, self.alignment)
+            reference_frame_index = int(len(recording) * progress_estimate)
+            reference_pose = recording[reference_frame_index]
+
+            # We calculate the differences between elements of our skelleton
+            # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
+            delta = self.pose_definition_adapter.pose_delta(pose, reference_pose)
+
+            if delta < smallest_delta:
+                smallest_delta = delta
+                best_reference_pose = reference_pose
+                best_reference_frame_index = reference_frame_index
+                best_reference_recording_idx = idx
+        
+        self.showroom_reference_frame_time_publisher.publish(self.spot_info_dict["exercise_data"]["video_frame_idxs"][best_reference_recording_idx][best_reference_frame_index])
+        self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
+
+        return best_reference_pose, smallest_delta
+
+    @logy.trace_time("calculate_reference_pose_mapping", period=100)
+    def calculate_progress(self) -> np.ndarray:
+        """Calculate the progress of a user, using a set of reference repetitions.
 
         This method measures the similarity between the recent feature_trajectory of a user and the vectors
         inside a hankel matrix of the reference trajectory. Thereby we can compute how likely it is that the
@@ -269,13 +334,7 @@ class Worker(Thread):
             mean_resampled_values_reference_trajectory_fractions_average_difference: The average difference of "where different features think we are"
 
         """
-        recordings = self.spot_info_dict['exercise_data']['recordings']
-
-        if len(recordings.values()) > 1:
-            raise NotImplementedError("We have not gotten this method ready for multiple recordings!")
-
-        recording = list(recordings.values())[0]
-
+        last_progress = self.progress
         predicted_indices = []
         median_resampled_values_reference_trajectory_fractions = []
         progress_vectors = []
@@ -286,27 +345,20 @@ class Worker(Thread):
             hankel_tensor_2 = f.reference_feature_collection.hankel_tensor
             discrete_feature_trajectory = np.array(f.discretized_values)
 
-            for idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
+            for recording_idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
                 errors = trajectory_distance(hankel_tensor_1, discrete_feature_trajectory, 100, 1)
                 prediction = np.argmin(errors)
-                index = discretization_reference_trajectory_indices_tensor[idx][prediction]
-                median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
-                feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-                progress_vector = map_progress_to_vector(feature_progress)
-                progress_vectors.append(progress_vector)
-                median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
+                index = discretization_reference_trajectory_indices_tensor[recording_idx][prediction]
                 predicted_indices.append(index)
-
-                f.errors = errors
-                f.progress_vector = progress_vector
-                f.prediction = prediction
-
-                update_gui_features(self.gui, f)
-                    
-        last_progress = self.progress
+            
+            median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
+            feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
+            progress_vector = map_progress_to_vector(feature_progress)
+            progress_vectors.append(progress_vector)
+            median_resampled_values_reference_trajectory_fractions.append(median_resampled_values_reference_trajectory_fraction_dict)
 
         progress_estimate, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=progress_vectors)
-        
+
         # We try to calculate a progress velocity here and never use the estimated progress directly but update it based on a dacaying velocityyyyyy
         if self.t - self.last_t:
             delta = 0.5 # We always have to be lower than 50% progress delta
@@ -319,19 +371,10 @@ class Worker(Thread):
         else:
             self.progress_velocity = 0
 
-        self.progress = (self.progress + (self.t - self.last_t) * self.progress_velocity) % 1
+        progress = (self.progress + (self.t - self.last_t) * self.progress_velocity) % 1
+        self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, progress - last_progress)
 
-        self.alignments_this_rep = np.append(self.alignments_this_rep, self.alignment)
-        self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, self.progress - last_progress)
-
-        reference_frame_index = int(len(recording) * self.progress)
-
-        reference_pose = recording[reference_frame_index]
-
-        self.showroom_reference_frame_time_publisher.publish(self.spot_info_dict["exercise_data"]["video_frame_idxs"][reference_frame_index])
-        self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
-
-        return reference_pose
+        return progress
 
     @logy.trace_time("analyze_feature_progressions", period=100)
     def analyze_feature_progressions(self,

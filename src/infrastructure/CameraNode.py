@@ -44,6 +44,7 @@ class CameraNode():
         self._camera_mode = camera_mode
         self._dev_id = "dev" + str(dev_id)
         self._youtube_mode = False
+        self._disk_mode = False
         self._debug_repetition_ms = debug_repetition_ms
 
         rospy.init_node('camera', anonymous=True)
@@ -67,6 +68,10 @@ class CameraNode():
         if not self._cap.isOpened() or self._cap is None:
             self.set_youtube_stream()
             self._youtube_mode = True
+    
+    def __del__(self):
+        if self._cap is not None:
+            self._cap.release()
 
     def start_camera_publisher(self):
         rate = rospy.Rate(25)  # TODO: Aufnahme ist in 25FPS
@@ -86,9 +91,9 @@ class CameraNode():
                 elif self._disk_mode:
                     self._cap.open(self._disk_path)
                     continue
-
-                rospy.logerr('Could not get image')
-                raise IOError('[CameraNode] Could not get image')
+                break
+                #rospy.logerr('Could not get image')
+                #raise IOError('[CameraNode] Could not get image')
 
             #frame = cv2.resize(frame, (1280, 720))
             img = Image()

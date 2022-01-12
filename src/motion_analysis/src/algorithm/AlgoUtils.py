@@ -16,7 +16,11 @@ class IllegalAngleException(Exception):
 
 class PoseDefinitionAdapter():
     def __init__(self):
-        self.normal_orientation_matrix_transpose = np.matrix.transpose(self.calculate_orientation_vector(self.normal_skelleton))
+        self.pelvis_normal_orientation_matrix = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        # np.matrix.transpose(self.calculate_pelvis_orientation_vector(self.normal_skelleton))
+
+        self.chest_normal_orientation_matrix = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        # np.matrix.transpose(self.calculate_chest_orientation_vector(self.normal_skelleton))
 
     @abstractmethod
     def poses_to_ndarray(self, poses: object) -> np.ndarray:
@@ -71,28 +75,46 @@ class PoseDefinitionAdapter():
     def get_joint_name(self, joint_idx: int):
         return self.joints_used_labels[joint_idx]
 
-    def calculate_orientation_vector(self, input_skelleton):
-        """Returns the orientation of the skelleton's pelvis.
+    # def calculate_pelvis_orientation_vector(self, input_skelleton):
+    #     """Returns the orientation of the skelleton's pelvis.
 
-        Calculateas the orientation of the pelvis joint connections of the skelleton.
-        The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
+    #     Calculateas the orientation of the pelvis joint connections of the skelleton.
+    #     The returned orientation is the vector representing the normal vector of two of the pelvises' joint connections.
+    #     """
+        # x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
+        # y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
+        # if np.array_equal(x, y):
+        #     try:
+        #         import logy
+        #         logy.error("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+        #     except ImportError:
+        #         print("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+        #     raise ValueError("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
+        # _x = x / np.linalg.norm(x)
+        # cross_x_y = np.cross(x,y)
+        # _z = cross_x_y / np.linalg.norm(cross_x_y)
+        # cross__z_x = np.cross(_z,x)
+        # _y = cross__z_x / np.linalg.norm(cross__z_x)
+        # return  np.stack([_x, _y, _z])
+
+    def calculate_orientation_vector(self, input_skelleton, upper_joint_idx, left_joint_idx, right_joint_idx):
+        """Returns the orientation of the the skelleton according to three given joints that form a normal plane.
+
+        The returned orientation is the vector representing the normal vector of two of the joint connections.
         """
-        # Roate skelleton, such that skelletons pelvises overlap
-        x = np.array(input_skelleton[self.orientational_vector_joint_idxs_1[1]] - input_skelleton[self.orientational_vector_joint_idxs_1[0]])
-        y = np.array(input_skelleton[self.orientational_vector_joint_idxs_2[1]] - input_skelleton[self.orientational_vector_joint_idxs_2[0]])
-        if np.array_equal(x, y):
-            try:
-                import logy
-                logy.error("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
-            except ImportError:
-                print("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
-            raise ValueError("Two pelvis bones the same orientation, this is impossible under realistic conditions. Aborting analysis step...")
-        _x = x / np.linalg.norm(x)
-        cross_x_y = np.cross(x,y)
-        _z = cross_x_y / np.linalg.norm(cross_x_y)
-        cross__z_x = np.cross(_z,x)
-        _y = cross__z_x / np.linalg.norm(cross__z_x)
-        return  np.stack([_x, _y, _z])
+        v_up_left = np.array(input_skelleton[upper_joint_idx] - input_skelleton[left_joint_idx])
+        v_left_right = np.array(input_skelleton[left_joint_idx] - input_skelleton[right_joint_idx])
+        v_up_right = np.array(input_skelleton[upper_joint_idx] - input_skelleton[right_joint_idx])
+
+        # We need orthogonal unit vectors
+        r_y = (v_up_left + 0.5 * v_left_right)
+        r_y = r_y / np.linalg.norm(r_y) 
+        r_z = np.cross(v_up_left, v_up_right)
+        r_z = r_z / np.linalg.norm(r_z)
+        r_x = np.cross(r_z, r_y)
+
+        return  np.stack([r_x, r_y, r_z])
+
 
     def normalize_skelleton_size(self, input_skelleton):
         """Stretch all vectors of person to the same length as the vectors in normal_skelleton
@@ -129,26 +151,39 @@ class PoseDefinitionAdapter():
 
         return resized_skelleton
 
+    def normalize_skelleton_position(self, input_skelleton, new_central_joint_idx=None):
+        """Returns a skelleton such that the position of the central joint is at (0, 0, 0).
+        
+        By default, the central joint is the pelvis, i.e. self.central_joint_idx."""
 
-    def normalize_skelleton_position(self, input_skelleton):
-        """Returns a skelleton with the pelvis at (0, 0, 0)."""
+        if new_central_joint_idx is None:
+            new_central_joint_idx = self.central_joint_idx
+
         reoriented_skelleton = np.copy(input_skelleton)
         # Move skelleton to 0/0/0 by substracting coordinates of central joint from all joints
         for joint_idx in range(len(reoriented_skelleton)):
-            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[self.central_joint_idx][0]
-            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[self.central_joint_idx][1]
-            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[self.central_joint_idx][2]
+            reoriented_skelleton[joint_idx][0] = input_skelleton[joint_idx][0] - input_skelleton[new_central_joint_idx][0]
+            reoriented_skelleton[joint_idx][1] = input_skelleton[joint_idx][1] - input_skelleton[new_central_joint_idx][1]
+            reoriented_skelleton[joint_idx][2] = input_skelleton[joint_idx][2] - input_skelleton[new_central_joint_idx][2]
 
         return reoriented_skelleton
 
-    def normalize_skelleton_orientation(self, input_skelleton):
+    def normalize_chest_orientation(self, input_skelleton):
         """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
-        reoriented_skelleton = np.copy(input_skelleton)
-        reoriented_skelleton_rotation_matrix = self.calculate_orientation_vector(reoriented_skelleton)
-        rotation_matrix_to_normal_orientation = np.matmul(self.normal_orientation_matrix_transpose, reoriented_skelleton_rotation_matrix)
+        reoriented_skelleton_rotation_matrix = self.calculate_chest_orientation_vector(input_skelleton)
+        rotation_matrix_to_normal_orientation = np.matmul(self.chest_normal_orientation_matrix, np.matrix.transpose(reoriented_skelleton_rotation_matrix))
+        return self._reorient(input_skelleton, rotation_matrix_to_normal_orientation)
 
-        for joint_idx in range(len(reoriented_skelleton)):
-            reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix_to_normal_orientation)
+    def normalize_pelvis_orientation(self, input_skelleton):
+        """Returns a skelleton with the pevlis turned into the same directions as the normal skelleton."""
+        reoriented_skelleton_rotation_matrix = self.calculate_pelvis_orientation_vector(input_skelleton)
+        rotation_matrix_to_normal_orientation = np.matmul(self.pelvis_normal_orientation_matrix, np.matrix.transpose(reoriented_skelleton_rotation_matrix))
+        return self._reorient(input_skelleton, rotation_matrix_to_normal_orientation)
+
+    def _reorient(self, input_skelleton, rotation_matrix):
+        reoriented_skelleton = np.copy(input_skelleton)
+        for joint_idx in range(len(input_skelleton)):
+            reoriented_skelleton[joint_idx] = np.matmul(reoriented_skelleton[joint_idx], rotation_matrix)
 
         return reoriented_skelleton
 
@@ -165,11 +200,15 @@ class PoseDefinitionAdapter():
         rp.logerr(f"Total number of joints: {len(already_added_nodes)}")
         rp.logerr(already_added_nodes)
 
-    def normalize_skelleton(self, input_skelleton):
+    def normalize_skelleton(self, input_skelleton, is_pelvis_center=True):
         """Utility method to normalize size, position and orientation of skelleton."""
         skelleton = self.normalize_skelleton_size(input_skelleton)
-        skelleton = self.normalize_skelleton_position(skelleton)
-        skelleton = self.normalize_skelleton_orientation(skelleton)
+        if is_pelvis_center:
+            skelleton = self.normalize_skelleton_position(skelleton, new_central_joint_idx=self.center_of_pelvis_idx)
+            skelleton = self.normalize_pelvis_orientation(skelleton)
+        else:
+            skelleton = self.normalize_skelleton_position(skelleton, new_central_joint_idx=self.center_of_chest_idx)
+            skelleton = self.normalize_chest_orientation(skelleton)
         return skelleton
 
     def find_inner_joint(self, joint_names):
@@ -240,7 +279,47 @@ class PoseDefinitionAdapter():
 
 
         raise IllegalAngleException("This angle is not defined, as there is no 'inner' joint.")
-                
+
+    @abstractmethod
+    def normal_bone_length(self, pose: np.ndarray) -> float:
+        """Return the length of a bone that (hopefully) does not change.
+        
+        In order to calculate a meaningful pose delta, and corrections, we need to normalize distances.
+        We require that there exists a bone, i.e. connection between two joints, that does not change between
+        different instances of peoples skelletons.
+
+        Args:
+            pose: An np.ndarray representing a skelleton
+
+        Return:
+            The normal-bone-length for this skelleton
+        """
+        raise NotImplementedError("This is an interface, it should not be called directly.")
+
+    @abstractmethod
+    def calculate_chest_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's chest"""
+        raise NotImplementedError("This is an interface, it should not be called directly.")
+
+    @abstractmethod
+    def calculate_pelvis_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's pelvis"""
+        raise NotImplementedError("This is an interface, it should not be called directly.")
+
+    def pose_delta(self, pose_a: np.ndarray, pose_b: np.ndarray) -> float:
+        """Calculate a difference between two poses, based on the weights of the respective joints."""
+
+        # Careful! This method introduces a difference between deltas from different Pose Definition Adapters. This difference can only be overcome by adding a factor to the normal bone length.
+
+        weights = 0
+        delta = 0
+        for joint_name, weight in self.joint_weights.items():
+            joint_index = self.joints_used_labels.index(joint_name)
+            delta += np.abs(np.linalg.norm(pose_a[joint_index] - pose_b[joint_index])) * weight
+            weights += weight
+
+        return delta / (weights * np.linalg.norm(self.normal_bone_length(pose_a)) * np.linalg.norm(self.normal_bone_length(pose_b)))
+         
 
 def map_progress_to_vector(progress: float):
     """ Calculate the cartesian represenation of a progress as a unit vector.
@@ -338,11 +417,11 @@ def update_gui_features(gui, feature):
                             np.array(feature.prediction))
 
 
-def update_gui_progress(gui, progress, alignment, progress_alignment_vector):
+def update_gui_progress(gui, progress, alignment, progress_alignment_vector, score, last_score):
     """ Update a gui regarding overall parameters. """
     if not gui:
         return
-    gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]))
+    gui.update_overall_data_signal.emit(float(progress), float(alignment), np.array([progress_alignment_vector.real, progress_alignment_vector.imag]), int(score), int(last_score))
 
 
 

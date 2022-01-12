@@ -38,6 +38,42 @@ class UnknownAngleException(FeatureExtractorException):
 
 class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
     """This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper."""
+
+    # We define weights for joints that should overlap with expert joints. Each key corresponds to the name of the joint in the joint_labels array, the value is the weight.
+    joint_weights = {
+        'L_Ankle': 20,
+        'R_Ankle': 20,
+        'L_Knee': 50,
+        'R_Knee': 50,
+        'L_Wrist': 20,
+        'R_Wrist': 20,
+        'L_Elbow': 50,
+        'R_Elbow': 50,
+        'Head': 50,
+        'L_Shoulder': 100,
+        'R_Shoulder': 100,
+    }
+
+    upper_body_correction_joints = [
+        'L_Wrist',
+        'R_Wrist',
+        'L_Elbow',
+        'R_Elbow',
+        # 'Head',
+        # 'L_Shoulder',
+        # 'R_Shoulder',
+    ]
+
+    lower_body_correction_joints = [
+        'L_Ankle',
+        'R_Ankle',
+        'L_Knee',
+        'R_Knee',
+        # 'Head',
+        # 'L_Shoulder',
+        # 'R_Shoulder',
+    ]
+
     def __init__(self):
         # The indices of the joints that we use (of all the joints from the spin paper)
         self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
@@ -53,7 +89,8 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         # TODO: Maybe use sorted list for compatibility with C++
         self.joint_connections_labels = set(frozenset((self.joint_labels[x], self.joint_labels[y])) for [x, y] in self.joint_connections)
 
-        self.center_of_body_label = 'M_Hip'
+        self.center_of_pelvis_idx = self.joint_labels.index('M_Hip')
+        self.center_of_chest_dx = self.joint_labels.index('Neck')
 
         # Build order of the current Gymy skeleton
         self.body_build_order = [(0, 3), (3, 6), (6, 9), (9, 12), (12, 15), (12, 13), (13, 16), (16, 18), (18, 20), (20, 22), (12, 14), (14, 17),
@@ -69,12 +106,16 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         self.orientational_vector_joint_idxs_2 = (0, 2)
 
         super().__init__()
-
+    
     def recording_to_ndarray(self, recording: list) -> np.ndarray:
         """ Returns an ndarray of skelletons, one per timestep """
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
 
+        start_frame_id = recording[0][0]
+        video_frame_idxs = []
+
         for idx_recording, step in enumerate(recording):
+            video_frame_idxs.append(int(step[0] - start_frame_id))
             skelleton = step[1]
             for joint, coordinates in skelleton.items():
                 idx_step = self.get_joint_index(joint)
@@ -82,8 +123,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
                 array[idx_recording][idx_step][Y] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
                 array[idx_recording][idx_step][Z] = coordinates['z'] 
         
-        return array
-
+        return array, video_frame_idxs
 
     def pose_to_nd_array(self, pose: dict):
         """ Returns an ndarray representing the input pose """
@@ -123,12 +163,58 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         
         return body_parts
 
+    def normal_bone_length(self, pose: np.ndarray) -> float:
+        return np.abs(np.linalg.norm(pose[self.joint_labels.index('L_Back')] - pose[self.joint_labels.index('M_Back')]))
+
+    def calculate_chest_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's chest"""
+        return self.calculate_orientation_vector(pose, self.joint_labels.index("Neck"), self.joint_labels.index("L_Shoulder"), self.joint_labels.index("R_Shoulder"))
+
+    def calculate_pelvis_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's pelvis"""
+        return self.calculate_orientation_vector(pose, self.joint_labels.index("M_Hip"), self.joint_labels.index("L_Hip"), self.joint_labels.index("R_Hip"))
 
 class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
     """
     This adapter uses the skeleton definition introduced to our system by Shawan Mohamed, originally formulated by the authors of the SPIN paper.
     The Adapter is considered legacy, because we use the Metrabs code now by default.
     """
+
+    # We define weights for joints that should overlap with expert joints. Each key corresponds to the name of the joint in the joint_labels array, the value is the weight.
+    joint_weights = {
+        'OP_L_Ankle': 20,
+        'OP_R_Ankle': 20,
+        'OP_L_Knee': 50,
+        'OP_R_Knee': 50,
+        'OP_L_Wrist': 20,
+        'OP_R_Wrist': 20,
+        'OP_L_Elbow': 50,
+        'OP_R_Elbow': 50,
+        'Nose': 50,
+        'OP_L_Shoulder': 100,
+        'OP_R_Shoulder': 100,
+    }
+
+    upper_body_correction_joints = [
+        'OP_L_Wrist',
+        'OP_R_Wrist',
+        'OP_L_Elbow',
+        'OP_R_Elbow',
+        # 'Nose',
+        # 'OP_L_Shoulder',
+        # 'OP_R_Shoulder',
+    ]
+
+    lower_body_correction_joints = [
+        'OP_L_Ankle',
+        'OP_R_Ankle',
+        'OP_L_Knee',
+        'OP_R_Knee',
+        # 'Head',
+        # 'L_Shoulder',
+        # 'R_Shoulder',
+    ]
+
     def __init__(self):
         # The indices of the joints that we use (of all the joints from the spin paper)
         self.joints_used = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 37, 39, 41, 42, 43]
@@ -144,7 +230,8 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
         # TODO: Maybe use sorted list for compatibility with C++
         self.joint_connections_labels = set(frozenset((self.joint_labels[x], self.joint_labels[y])) for [x, y] in self.joint_connections)
 
-        self.center_of_body_label = 'Pelvis_MPII'
+        self.center_of_pelvis_idx = self.joint_labels.index('Pelvis_MPII')
+        self.center_of_chest_dx = self.joint_labels.index('OP_Neck')
 
         # Build order of the current Gymy skeleton, by Ted
         # original_body_build_order = [(39, 8), (39, 27), (39, 28), (28, 12), (12, 9), (39, 41), (41, 1), (27, 2), (28, 5), (2, 3), (3, 4),
@@ -172,7 +259,11 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
         """ Returns an ndarray of skelletons, one per timestep """
         array = np.ndarray(shape=[len(recording), len(self.joints_used), 3], dtype=np.float16)
 
+        start_frame_id = recording[0][0]
+        video_frame_idxs = []
+
         for idx_recording, step in enumerate(recording):
+            video_frame_idxs.append(int(step[0] - start_frame_id))
             skelleton = step[1]
             for joint, coordinates in skelleton.items():
                 idx_step = self.get_joint_index(joint)
@@ -180,8 +271,7 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
                 array[idx_recording][idx_step][Y] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
                 array[idx_recording][idx_step][Z] = coordinates['z'] 
         
-        return array
-
+        return array, video_frame_idxs
 
     def pose_to_nd_array(self, pose: dict):
         """ Returns an ndarray representing the input pose """
@@ -192,7 +282,6 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
                 array[idx_step][Y] = coordinates['y'] # We DO NOT have to swap x and y here, because Tamer has swapped it already (?)
                 array[idx_step][Z] = coordinates['z'] 
         return array
-
 
     def body_parts_to_ndarray(self, body_parts: Bodypart) -> np.ndarray:
         """ Returns an ndarray of poses. """
@@ -207,7 +296,6 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
 
         return array
 
-
     def ndarray_to_body_parts(self, ndarray: np.ndarray) -> list:
         """ Returns an ndarray of poses. """
         # We need some dummy body parts that we do not actually use but are still part of the Person defined by SPIN
@@ -221,3 +309,14 @@ class SpinPoseDefinitionAdapter(PoseDefinitionAdapter):
             body_parts[used_index] = b
         
         return body_parts
+
+    def normal_bone_length(self, pose: np.ndarray) -> float:
+        return np.abs(np.linalg.norm(pose[self.joint_labels.index('Pelvis_MPII')] - pose[self.joint_labels.index('Spine_HM')]))
+
+    def calculate_chest_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's chest"""
+        raise NotImplementedError
+
+    def calculate_pelvis_orientation_vector(self, pose: np.ndarray) -> np.ndarray:
+        """Returns a vector that points straight forward from the perspective of the user's pelvis"""
+        raise NotImplementedError

@@ -75,7 +75,7 @@ class PoseEstimator():
         self.model = tf.saved_model.load(CONFIG["model_path"])
         self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
         self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
-        self._fake_image = cv2.imread('/home/trainerai/trainerai-core/src/AI/metrabs/image.jpg')
+        #self._fake_image = cv2.imread('/home/trainerai/trainerai-core/src/AI/metrabs/image.jpg')
         self._fake_person_boxes = [np.array([680.0, 180.0, 180.0, 490.0], np.float32)]
         self.start_ai([], np.stack([self._fake_image]), [self._fake_person_boxes], set())
 

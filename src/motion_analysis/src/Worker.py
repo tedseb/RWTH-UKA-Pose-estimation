@@ -199,8 +199,8 @@ class Worker(Thread):
                     
                     # Calculate a new reference pose mapping
                     reference_pose, delta = self.calculate_reference_pose_mapping(pose)
+                    self.calculate_progress()
 
-                    
                     self.skelleton_deltas_since_rep_start.append(delta)
                     score = self.calculate_repetition_score()
 
@@ -317,7 +317,6 @@ class Worker(Thread):
                 best_reference_recording_idx = idx
         
         self.showroom_reference_frame_time_publisher.publish(self.spot_info_dict["exercise_data"]["video_frame_idxs"][best_reference_recording_idx][best_reference_frame_index])
-        self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
 
         return best_reference_pose, smallest_delta
 
@@ -371,10 +370,12 @@ class Worker(Thread):
         else:
             self.progress_velocity = 0
 
-        progress = (self.progress + (self.t - self.last_t) * self.progress_velocity) % 1
-        self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, progress - last_progress)
+        self.progress = (self.progress + (self.t - self.last_t) * self.progress_velocity) % 1
+        self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, self.progress - last_progress)
 
-        return progress
+        self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
+
+        return self.progress
 
     @logy.trace_time("analyze_feature_progressions", period=100)
     def analyze_feature_progressions(self,

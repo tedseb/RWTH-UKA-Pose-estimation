@@ -102,7 +102,7 @@ class BaseFeature(ABC):
         # If there is anything else apart from the feature_hash to specify what feature this is, we specify it in this dict
         self.specification_dict = specification_dict
         
-        from src.algorithm.FeatureExtraction import feature_extraction_methods # Try to remove this
+        from src.algorithm.FeatureExtraction import feature_extraction_methods # TODO: Try to remove this
         self.feature_extraction_method = feature_extraction_methods[self.type]
 
     def add_filter_value(self, value):
@@ -378,6 +378,8 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
     def new_repetition(self):
         self.progression = 0
         self.total_joint_differences_this_rep = []
+        for f in self.reference_recording_features:
+            f.new_repetition()
 
     def asdict(self):
         return {

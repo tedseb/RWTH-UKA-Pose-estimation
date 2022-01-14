@@ -95,7 +95,7 @@ class WorkerHandler(QThread):
     @logy.catch_ros
     def callback(self, station_usage_data: Any) -> NoReturn:
         station_id = station_usage_data.stationID
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
+        _, _, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
 
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
@@ -111,7 +111,7 @@ class WorkerHandler(QThread):
 
             recordings = []
             video_frame_idcs = []
-            reference_recording_feature_collections = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
+            features_dict = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
             for exercise_data in exercise_data_list:
                 # See if we can reference this exercise with an optimize config
                 optimized_config = exercise_data.get("optimized_config", None)
@@ -121,7 +121,7 @@ class WorkerHandler(QThread):
                     config = self.config
                     logy.warn_throttle("One or more exercise data entries with are without optimized config. Optimize for this exercise or import data to exercise DB!", throttel_time_ms=500)
                 
-                feature_hashes_to_go = set(reference_recording_feature_collections.keys())
+                feature_hashes_to_go = set(features_dict.keys())
 
                 recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
                 recording = self.pose_definition_adapter.normalize_skelletons(recording)
@@ -132,7 +132,7 @@ class WorkerHandler(QThread):
                 feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
 
                 for feature_hash, feature_specification in feature_of_interest_specification.items():
-                    if feature_hash in reference_recording_feature_collections.keys():
+                    if feature_hash in features_dict.keys():
                         if feature_hash in feature_hashes_to_go:
                             feature_hashes_to_go.remove(feature_hash)
                         else:
@@ -141,19 +141,18 @@ class WorkerHandler(QThread):
                         logy.error("Multiple recordings for one exercise have different feature specifications! Aborting recording analysis.")
                     
                     # On anaylsis of the first recording, we add the reference feature collection
-                    if not reference_recording_feature_collections.get(feature_hash):
+                    if not features_dict.get(feature_hash):
                         # We use the general config for the collection
                         # Featuers added later will use their respective optimized recording configs
-                        reference_recording_feature_collections[feature_hash] = ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification)
+                        features_dict[feature_hash] = Feature(self.config, feature_hash, feature_specification)
 
                     # Add this recording to the reference recording feature collections, we use the same pose definition adapter for all recordings for now
-                    reference_recording_feature_collections[feature_hash].add_recording(exercise_data["name"], recording, self.pose_definition_adapter, config)
+                    features_dict[feature_hash].add_recording(exercise_data["name"], recording, self.pose_definition_adapter, config)
 
-            for r in reference_recording_feature_collections.values():
-                r.update_static_data()
+            for f in features_dict.values():
+                f.update_static_data()
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(self.config, c) for c in reference_recording_feature_collections.values()}
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
@@ -161,14 +160,13 @@ class WorkerHandler(QThread):
             exercise_data['video_frame_idxs'] = video_frame_idcs
             del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
-            exercise_data['reference_feature_collections'] = reference_recording_feature_collections
 
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0, 'station_usage_hash': station_usage_data.stationUsageHash}
 
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
             current_worker = self.workers.get(station_id, None)
-            feature_hashes = reference_recording_feature_collections.keys()
+            feature_hashes = features_dict.keys()
 
             if current_worker:
                 current_worker.running = False

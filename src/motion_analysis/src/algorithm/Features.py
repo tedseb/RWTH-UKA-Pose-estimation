@@ -33,7 +33,7 @@ from collections import deque
 from os import remove
 import numpy as np
 import math
-from abc import ABC
+from abc import ABC, abstractclassmethod, abstractmethod
 from scipy.linalg import hankel
 from typing import List
 
@@ -110,6 +110,65 @@ class BaseFeature(ABC):
             self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution), min(value, self.filtered_value + (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution))))
         except IndexError as e:
             self.filtered_values = np.append(self.filtered_values, value)
+
+    
+    def update_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
+        value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
+        self.add_filter_value(value)
+
+        try:
+            discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
+            if discretized_values:
+                self.discretized_values = np.append(self.discretized_values, discretized_values)
+        except IndexError:
+            scale = self.scale
+            # If this is the first value, extend with the nearest value on our scale
+            self.discretized_values = np.append(self.discretized_values, scale[np.argmin(abs(scale - value))])
+        
+        self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, self.config['REMOVE_JITTER_RANGE'])
+
+        self.values = np.append(self.values, value)
+        has_changed_progression = self.compute_new_feature_progression(self.median_beginning_state)
+        self.states = np.append(self.states, decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
+
+        return has_changed_progression
+
+
+    def compute_new_feature_progression(self, median_beginning_state):
+        """Compute a dictionary representing the progression of the features specified by feature_state
+
+        This method turns features states, such as FEATURE_HIGH or FEATURE_LOW into a feature progression,
+        that is a number that represents the number of state changes in this feature in this repetition, 
+        depending on the previous progression of the feature. 
+        This way we can track the progression of different features between timesteps.
+
+        Args: 
+            beginning_state: A dictionary that holds the state in which a feature begins for every feature of every category
+            features_state: The state that the featuers are in
+            last_feature_progression: The last dictionary produced by this method in the last timestep
+
+        Return:
+            new_feature_progression: The feature progression dictionary at this timestep
+
+        Raises:
+            MalformedFeatures: If features are not the expected form.
+        """
+        # If features beginn with the FEATURE_HIGH state, feature progressions must be odd if the feature state changes to FEATURE_LOW and even afterwards
+        if median_beginning_state == FeatureState.FEATURE_HIGH and \
+            ((self.state <= FeatureState.FEATURE_LOW_UNDECIDED and self.progression % 2 == 0) or \
+                (self.state >= FeatureState.FEATURE_HIGH_UNDECIDED and self.progression % 2 == 1)):
+                new_feature_progression = self.progression + 1
+        # If features beginn with the FEATURE_LOW state, feature progressions must be odd if the feature state changes to FEATURE_HIGH and even afterwards
+        elif median_beginning_state == FeatureState.FEATURE_LOW and \
+            ((self.state >= FeatureState.FEATURE_HIGH_UNDECIDED and self.progression % 2 == 0) or \
+                (self.state <= FeatureState.FEATURE_LOW_UNDECIDED and self.progression % 2 == 1)):
+                new_feature_progression = self.progression + 1
+        else:
+            new_feature_progression = self.progression
+
+        has_changed = self.progression != new_feature_progression
+        self.progression = new_feature_progression
+        return has_changed
 
     @property
     def value(self):
@@ -304,8 +363,8 @@ class ReferenceRecordingFeature(BaseFeature):
             "median_beginning_state": self.median_beginning_state
         }
 
-
-class ReferenceRecordingFeatureCollection(BaseFeature):
+ 
+class Feature(BaseFeature):
     def __init__(self, \
         config: dict, \
             feature_hash: str, \
@@ -400,92 +459,6 @@ class ReferenceRecordingFeatureCollection(BaseFeature):
             "median_trajectory_discretization_ranges": self.median_trajectory_discretization_ranges,
             "median_beginning_state": self.median_beginning_state,
             "reference_features": {r.recording_hash: r.asdict() for r in self.reference_recording_features}
-        }
-
-
-class Feature(BaseFeature):
-    def __init__(self, \
-    config: dict, \
-        reference_feature_collection: ReferenceRecordingFeatureCollection, \
-                max_trajectory_length=None):
-
-        max_trajectory_length = max_trajectory_length if max_trajectory_length else config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE']
-
-
-        super().__init__(config, reference_feature_collection.feature_hash, reference_feature_collection.specification_dict, max_digitized_trajectory_length=max_trajectory_length)
-        self.reference_feature_collection = reference_feature_collection
-        self.lower_boundary = reference_feature_collection.lower_boundary
-        self.upper_boundary = reference_feature_collection.upper_boundary
-        self.resolution = reference_feature_collection.resolution
-
-    def update(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
-        value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
-        self.add_filter_value(value)
-
-        try:
-            discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
-            if discretized_values:
-                self.discretized_values = np.append(self.discretized_values, discretized_values)
-        except IndexError:
-            scale = self.reference_feature_collection.scale
-            # If this is the first value, extend with the nearest value on our scale
-            self.discretized_values = np.append(self.discretized_values, scale[np.argmin(abs(scale - value))])
-        
-        self.discretized_values = remove_jitter_from_last_samples(self.discretized_values, self.config['REMOVE_JITTER_RANGE'])
-
-        self.values = np.append(self.values, value)
-        has_changed_progression = self.compute_new_feature_progression()
-        self.states = np.append(self.states, decide_feature_state(value, self.state, self.lower_boundary, self.upper_boundary))
-
-        return has_changed_progression
-
-
-    def compute_new_feature_progression(self):
-        """Compute a dictionary representing the progression of the features specified by feature_state
-
-        This method turns features states, such as FEATURE_HIGH or FEATURE_LOW into a feature progression,
-        that is a number that represents the number of state changes in this feature in this repetition, 
-        depending on the previous progression of the feature. 
-        This way we can track the progression of different features between timesteps.
-
-        Args: 
-            beginning_state: A dictionary that holds the state in which a feature begins for every feature of every category
-            features_state: The state that the featuers are in
-            last_feature_progression: The last dictionary produced by this method in the last timestep
-
-        Return:
-            new_feature_progression: The feature progression dictionary at this timestep
-
-        Raises:
-            MalformedFeatures: If features are not the expected form.
-        """
-        # If features beginn with the FEATURE_HIGH state, feature progressions must be odd if the feature state changes to FEATURE_LOW and even afterwards
-        if self.reference_feature_collection.median_beginning_state == FeatureState.FEATURE_HIGH and \
-            ((self.state <= FeatureState.FEATURE_LOW_UNDECIDED and self.progression % 2 == 0) or \
-                (self.state >= FeatureState.FEATURE_HIGH_UNDECIDED and self.progression % 2 == 1)):
-                new_feature_progression = self.progression + 1
-        # If features beginn with the FEATURE_LOW state, feature progressions must be odd if the feature state changes to FEATURE_HIGH and even afterwards
-        elif self.reference_feature_collection.median_beginning_state == FeatureState.FEATURE_LOW and \
-            ((self.state >= FeatureState.FEATURE_HIGH_UNDECIDED and self.progression % 2 == 0) or \
-                (self.state <= FeatureState.FEATURE_LOW_UNDECIDED and self.progression % 2 == 1)):
-                new_feature_progression = self.progression + 1
-        else:
-            new_feature_progression = self.progression
-
-        has_changed = self.progression != new_feature_progression
-        self.progression = new_feature_progression
-        return has_changed
-
-    def asdict(self):
-        return {
-            "feature_hash": self.feature_hash,
-            "lower_boundary": self.lower_boundary,
-            "upper_boundary": self.upper_boundary,
-            "resolution": self.resolution,
-            "values": self.values,
-            "discritized_values": self.discretized_values,
-            "progression": self.progression,
-            "states": self.states
         }
 
 

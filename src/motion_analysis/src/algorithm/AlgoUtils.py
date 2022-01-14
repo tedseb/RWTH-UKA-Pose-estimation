@@ -396,7 +396,7 @@ def update_gui_features(gui, feature):
         widget = gui.feature_widgets[feature_hash]
         if not widget.reference_plot_data_set:
             try:
-                sample_reference_feature = feature.reference_feature_collection.reference_recording_features[0]
+                sample_reference_feature = feature.reference_recording_features[0]
                 spec = feature.specification_dict
                 spec.pop("type")
                 widget.update_static_data.emit(

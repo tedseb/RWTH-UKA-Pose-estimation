@@ -101,7 +101,7 @@ class Worker(Thread):
 
         self.features = {}
 
-        self.bad_repetition = False
+        self.bad_repetition_dict = {}
 
         self.gui = gui
 
@@ -167,7 +167,9 @@ class Worker(Thread):
                     pose = self.pose_definition_adapter.normalize_skelleton(pose)
 
                     for f in self.features.values():
-                        f.update(pose, self.pose_definition_adapter)
+                        f.update_pose(pose, self.pose_definition_adapter)
+                        for rf in f.reference_recording_features:
+                            rf.update_pose(pose, self.pose_definition_adapter)
 
                     # Compare joints with expert system data
                     increase_reps = self.analyze_feature_progressions(self.features)
@@ -187,7 +189,8 @@ class Worker(Thread):
                         # We do not want negative and positive progresses to relate to each other as follows: (If they do, we mark this repetition as bad)
                         if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and self.config ['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
                             logy.debug("Progression was too jumpy in this repetition. Marking this repetition as bad...")
-                            self.bad_repetition = True
+                            for k in self.bad_repetition_dict.keys():
+                                self.bad_repetition_dict[k] = True
                             increase_reps = False
                             self.alignments_this_rep = np.array([])
                         
@@ -272,15 +275,15 @@ class Worker(Thread):
 
         for h, f in self.features.items():
             # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
-            discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
-            hankel_tensor_2 = f.reference_feature_collection.hankel_tensor
+            discretization_reference_trajectory_indices_tensor = f.discretization_reference_trajectory_indices_tensor
+            hankel_tensor_2 = f.hankel_tensor
             discrete_feature_trajectory = np.array(f.discretized_values)
 
             for recording_idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
                 errors = trajectory_distance(hankel_tensor_1, discrete_feature_trajectory, 100, 1)
                 prediction = np.argmin(errors)
                 index = discretization_reference_trajectory_indices_tensor[recording_idx][prediction]
-                median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.reference_recording_features[recording_idx].median_trajectory_discretization_ranges[prediction]
+                median_resampled_values_reference_trajectory_fraction_dict = f.reference_recording_features[recording_idx].median_trajectory_discretization_ranges[prediction]
                 feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
                 progress_vector = map_progress_to_vector(feature_progress)
                 progress_vectors[recording_idx].append(progress_vector)
@@ -340,8 +343,8 @@ class Worker(Thread):
 
         for h, f in self.features.items():
             # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
-            discretization_reference_trajectory_indices_tensor = f.reference_feature_collection.discretization_reference_trajectory_indices_tensor
-            hankel_tensor_2 = f.reference_feature_collection.hankel_tensor
+            discretization_reference_trajectory_indices_tensor = f.discretization_reference_trajectory_indices_tensor
+            hankel_tensor_2 = f.hankel_tensor
             discrete_feature_trajectory = np.array(f.discretized_values)
 
             for recording_idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
@@ -350,7 +353,7 @@ class Worker(Thread):
                 index = discretization_reference_trajectory_indices_tensor[recording_idx][prediction]
                 predicted_indices.append(index)
             
-            median_resampled_values_reference_trajectory_fraction_dict = f.reference_feature_collection.median_trajectory_discretization_ranges[prediction]
+            median_resampled_values_reference_trajectory_fraction_dict = f.median_trajectory_discretization_ranges[prediction]
             feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
             progress_vector = map_progress_to_vector(feature_progress)
             progress_vectors.append(progress_vector)
@@ -388,69 +391,85 @@ class Worker(Thread):
         Returns:
             increase_reps (bool): Is true if a repetition was detected
         """
-        increase_reps = True
-        in_beginning_state = True
-        num_features_progressed = 0
-        num_features_progressed_too_far = 0
-        num_features_in_beginning_state = 0
 
+        total_increase_reps = False
+        
         def num_features_to_progress(num_features):
             # Simple formula to determine the number of feature that have to finish before exercise is finished
             return int(num_features/self.config['NUM_FEATURE_TO_PROGRESS_ALPHA'] + self.config['NUM_FEATURE_TO_PROGRESS_BETA'])
 
-        for f in features.values():
-            beginning_state = f.reference_feature_collection.median_beginning_state
-            number_of_dicided_state_changes_for_repetition = f.reference_feature_collection.number_of_dicided_state_changes
-            if f.state == beginning_state:
-                num_features_in_beginning_state += 1
-            else:
-                in_beginning_state = False
-            if f.progression < number_of_dicided_state_changes_for_repetition:
+        for idx in range(len(next(iter(features.values())).reference_recording_features)): # TODO: The iterator here is a little hacky, come up with something better here
+            increase_reps = True
+            in_beginning_state = True
+            num_features_progressed = 0
+            num_features_progressed_too_far = 0
+            num_features_in_beginning_state = 0
+
+            for feature in features.values():
+                f = feature.reference_recording_features[idx]
+                beginning_state = f.median_beginning_state
+                number_of_dicided_state_changes_for_repetition = f.number_of_dicided_state_changes
+                if f.state == beginning_state:
+                    num_features_in_beginning_state += 1
+                else:
+                    in_beginning_state = False
+                if f.progression < number_of_dicided_state_changes_for_repetition:
+                    increase_reps = False
+                elif f.progression > number_of_dicided_state_changes_for_repetition:
+                    num_features_progressed_too_far += 1
+                elif f.progression == number_of_dicided_state_changes_for_repetition:
+                    num_features_progressed += 1
+
+            # We calculate the number of features that have to have progressed in order to count this repetition
+            if num_features_progressed < num_features_to_progress(len(features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']: # TODO: This is a parameter to be tuned!!
                 increase_reps = False
-            elif f.progression > number_of_dicided_state_changes_for_repetition:
-                num_features_progressed_too_far += 1
-            elif f.progression == number_of_dicided_state_changes_for_repetition:
-                num_features_progressed += 1
 
-        # We calculate the number of features that have to have progressed in order to count this repetition
-        if num_features_progressed < num_features_to_progress(len(features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']: # TODO: This is a parameter to be tuned!!
-            increase_reps = False
+            # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
+            if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
+                self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+                self.bad_repetition_dict[idx] = True
 
-        # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
-        if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
-            self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
-            self.bad_repetition = True
+            # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
+            if in_beginning_state and self.bad_repetition_dict.get(idx, None):
+                self.log_with_metadata(logy.info, "Bad repetition aborted. Resetting feature progressions and repetition data...")
+                for feature in features.values():
+                    f = feature.reference_recording_features[idx]
+                    f.progression = 0
+                self.bad_repetition_dict[idx] = False
+                self.beginning_of_next_repetition_detected = True
+                self.skelleton_deltas_since_rep_start = []
+                
+                increase_reps = self.analyze_feature_progressions(features)
 
-        # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
-        if in_beginning_state and self.bad_repetition:
-            self.log_with_metadata(logy.info, "Bad repetition aborted. Resetting feature progressions and repetition data...")
-            for f in features.values():
-                f.progression = 0
-            self.bad_repetition = False
-            self.beginning_of_next_repetition_detected = True
-            self.skelleton_deltas_since_rep_start = []
-            
-            increase_reps = self.analyze_feature_progressions(features)
+            if self.bad_repetition_dict.get(idx, None):
+                increase_reps = False
 
-        if self.bad_repetition:
-            increase_reps = False
+            if increase_reps:
+                self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions...")
+                self.beginning_of_next_repetition_detected = True
 
-        if increase_reps:
-            self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions...")
-            for f in features.values():
-                f.progression = 0
-            self.beginning_of_next_repetition_detected = True
+            # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
+            if not in_beginning_state and self.beginning_of_next_repetition_detected:
+                self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+                self.skelleton_deltas_since_rep_start = []
+                self.beginning_of_next_repetition_detected = False
+                self.alignments_this_rep = np.array([])
+                self.progress_differences_this_rep = np.array([])
+                self.progress = 0
 
-        # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
-        if not in_beginning_state and self.beginning_of_next_repetition_detected:
-            self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
-            self.skelleton_deltas_since_rep_start = []
-            self.beginning_of_next_repetition_detected = False
-            self.alignments_this_rep = np.array([])
-            self.progress_differences_this_rep = np.array([])
-            self.progress = 0
+            # If one reference recording has detected a repetition, we let it count
+            if increase_reps:
+                rp.logerr(idx)
+            total_increase_reps = total_increase_reps or increase_reps
 
-        return increase_reps
+        if total_increase_reps:
+            for idx in range(len(next(iter(features.values())).reference_recording_features)):
+                for feature in features.values():
+                    f = feature.reference_recording_features[idx]
+                    f.progression = 0
+
+
+        return total_increase_reps
 
     def calculate_repetition_score(self): # TODO: This should be placed in the Algorithm file, but for now needs quite a lot of data from the Worker object so we leave it here
         """ This is a simple first approach to calculating the repetition score for a repetition. 

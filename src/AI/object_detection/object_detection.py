@@ -143,7 +143,7 @@ class ObjectDetectionPipeline:
 
                 yolo_data_results = self.detect_objects(images, resize_factors)
                 if len(yolo_data_results) == 0:
-                    return
+                    continue
 
                 for i, yolo_data in enumerate(yolo_data_results):
                     if yolo_data is None:

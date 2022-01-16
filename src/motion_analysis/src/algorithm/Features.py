@@ -107,17 +107,20 @@ class BaseFeature(ABC):
 
     def add_filter_value(self, value):
         try:
-            self.filtered_values = np.append(self.filtered_values, max(self.filtered_value - (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution), min(value, self.filtered_value + (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution))))
+            filtered_value = max(self.filtered_value - (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution), min(value, self.filtered_value + (self.config['TRUST_REGION_FILTER_FACTOR'] * self.resolution)))
         except IndexError as e:
-            self.filtered_values = np.append(self.filtered_values, value)
+            filtered_value = value
+        
+        self.filtered_values = np.append(self.filtered_values, filtered_value)
+        return filtered_value
 
     
     def update_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter):
         value = self.feature_extraction_method(pose, self.specification_dict, pose_definition_adapter)
-        self.add_filter_value(value)
+        filtered_value = self.add_filter_value(value)
 
         try:
-            discretized_values =  discretize_feature_values(value, self.discretized_values[-1], self.resolution)
+            discretized_values =  discretize_feature_values(filtered_value, self.discretized_values[-1], self.resolution)
             if discretized_values:
                 self.discretized_values = np.append(self.discretized_values, discretized_values)
         except IndexError:
@@ -283,21 +286,21 @@ class ReferenceRecordingFeature(BaseFeature):
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
+        self.resolution = self.range_of_motion * self.config['FEATURE_TRAJECTORY_RESOLUTION_FACTOR']
         self.lower_boundary = self.lowest_value + self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER']
         self.upper_boundary = self.highest_value - self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER']
+
+        for value in self.values:
+            self.add_filter_value(value) # We need the resolution for this
         
         first_reference_feature_value = self.values[0]
         self.beginning_state = decide_feature_state(first_reference_feature_value, FeatureState.FEATURE_UNDECIDED, self.lower_boundary, self.upper_boundary)
-
+        
         discrete_trajectories_tensor, \
             self.discretization_reference_trajectory_indices_tensor, \
                 self.hankel_tensor, \
                     self.feature_states_matrix, \
-                        self.scale, \
-                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.values], self.range_of_motion, self.lower_boundary, self.upper_boundary, self.config)
-        
-        for value in self.values:
-            self.add_filter_value(value)
+                        self.scale = compute_discrete_trajectories_hankel_matrices_and_feature_states([self.filtered_values], self.resolution, self.lower_boundary, self.upper_boundary, self.config)
 
         self.discretized_values = discrete_trajectories_tensor[0]
 
@@ -402,16 +405,21 @@ class Feature(BaseFeature):
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
+        self.resolution = self.range_of_motion * self.config['FEATURE_TRAJECTORY_RESOLUTION_FACTOR']
         self.lower_boundary = self.lowest_value + self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER']
         self.upper_boundary = self.highest_value - self.range_of_motion * self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER']
 
+        for value in self.values:
+            self.add_filter_value(value) # We need the resolution for this
+
+        filtered_trajectories = [rf.filtered_values for rf in self.reference_recording_features]
+            
         discrete_trajectories_tensor, \
             self.discretization_reference_trajectory_indices_tensor, \
                 self.hankel_tensor, \
                     self.feature_states_matrix, \
-                        self.scale, \
-                            self.resolution = compute_discrete_trajectories_hankel_matrices_and_feature_states(trajectories, self.range_of_motion, self.lower_boundary, self.upper_boundary, self.config)
-
+                        self.scale = compute_discrete_trajectories_hankel_matrices_and_feature_states(filtered_trajectories, self.resolution, self.lower_boundary, self.upper_boundary, self.config)
+        
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
 
@@ -540,7 +548,7 @@ def remove_jitter_from_trajectory(trajectory, _range):
     return trajectory
 
 
-def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, range_of_motion, lower_boundary, upper_boundary, config):
+def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, resolution, lower_boundary, upper_boundary, config):
     """Discritize a list of trajectories and compute their hankel tensor and features states.
 
     Args:
@@ -557,7 +565,6 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
         The scale that the discrete_trajectories_tensor was constructed with
     """
     # We compute the resampled values separately for each trajectory and turn them into hankel matrices
-    resolution = range_of_motion * config['FEATURE_TRAJECTORY_RESOLUTION_FACTOR']
     discrete_trajectories_tensor = []
     discretization_reference_trajectory_indices_tensor = [] # For every resampled value, we need an index to point us to the original pose
     hankel_tensor = [] # In the analysis algorithm, we need a hankel matrix of every resampled reference trajectory
@@ -596,7 +603,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
         feature_states_matrix.append(feature_states)
 
     hankel_tensor = np.asarray(hankel_tensor, dtype=object)
-    feature_states_matrix = np.asarray(feature_states_matrix, dtype=object)
+    feature_states_matrix = np.array(feature_states_matrix, dtype=object)
     discretization_reference_trajectory_indices_tensor = np.asarray(discretization_reference_trajectory_indices_tensor, dtype=object)
 
     scale = set()
@@ -606,7 +613,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
     scale = np.sort(list(scale))
     #TODO: Turn usage of this scale into a np.digitize(value, bins=scale) -type of difitization?
 
-    return discrete_trajectories_tensor, discretization_reference_trajectory_indices_tensor, hankel_tensor, feature_states_matrix, scale, resolution
+    return discrete_trajectories_tensor, discretization_reference_trajectory_indices_tensor, hankel_tensor, feature_states_matrix, scale
 
 
 def compute_median_feature_states(feature_states_matrix):
@@ -619,22 +626,28 @@ def compute_median_feature_states(feature_states_matrix):
         An array representing the median of feature states.
     """
     median_feature_states = list()
-    median_length = np.int(np.median([len(states) for states in feature_states_matrix]))
+    lens = [len(states) for states in feature_states_matrix]
+    values, counts = np.unique(lens, return_counts=True)
+    most_common_idx = np.argmax(counts)
+    median_length = lens[most_common_idx]
     for i in range(median_length):
-        median_feature_state = np.median(feature_states_matrix[:, i])
-        while not np.where(feature_states_matrix[:, i] != median_feature_state):
-            bad_feature_state_indices = np.where(feature_states_matrix[:, i] != median_feature_state)
+        feature_states_at_i = [np.take(feature_states_matrix[j], i,  mode='clip') for j in range(len(feature_states_matrix))]
+        values, counts = np.unique(feature_states_at_i, return_counts=True)
+        most_common_idx = np.argmax(counts)
+        median_feature_state = feature_states_at_i[most_common_idx]
+        while not np.where(feature_states_matrix != median_feature_state):
+            bad_feature_state_indices = np.where(feature_states_matrix != median_feature_state)
             # Modify trajectories that differ such that they stay useful
             for bad_feature_state_index in bad_feature_state_indices:
-                if len(feature_states_matrix[:, i][bad_feature_state_index]) > median_length:
+                if len(feature_states_matrix[bad_feature_state_index]) > median_length:
                     # We cut parts of longer state trajectories
-                    np.delete(feature_states_matrix[:, i], bad_feature_state_index)
-                elif len(feature_states_matrix[:, i][bad_feature_state_index]) == median_length:
+                    np.delete(feature_states_matrix, bad_feature_state_index)
+                elif len(feature_states_matrix[bad_feature_state_index]) == median_length:
                     # We change states in trajectories of adequate length
-                    feature_states_matrix[bad_feature_state_index, i] = median_feature_state
+                    feature_states_matrix[bad_feature_state_index][i] = median_feature_state
                 else:
                     # We add dummy parts to shorter state trajectories
-                    np.insert(feature_states_matrix[:, i], bad_feature_state_index, median_feature_state)
+                    np.insert(feature_states_matrix, bad_feature_state_index, median_feature_state)
         median_feature_states.append(median_feature_state)
     
     return np.array(median_feature_states)

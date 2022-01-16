@@ -40,7 +40,7 @@ def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarra
 
     Args:
         hankel_matrix: The hankel matrix of the reference trajectory.
-        feature_trajectory: The trajectory of a feature of the user that we want to compare against
+        feature_trajectory: The discretized trajectory of a feature of the user that we want to compare against
         max_weight_: Dictates how strong the newest values are weighted
         min_weight: Dictates how weak the oldest values are weighted
     
@@ -51,11 +51,13 @@ def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarra
     hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
     feature_trajectory_shortened = feature_trajectory[-comparing_length:]
     distances = np.power(hankel_matrix_shortened - feature_trajectory_shortened, 2)
+    distances = np.array(distances, dtype=np.float16) # CAREFUL! numpy creates an error if we do not use this seemingly useless line!
     fading_factor = np.geomspace(min_weight, max_weight, comparing_length) # Let older signals have less influence on the error
     errors = np.linalg.norm(distances * fading_factor, axis=1)
-    normed_errors = errors / sum(errors)
-
-    return normed_errors
+    _sum = np.sum(errors)
+    if _sum == 0.:
+        return errors # This should not happen, as an empty trajectory is useless
+    return errors / _sum
 
 
 def total_joint_difference(pose: np.ndarray, reference_pose: np.ndarray):

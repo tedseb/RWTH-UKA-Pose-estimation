@@ -13,6 +13,7 @@ Whatever information is gained is sent via outgoing message queues.
 import time
 from functools import lru_cache
 from threading import Thread
+from tkinter import E
 from traceback import format_exc
 from typing import NoReturn, Dict
 
@@ -143,8 +144,8 @@ class Worker(Thread):
         self.features = self.features_interface.get(spot_feature_key)
 
         self.progress = 0
-        self.alignments_this_rep = np.array([])
-        self.progress_differences_this_rep = np.array([])
+        self.alignments_this_rep = np.array([0])
+        self.progress_differences_this_rep = np.array([0])
         self.beginning_of_next_repetition_detected = False
 
         # The following lines fetch data that we need to analyse
@@ -171,6 +172,14 @@ class Worker(Thread):
                         for rf in f.reference_recording_features:
                             rf.update_pose(pose, self.pose_definition_adapter)
 
+                    # Calculate poses before we test for repetition increase, because that might erase feature values for this repetition!                    
+                    # Calculate a new reference pose mapping
+                    reference_pose, delta = self.calculate_reference_pose_mapping(pose)
+                    self.calculate_progress()
+
+                    self.skelleton_deltas_since_rep_start.append(delta)
+                    score = self.calculate_repetition_score()
+
                     # Compare joints with expert system data
                     increase_reps = self.analyze_feature_progressions(self.features)
 
@@ -192,20 +201,14 @@ class Worker(Thread):
                             for k in self.bad_repetition_dict.keys():
                                 self.bad_repetition_dict[k] = True
                             increase_reps = False
-                            self.alignments_this_rep = np.array([])
+                            self.alignments_this_rep = np.array([self.alignments_this_rep[-1]])
                         
                     # If the feature alignment in this repetitions is too high, we do not count the repetition
                     if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
                         logy.debug("Feature missalignment during this repetition. Repetition falsified.")
                         increase_reps = False
-                        self.alignments_this_rep = np.array([])
+                        self.alignments_this_rep = np.array([self.alignments_this_rep[-1]])
                     
-                    # Calculate a new reference pose mapping
-                    reference_pose, delta = self.calculate_reference_pose_mapping(pose)
-                    self.calculate_progress()
-
-                    self.skelleton_deltas_since_rep_start.append(delta)
-                    score = self.calculate_repetition_score()
 
                     update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector, score, self.last_score)
 
@@ -274,16 +277,15 @@ class Worker(Thread):
         progress_vectors = [[] for h in recordings]
 
         for h, f in self.features.items():
-            # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
-            discretization_reference_trajectory_indices_tensor = f.discretization_reference_trajectory_indices_tensor
-            hankel_tensor_2 = f.hankel_tensor
-            discrete_feature_trajectory = np.array(f.discretized_values)
-
-            for recording_idx, hankel_tensor_1 in enumerate(hankel_tensor_2):
-                errors = trajectory_distance(hankel_tensor_1, discrete_feature_trajectory, 100, 1)
+            for recording_idx, rf in enumerate(f.reference_recording_features):
+                # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
+                discretization_reference_trajectory_indices_tensor = rf.discretization_reference_trajectory_indices_tensor[0]
+                discrete_feature_trajectory = np.array(f.discretized_values)
+                errors = trajectory_distance(rf.hankel_tensor[0], discrete_feature_trajectory, 100, 1)
                 prediction = np.argmin(errors)
-                index = discretization_reference_trajectory_indices_tensor[recording_idx][prediction]
-                median_resampled_values_reference_trajectory_fraction_dict = f.reference_recording_features[recording_idx].median_trajectory_discretization_ranges[prediction]
+                index = discretization_reference_trajectory_indices_tensor[prediction]
+                median_resampled_values_reference_trajectory_fraction_dict = rf.median_trajectory_discretization_ranges[prediction]
+
                 feature_progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
                 progress_vector = map_progress_to_vector(feature_progress)
                 progress_vectors[recording_idx].append(progress_vector)
@@ -453,8 +455,8 @@ class Worker(Thread):
                 self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
                 self.skelleton_deltas_since_rep_start = []
                 self.beginning_of_next_repetition_detected = False
-                self.alignments_this_rep = np.array([])
-                self.progress_differences_this_rep = np.array([])
+                self.alignments_this_rep = np.array([self.alignments_this_rep[-1]])
+                self.progress_differences_this_rep = np.array([self.alignments_this_rep[-1]])
                 self.progress = 0
 
             # If one reference recording has detected a repetition, we let it count

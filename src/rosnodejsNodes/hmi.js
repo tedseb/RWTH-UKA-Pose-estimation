@@ -18,21 +18,21 @@ const { features } = require('process');
 if (args['ai'] == 'spin') {
   // Parameters and Constants:
   PORT = config.PORT;
-  ownpose_labels = config.matrabs_labels;
-  ownpose_used = config.matrabs_used;
-  ownpose = config.matrabs;
-  exercises_db_string = "metrabs_exercises"
-  recordings_db_string = "metrabs_recordings"
-  hmiExercises_db_string = "metrabs_hmiExercises"
-} else {
-  // Parameters and Constants:
-  PORT = config.PORT;
   ownpose_labels = config.ownpose_labels_spin;
   ownpose_used = config.ownpose_used_spin;
   ownpose = config.ownpose_spin;
   exercises_db_string = "spin_exercises"
   recordings_db_string = "spin_recordings"
   hmiExercises_db_string = "spin_hmiExercises"
+} else {
+  // Parameters and Constants:
+  PORT = config.PORT;
+  ownpose_labels = config.matrabs_labels;
+  ownpose_used = config.matrabs_used;
+  ownpose = config.matrabs;
+  exercises_db_string = "metrabs_exercises"
+  recordings_db_string = "metrabs_recordings"
+  hmiExercises_db_string = "metrabs_hmiExercises"
 }
 
 // Web App Code:

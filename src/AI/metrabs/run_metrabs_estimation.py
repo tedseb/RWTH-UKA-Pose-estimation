@@ -330,8 +330,15 @@ class PoseEstimator():
                     cropped_images[i] = cv2.copyMakeBorder(img, height_difference, 0, 0, 0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, (0, 0, 0))
 
             # Concatenate images and convert them to ROS image format to display them later in rviz
+            #logy.warn("######## \n" + str(cropped_images))
             img = cv2.hconcat(cropped_images)
-            image_message = self._opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
+            #logy.warn(str(img.shape))
+            try:
+                image_message = self._opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
+            except:
+                logy.warn("FAIL: " + str(cropped_images))
+                logy.warn(str(img.shape))
+                return
             pub = self._publisher_crop.get(camera_id)
             if pub is not None:
                 pub.publish(image_message)

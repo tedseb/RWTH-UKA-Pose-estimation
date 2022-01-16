@@ -142,8 +142,8 @@ class ObjectDetectionPipeline:
                     continue
 
                 yolo_data_results = self.detect_objects(images, resize_factors)
-                if yolo_data_results is None:
-                    return
+                if len(yolo_data_results) == 0:
+                    continue
 
                 for i, yolo_data in enumerate(yolo_data_results):
                     if yolo_data is None:
@@ -157,7 +157,7 @@ class ObjectDetectionPipeline:
                 logy.log_fps("object_detection_fps")
 
     @logy.trace_time("detect_objects")
-    def detect_objects(self, imgs : List, resize_factors : Tuple) -> YoloData:
+    def detect_objects(self, imgs : List, resize_factors : Tuple) -> List[YoloData]:
         '''
         This function uses the Yolo object detector. It predicts BBOX with label and confidence values.
         Returns:
@@ -177,7 +177,7 @@ class ObjectDetectionPipeline:
             result_np = results.xyxy[i].cpu().detach().numpy() #x1, y1, x2, y2
             if result_np.size == 0:
                 logy.warn_throttle("No Results in Object Detection", 1000)
-                yolo_data_results.append(None)
+                #yolo_data_results.append(None)
                 continue
 
             result_np[:, 0] *= resize_factors[i][0]

@@ -347,6 +347,7 @@ class MyClientProtocol(WebSocketClientProtocol):
         response["payload"] = payload
         response = str(json.dumps(response))
         response = response.encode('utf8')
+        logy.warn(response)
         #print("[REQUEST]:", response)
         try:
             self.sendMessage(response, False)

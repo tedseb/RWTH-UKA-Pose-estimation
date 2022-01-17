@@ -324,6 +324,7 @@ class Worker(Thread):
                             'video_frame_idx': recordings[idx]["video_frame_idcs"][reference_frame_index],
                         }
                 publish_message(self.showroom_video_reference_publisher, self.config['SHOW_ROOM_VIDEO_REFERENCE'], showroom_video_reference_message)
+                
 
             else: # Otherwise, we would like to compute a delta and see if this the reference pose matches the user pose etc.
                 # We calculate the differences between elements of our skelleton

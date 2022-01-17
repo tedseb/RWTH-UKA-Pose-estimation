@@ -30,6 +30,9 @@ const config = require('./config.json');
 var url = require('url');
 const ws_1 = __importStar(require("ws"));
 const args = require('minimist')(process.argv.slice(2));
+let isRos = args['rosnodejs'] === 'on';
+let ai = args['spin'];
+let isIsolated = args['isolated'] === 'on';
 let skeleton;
 // Skeleton Usage
 if (args['ai'] === 'spin') {
@@ -38,6 +41,7 @@ if (args['ai'] === 'spin') {
         labels: config.metrabs.labels,
         connections: config.metrabs.connections
     };
+    console.log(skeleton);
 }
 else {
     skeleton = {
@@ -68,6 +72,16 @@ wss.on('connection', (ws, req) => {
     let query = url_parts.query;
     console.log(query);
     websockets.push(ws);
+    if (isRos) {
+        ws.on('message', msg => {
+            const res = new rosTypes[0]({
+                stationID: msg['stationID'],
+                isActive: msg['isActive'],
+                exerciseName: msg['exerciseName']
+            });
+            publishers.forEach(publisher => publisher.publish(msg));
+        });
+    }
 });
 // WebServer
 app.use(express.static(process.cwd() + '/webtarget'));
@@ -75,25 +89,32 @@ app.get('/', (req, res) => {
     res.sendFile(process.cwd() + '/webtarget/index.html');
 });
 app.get('/api/connections/dict', (req, res) => {
-    console.log(skeleton);
+    console.log("WAS IST DAS HIER");
+    console.log(skeleton, "SKELETON HIER");
     res.send(skeleton);
 });
 app.get('/api/websocket/cache', (req, res) => {
     res.send(JSON.stringify(websocketCache));
 });
 if (args['isolated'] === 'on') {
-    console.log("isolated is on");
-    const loadWebsSoc = require('./websocket.json');
-    console.log(loadWebsSoc[0]);
-    console.log(typeof loadWebsSoc);
-    loadWebsSoc.forEach(delta => {
-        "Hi";
-        let todo = () => {
-            websockets.forEach(ws => ws.send(JSON.stringify(JSON.parse(delta['message']))));
-        };
-        let timer = setTimeout(todo, delta['date']);
-    });
+    console.log("running in isolated environment, reloading websocketCache");
+    const cached = require('./websocket.json');
+    let deployCacheOnWebSocket = () => {
+        cached.forEach((delta, index) => {
+            let todo = () => {
+                websockets.forEach(ws => ws.send(JSON.stringify(JSON.parse(delta['message']))));
+                if (index === cached.length - 1) {
+                    deployCacheOnWebSocket();
+                }
+                ;
+            };
+            setTimeout(todo, delta['date']);
+        });
+    };
+    deployCacheOnWebSocket();
 }
+let publishers = [];
+let rosTypes = [];
 // rosnodejs
 if (args['rosnodejs'] === 'on') {
     console.log("rosnodejs usage is on");
@@ -104,6 +125,8 @@ if (args['rosnodejs'] === 'on') {
     console.log(std_msgs);
     const int16 = std_msgs.msg.Int16;
     const StringMsg = std_msgs.msg.String;
+    const StationUsage = rosnodejs.require("backend").msg.StationUsage;
+    rosTypes.push(StationUsage);
     const skeleton_coordinates = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
         let pose = {};
         let bodyParts = msg.persons[0]['bodyParts'];
@@ -121,25 +144,34 @@ if (args['rosnodejs'] === 'on') {
         });
     });
     const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
-        //TODO: send message using websocket
-        let res = {
-            usage: 'reference_progress',
-            data: msg
-        };
-        websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
-        websockets.forEach(ws => {
-            ws.send(JSON.stringify(res));
-        });
-    });
-    const showroom_reference_frame = nh.subscribe('showroom_reference_frame', int16, (msg) => {
-        //TODO: send message using websocket
-        let res = {
-            usage: 'reference_frame',
-            data: msg
-        };
-        websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
         websockets.forEach(ws => {
             if (ws.readyState === ws_1.default.OPEN) {
+                let res = {
+                    usage: 'reference_progress',
+                    data: msg
+                };
+                websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
+                ws.send(JSON.stringify(res));
+            }
+        });
+    });
+    const showroom_reference_frame = nh.subscribe('showroom_video_reference', StringMsg, (msg) => {
+        let obj = JSON.parse(msg.data).data;
+        console.log(obj);
+        let res = {
+            usage: 'reference_frame',
+            data: obj.video_frame_idx
+        };
+        console.log(res);
+        websockets.forEach(ws => {
+            if (ws.readyState === ws_1.default.OPEN) {
+                let obj = JSON.parse(msg.data).data;
+                let res = {
+                    usage: 'reference_frame',
+                    data: obj.video_frame_idx
+                };
+                console.log(res);
+                websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
                 ws.send(JSON.stringify(res));
             }
         });
@@ -162,6 +194,8 @@ if (args['rosnodejs'] === 'on') {
             ;
         });
     });
+    const showroom_exercise = nh.advertise('/showroom_exercise', StationUsage);
+    publishers.push(showroom_exercise);
 }
 else {
     console.log("rosnodejs is off");

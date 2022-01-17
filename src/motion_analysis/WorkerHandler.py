@@ -110,7 +110,6 @@ class WorkerHandler(QThread):
                 return
 
             recordings = []
-            video_frame_idcs = []
             features_dict = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
             for exercise_data in exercise_data_list:
                 # See if we can reference this exercise with an optimize config
@@ -123,11 +122,11 @@ class WorkerHandler(QThread):
                 
                 feature_hashes_to_go = set(features_dict.keys())
 
-                recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+                recording, video_frame_idcs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
                 recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
-                recordings.append(recording)
-                video_frame_idcs.append(video_frame_idxs)
+                recording_dict = {"recording": recording, "video_frame_idcs": video_frame_idcs, "is_reference_recording": exercise_data.get("is_reference_recording", True), "video_file_name": exercise_data.get("video_file_name", None)}
+                recordings.append(recording_dict)
 
                 feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
 
@@ -157,7 +156,6 @@ class WorkerHandler(QThread):
 
             # Set all entries that are needed by the handler threads later on
             exercise_data['recordings'] = recordings
-            exercise_data['video_frame_idxs'] = video_frame_idcs
             del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
 

@@ -16,6 +16,7 @@ from threading import Thread
 from tkinter import E
 from traceback import format_exc
 from typing import NoReturn, Dict
+from collections import defaultdict
 
 import redis
 import numpy as np
@@ -92,8 +93,8 @@ class Worker(Thread):
         self.user_exercise_state_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_EXERCISE_STATES'], String, queue_size=1000)  
         self.user_correction_publisher = rp.Publisher(self.config['ROS_TOPIC_USER_CORRECTIONS'], String, queue_size=1000)
 
-        self.showroom_reference_progress_publisher = rp.Publisher(self.config['SHOW_ROOM_REFERENCE_PROGRESS_TOPIC'], Int16, queue_size=1000)
-        self.showroom_reference_frame_time_publisher =  rp.Publisher(self.config['SHOW_ROOM_REFERENCE_FRAME_TIME_TOPIC'], Int16, queue_size=1000)
+        self.showroom_reference_progress_publisher = rp.Publisher(self.config['SHOW_ROOM_REFERENCE_PROGRESS_TOPIC'], String, queue_size=1000)
+        self.showroom_video_reference_publisher =  rp.Publisher(self.config['SHOW_ROOM_VIDEO_REFERENCE'], String, queue_size=1000)
 
         self.predicted_skelleton_publisher = rp.Publisher("motion_analysis_reference_prediction", Person, queue_size=1000)
         self.user_skelleton_publisher = rp.Publisher("motion_analysis_input", Person, queue_size=1000)
@@ -144,9 +145,13 @@ class Worker(Thread):
         self.features = self.features_interface.get(spot_feature_key)
 
         self.progress = 0
-        self.alignments_this_rep = np.array([0])
         self.progress_differences_this_rep = np.array([0])
         self.beginning_of_next_repetition_detected = False
+        
+        def dummy_factory():
+            return np.array([0])
+        self.alignments_this_rep = defaultdict(dummy_factory)
+        
 
         # The following lines fetch data that we need to analyse
         self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions", "station_usage_hash"])
@@ -181,10 +186,12 @@ class Worker(Thread):
                     score = self.calculate_repetition_score()
 
                     # Compare joints with expert system data
-                    increase_reps = self.analyze_feature_progressions(self.features)
+                    increase_reps, recording_idx = self.analyze_feature_progressions(self.features)
 
                     # See if progress jumped around too much
                     if increase_reps:
+                        import rospy as rp
+                        rp.logerr(recording_idx)
                         negative_progress_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep < 0)]
                         positive_progresses_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep > 0)]
                         if len(negative_progress_differences) > 0:
@@ -196,18 +203,18 @@ class Worker(Thread):
                         else:
                             pos_median = 0
                         # We do not want negative and positive progresses to relate to each other as follows: (If they do, we mark this repetition as bad)
-                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences) and self.config ['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
-                            logy.debug("Progression was too jumpy in this repetition. Marking this repetition as bad...")
+                        if  neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA'] and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences):
+                            logy.warn("Progression was too jumpy in this repetition. Marking this repetition as bad...")
                             for k in self.bad_repetition_dict.keys():
                                 self.bad_repetition_dict[k] = True
                             increase_reps = False
-                            self.alignments_this_rep = np.array([self.alignments_this_rep[-1]])
+                            self.alignments_this_rep[recording_idx] = np.array([self.alignments_this_rep[recording_idx][-1]])
                         
                     # If the feature alignment in this repetitions is too high, we do not count the repetition
-                    if increase_reps and np.mean(self.alignments_this_rep) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
-                        logy.debug("Feature missalignment during this repetition. Repetition falsified.")
+                    if increase_reps and np.mean(self.alignments_this_rep[recording_idx]) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
+                        logy.warn("Feature missalignment during this repetition. Repetition falsified.")
                         increase_reps = False
-                        self.alignments_this_rep = np.array([self.alignments_this_rep[-1]])
+                        self.alignments_this_rep[recording_idx] = np.array([self.alignments_this_rep[recording_idx][-1]])
                     
 
                     update_gui_progress(self.gui, self.progress, self.alignment, self.progress_alignment_vector, score, self.last_score)
@@ -305,24 +312,30 @@ class Worker(Thread):
 
         # For a set of progress vectors (one set per recording), we look for the one that leads us to a minimal delta, i.e. the best expert pose
         for idx, vectors in enumerate(progress_vectors):
-            recording = recordings[idx]
+            recording = recordings[idx]['recording']
             progress_estimate, self.alignment, self.progress_alignment_vector = map_vectors_to_progress_and_alignment(vectors=vectors)
-            self.alignments_this_rep = np.append(self.alignments_this_rep, self.alignment)
+            self.alignments_this_rep[idx] = np.append(self.alignments_this_rep[idx], self.alignment)
             reference_frame_index = int(len(recording) * progress_estimate)
             reference_pose = recording[reference_frame_index]
 
-            # We calculate the differences between elements of our skelleton
-            # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
-            delta = self.pose_definition_adapter.pose_delta(pose, reference_pose)
+            if not recordings[idx]["is_reference_recording"]:
+                showroom_video_reference_message = {
+                            'video_file_name': recordings[idx]["video_file_name"],
+                            'video_frame_idx': recordings[idx]["video_frame_idcs"][reference_frame_index],
+                        }
+                publish_message(self.showroom_video_reference_publisher, self.config['SHOW_ROOM_VIDEO_REFERENCE'], showroom_video_reference_message)
 
-            if delta < smallest_delta:
-                smallest_delta = delta
-                best_reference_pose = reference_pose
-                best_reference_frame_index = reference_frame_index
-                best_reference_recording_idx = idx
+            else: # Otherwise, we would like to compute a delta and see if this the reference pose matches the user pose etc.
+                # We calculate the differences between elements of our skelleton
+                # TODO: Next step: Calculate difference between elements that we put emphasis on in expert system! (Like certain angles or joints!)
+                delta = self.pose_definition_adapter.pose_delta(pose, reference_pose)
+
+                if delta < smallest_delta:
+                    smallest_delta = delta
+                    best_reference_pose = reference_pose
+                    best_reference_frame_index = reference_frame_index
+                    best_reference_recording_idx = idx
         
-        self.showroom_reference_frame_time_publisher.publish(self.spot_info_dict["exercise_data"]["video_frame_idxs"][best_reference_recording_idx][best_reference_frame_index])
-
         return best_reference_pose, smallest_delta
 
     @logy.trace_time("calculate_reference_pose_mapping", period=100)
@@ -395,6 +408,7 @@ class Worker(Thread):
         """
 
         total_increase_reps = False
+        rep_recording_idx = None
         
         def num_features_to_progress(num_features):
             # Simple formula to determine the number of feature that have to finish before exercise is finished
@@ -441,8 +455,6 @@ class Worker(Thread):
                 self.beginning_of_next_repetition_detected = True
                 self.skelleton_deltas_since_rep_start = []
                 
-                increase_reps = self.analyze_feature_progressions(features)
-
             if self.bad_repetition_dict.get(idx, None):
                 increase_reps = False
 
@@ -455,13 +467,13 @@ class Worker(Thread):
                 self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
                 self.skelleton_deltas_since_rep_start = []
                 self.beginning_of_next_repetition_detected = False
-                self.alignments_this_rep = np.array([self.alignments_this_rep[-1]])
-                self.progress_differences_this_rep = np.array([self.alignments_this_rep[-1]])
+                self.alignments_this_rep[idx] = np.array([self.alignments_this_rep[idx][-1]])
+                self.progress_differences_this_rep = np.array([self.alignments_this_rep[idx][-1]])
                 self.progress = 0
 
             # If one reference recording has detected a repetition, we let it count
-            if increase_reps:
-                rp.logerr(idx)
+            if increase_reps and not total_increase_reps:
+                rep_recording_idx = idx
             total_increase_reps = total_increase_reps or increase_reps
 
         if total_increase_reps:
@@ -469,9 +481,11 @@ class Worker(Thread):
                 for feature in features.values():
                     f = feature.reference_recording_features[idx]
                     f.progression = 0
+                    if idx != rep_recording_idx:
+                        self.bad_repetition_dict[idx] = True
 
 
-        return total_increase_reps
+        return total_increase_reps, rep_recording_idx
 
     def calculate_repetition_score(self): # TODO: This should be placed in the Algorithm file, but for now needs quite a lot of data from the Worker object so we leave it here
         """ This is a simple first approach to calculating the repetition score for a repetition. 

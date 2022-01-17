@@ -30,9 +30,9 @@ if (args['ai'] == 'spin') {
   ownpose_labels = config.matrabs_labels;
   ownpose_used = config.matrabs_used;
   ownpose = config.matrabs;
-  exercises_db_string = "metrabs_exercises"
-  recordings_db_string = "metrabs_recordings"
-  hmiExercises_db_string = "metrabs_hmiExercises"
+  exercises_db_string = "exercises"
+  recordings_db_string = "recordings"
+  hmiExercises_db_string = "hmiExercises"
 }
 
 // Web App Code:

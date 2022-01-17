@@ -135,9 +135,9 @@ class WorkerHandler(QThread):
                         if feature_hash in feature_hashes_to_go:
                             feature_hashes_to_go.remove(feature_hash)
                         else:
-                            logy.error("Multiple recordings for one exercise have different feature specifications! Aborting recording analysis.")
+                            logy.warn("Multiple recordings for one exercise have different feature specifications!")
                     elif feature_hashes_to_go: # This means that the first recording has already initialized the reference features and we have feature hashes to go, but another recording omits the feature
-                        logy.error("Multiple recordings for one exercise have different feature specifications! Aborting recording analysis.")
+                        logy.warn("Multiple recordings for one exercise have different feature specifications!")
                     
                     # On anaylsis of the first recording, we add the reference feature collection
                     if not features_dict.get(feature_hash):

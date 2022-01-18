@@ -48,8 +48,8 @@ GUI_FPS: 25
 
 # 0 means that user has to reach angle at least as high/low as performed by expert
 # 1 means that the boundaries are swapped (and makes no sense)
-REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER: 0.31
-REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER: 0.31
+REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER: 0.41
+REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER: 0.41
 
 # The final feature trajectory resolution is: FEATURE_TRAJECTORY_RESOLUTION_FACTOR  * range of motion of a single feature
 FEATURE_TRAJECTORY_RESOLUTION_FACTOR: 0.1
@@ -67,7 +67,7 @@ JUMPY_PROGRESS_BETA: 4
 
 TRUST_REGION_FILTER_FACTOR: 0.5
 
-ENABLE_FEATURE_ALIGNMENT_CHECK: True
+ENABLE_FEATURE_ALIGNMENT_CHECK: False
 MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT: 0.80
 
 # We use this fading factor for a exponentially dying error 

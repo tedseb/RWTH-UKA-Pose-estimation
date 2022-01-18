@@ -216,8 +216,8 @@ class Worker(Thread):
                         logy.debug("Feature missalignment for recording " + str(recording_idx) + "  during this repetition. Repetition falsified.")
                         increase_reps = False
                         self.alignments_this_rep[recording_idx] = np.array([self.alignments_this_rep[recording_idx][-1]])
-                    
-                    update_gui_progress(self.gui, self.progress, np.mean([alignments for alignments in self.alignments_this_rep]), self.progress_alignment_vector, score, self.last_score)
+
+                    update_gui_progress(self.gui, self.progress, np.mean([np.mean(alignments) for alignments in self.alignments_this_rep.values()]), self.progress_alignment_vector, score, self.last_score)
 
                     # Send info back to App
                     if increase_reps:
@@ -262,8 +262,15 @@ class Worker(Thread):
         self.spot_metadata_interface.set_spot_info_dict(spot_info_key, self.spot_info_dict)
         
         self.spot_info_dict = None
+        self.skelleton_deltas_since_rep_start = []
         self.features = {}
-        self.bad_repetition = False
+        self.last_score = 0
+
+        self.t = None
+        self.progress = 0
+        self.progress_velocity = 0
+        self.progress_alignment_vector = None
+        self.bad_repetition_dict = {}
 
     @logy.trace_time("calculate_reference_pose_mapping", period=100)
     def calculate_reference_pose_mapping(self, pose) -> np.ndarray:

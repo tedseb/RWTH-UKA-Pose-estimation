@@ -18,14 +18,12 @@ from traceback import format_exc
 from typing import NoReturn, Dict
 from collections import defaultdict
 
-import redis
 import numpy as np
 import rospy as rp
 from std_msgs.msg import String, Int16
 from unittest import mock
 from scipy import signal
 import logy
-import pandas as pd
 
 from backend.msg import Person
 
@@ -154,7 +152,6 @@ class Worker(Thread):
         def false_factory():
             return False
         self.beginning_of_next_repetition_detected = defaultdict(false_factory)
-        
 
         # The following lines fetch data that we need to analyse
         self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions", "station_usage_hash"])
@@ -332,7 +329,6 @@ class Worker(Thread):
                             'video_frame_idx': recordings[idx]["video_frame_idcs"][reference_frame_index],
                         }
                 publish_message(self.showroom_video_reference_publisher, self.config['SHOW_ROOM_VIDEO_REFERENCE'], showroom_video_reference_message)
-                
 
             else: # Otherwise, we would like to compute a delta and see if this the reference pose matches the user pose etc.
                 # We calculate the differences between elements of our skelleton
@@ -415,12 +411,12 @@ class Worker(Thread):
 
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
-                self.log_with_metadata(logy.error, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+                self.log_with_metadata(logy.info, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition_dict[idx] = True
 
             # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
             if in_beginning_state and self.bad_repetition_dict.get(idx, None):
-                self.log_with_metadata(logy.error, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
+                self.log_with_metadata(logy.debug, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
                 for feature in self.features.values():
                     f = feature.reference_recording_features[idx]
                     f.progression = 0
@@ -432,12 +428,12 @@ class Worker(Thread):
                 increase_reps = False
 
             if increase_reps:
-                self.log_with_metadata(logy.error, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
+                self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
                 self.beginning_of_next_repetition_detected[idx] = True
 
             # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
             if not in_beginning_state and self.beginning_of_next_repetition_detected[idx]:
-                self.log_with_metadata(logy.error, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
+                self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
                 self.skelleton_deltas_since_rep_start = []
                 self.beginning_of_next_repetition_detected[idx] = False
                 self.alignments_this_rep[idx] = np.array([self.alignments_this_rep[idx][-1]])
@@ -446,7 +442,6 @@ class Worker(Thread):
 
             # If one reference recording has detected a repetition, we let it count
             if increase_reps and not total_increase_reps:
-                rp.logerr(idx)
                 rep_recording_idx = idx
             total_increase_reps = total_increase_reps or increase_reps
 

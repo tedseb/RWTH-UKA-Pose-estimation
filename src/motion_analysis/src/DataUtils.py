@@ -6,7 +6,6 @@ This file contains a code snippets that have nowhere else to go.
 """
 
 import json
-import rospy as rp
 import logy
 
 
@@ -16,5 +15,4 @@ def publish_message(publisher, topic, data):
         message = json.dumps({'topic': topic, 'data': data})
         publisher.publish(message)
     except Exception as e:
-        rp.logerr(e)
-        logy.debug_throttle("Issue sending message" + str(message) + " to REST API. Error: " + str(e))
+        logy.error_throttle("Issue sending message" + str(message) + " to REST API. Error: " + str(e))

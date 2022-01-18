@@ -113,12 +113,15 @@ class WorkerHandler(QThread):
             features_dict = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
             for exercise_data in exercise_data_list:
                 # See if we can reference this exercise with an optimize config
-                optimized_config = exercise_data.get("optimized_config", None)
-                if optimized_config:
-                    config = optimized_config
+                if not self.config.get("FORCE_CONFIG", False):
+                    optimized_config = exercise_data.get("optimized_config", None)
+                    if optimized_config:
+                        config = optimized_config
+                    else:
+                        config = self.config
+                        logy.warn_throttle("One or more exercise data entries with are without optimized config. Optimize for this exercise or import data to exercise DB!", throttel_time_ms=500)
                 else:
                     config = self.config
-                    logy.warn_throttle("One or more exercise data entries with are without optimized config. Optimize for this exercise or import data to exercise DB!", throttel_time_ms=500)
                 
                 feature_hashes_to_go = set(features_dict.keys())
 

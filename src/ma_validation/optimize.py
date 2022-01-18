@@ -52,6 +52,7 @@ def validation_objective_function(hps):
         with open(STANDARD_CONFIG_PATH, 'r') as infile:
             config = yaml.safe_load(infile)
         config.update(hps)
+        config.update({"FORCE_CONFIG": True})
 
         with open(VALIDATION_TEMP_CONFIG_PATH, 'w') as outfile:
             yaml.dump(config, outfile)
@@ -170,8 +171,8 @@ if __name__ == '__main__':
         }
         ]),
 
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.3, 0.45),
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.3, 0.45),
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.1, 0.45),
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.1, 0.45),
         'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.uniform('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', 0.03, 0.3),
         'REMOVE_JITTER_RANGE': hp.quniform('REMOVE_JITTER_RANGE', 2, 7, 1),
         'JUMPY_PROGRESS_ALPHA': hp.uniform('JUMPY_PROGRESS_ALPHA', 2, 4),
@@ -181,7 +182,7 @@ if __name__ == '__main__':
         
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=12)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=25)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

@@ -532,7 +532,7 @@ def remove_jitter_from_trajectory(trajectory, _range):
     while not done:
         done = True
         try:
-            for i in range(1, _range):
+            for i in range(1, int(_range)):
                 for j in range(0, len(trajectory) - 3 * i):
                     window = trajectory[j: j + 2 * i]
                     if np.array_equal(window[:i], window[2 * i:]):

@@ -288,8 +288,6 @@ class Worker(Thread):
 
         for h, f in self.features.items(): # Iterate over features
             for recording_idx, rf in enumerate(f.reference_recording_features): # Iterate over reference features
-                if not recordings[recording_idx]["is_reference_recording"]:
-                    continue
                 # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
                 discretization_reference_trajectory_indices_tensor = rf.discretization_reference_trajectory_indices_tensor[0]
                 discrete_feature_trajectory = np.array(f.discretized_values)

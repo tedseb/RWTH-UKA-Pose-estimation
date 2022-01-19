@@ -27,6 +27,7 @@ We define our numpy arrays representing skelletons as follows:
 ]
 """
 
+import rospy as rp
 import collections
 from enum import IntEnum
 from collections import deque
@@ -575,7 +576,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
         last_feature_state = decide_feature_state(last_values[-1], None, lower_boundary, upper_boundary)
         discrete_values = np.array(last_values)
         feature_trajectory_indices = [0]
-        feature_states = list()
+        feature_states = [last_feature_state]
         for index, value in enumerate(trajectory):
             already_discritized_values = discretize_feature_values(value, last_values[-1], resolution)
             if already_discritized_values:
@@ -599,7 +600,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
         feature_trajectory_indices = np.array(feature_trajectory_indices, dtype=np.int16)
         discretization_reference_trajectory_indices_tensor.append(feature_trajectory_indices)
 
-        feature_states = np.array(feature_states, dtype=np.int8)
+        feature_states = np.array(feature_states)
         feature_states_matrix.append(feature_states)
 
     hankel_tensor = np.asarray(hankel_tensor, dtype=object)
@@ -629,7 +630,7 @@ def compute_median_feature_states(feature_states_matrix):
     lens = [len(states) for states in feature_states_matrix]
     values, counts = np.unique(lens, return_counts=True)
     most_common_idx = np.argmax(counts)
-    median_length = lens[most_common_idx]
+    median_length = values[most_common_idx]
     for i in range(median_length):
         feature_states_at_i = [np.take(feature_states_matrix[j], i,  mode='clip') for j in range(len(feature_states_matrix))]
         values, counts = np.unique(feature_states_at_i, return_counts=True)
@@ -649,7 +650,7 @@ def compute_median_feature_states(feature_states_matrix):
                     # We add dummy parts to shorter state trajectories
                     np.insert(feature_states_matrix, bad_feature_state_index, median_feature_state)
         median_feature_states.append(median_feature_state)
-    
+
     return np.array(median_feature_states)
 
 

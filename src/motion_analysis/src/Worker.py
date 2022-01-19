@@ -18,14 +18,12 @@ from traceback import format_exc
 from typing import NoReturn, Dict
 from collections import defaultdict
 
-import redis
 import numpy as np
 import rospy as rp
 from std_msgs.msg import String, Int16
 from unittest import mock
 from scipy import signal
 import logy
-import pandas as pd
 
 from backend.msg import Person
 
@@ -146,16 +144,14 @@ class Worker(Thread):
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
 
-        self.progress_differences_this_rep = np.array([0])
-        
         def array_factory():
             return np.array([0])
         self.alignments_this_rep = defaultdict(array_factory)
+        self.progress_differences_this_rep = defaultdict(array_factory)
         
         def false_factory():
             return False
         self.beginning_of_next_repetition_detected = defaultdict(false_factory)
-        
 
         # The following lines fetch data that we need to analyse
         self.spot_info_dict = self.spot_metadata_interface.get_spot_info_dict(spot_info_key, ["exercise_data_hash", "start_time", "repetitions", "station_usage_hash"])
@@ -183,18 +179,18 @@ class Worker(Thread):
 
                     # Calculate poses before we test for repetition increase, because that might erase feature values for this repetition!                    
                     # Calculate a new reference pose mapping
-                    reference_pose, delta = self.calculate_reference_pose_mapping(pose)
+                    reference_pose, delta = self.compute_reference_pose_mapping_data(pose)
 
                     self.skelleton_deltas_since_rep_start.append(delta)
                     score = self.calculate_repetition_score()
 
                     # Compare joints with expert system data
-                    increase_reps, recording_idx = self.analyze_feature_progressions()
+                    increase_reps, increase_recording_idx = self.detect_repetition()
 
                     # See if progress jumped around too much
                     if increase_reps:
-                        negative_progress_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep < 0)]
-                        positive_progresses_differences = self.progress_differences_this_rep[np.where(self.progress_differences_this_rep > 0)]
+                        negative_progress_differences = self.progress_differences_this_rep[increase_recording_idx][np.where(self.progress_differences_this_rep[increase_recording_idx] < 0)]
+                        positive_progresses_differences = self.progress_differences_this_rep[increase_recording_idx][np.where(self.progress_differences_this_rep[increase_recording_idx] > 0)]
                         if len(negative_progress_differences) > 0:
                             neg_mean = abs(np.mean(negative_progress_differences))
                         else:
@@ -209,13 +205,13 @@ class Worker(Thread):
                             for k in self.bad_repetition_dict.keys():
                                 self.bad_repetition_dict[k] = True
                             increase_reps = False
-                            self.alignments_this_rep[recording_idx] = np.array([self.alignments_this_rep[recording_idx][-1]])
+                            self.alignments_this_rep[increase_recording_idx] = np.array([self.alignments_this_rep[increase_recording_idx][-1]])
                         
                     # If the feature alignment in this repetitions is too high, we do not count the repetition
-                    if increase_reps and np.mean(self.alignments_this_rep[recording_idx]) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
-                        logy.debug("Feature missalignment for recording " + str(recording_idx) + "  during this repetition. Repetition falsified.")
+                    if increase_reps and np.mean(self.alignments_this_rep[increase_recording_idx]) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
+                        logy.debug("Feature missalignment for recording " + str(increase_recording_idx) + "  during this repetition. Repetition falsified.")
                         increase_reps = False
-                        self.alignments_this_rep[recording_idx] = np.array([self.alignments_this_rep[recording_idx][-1]])
+                        self.alignments_this_rep[increase_recording_idx] = np.array([self.alignments_this_rep[increase_recording_idx][-1]])
 
                     update_gui_progress(self.gui, self.progress, np.mean([np.mean(alignments) for alignments in self.alignments_this_rep.values()]), self.progress_alignment_vector, score, self.last_score)
 
@@ -272,12 +268,12 @@ class Worker(Thread):
         self.progress_alignment_vector = None
         self.bad_repetition_dict = {}
 
-    @logy.trace_time("calculate_reference_pose_mapping", period=100)
-    def calculate_reference_pose_mapping(self, pose) -> np.ndarray:
+    @logy.trace_time("compute_reference_pose_mapping_data", period=100)
+    def compute_reference_pose_mapping_data(self, pose) -> np.ndarray:
         """Calculate the pose in the reference trajectory that we think our user is most probably in.
 
         This method measures the similarity between the recent feature_trajectory of a user and the vectors
-        inside separate hankel matrices per recording.
+        inside separate hankel matrices per recording. Apart from the reference pose, progress and other data is computed.
 
         Returns:
             pose: The reference pose that we think the user is in
@@ -290,8 +286,8 @@ class Worker(Thread):
         median_resampled_values_reference_trajectory_fractions = [[] for h in recordings]
         progress_vectors = [[] for h in recordings]
 
-        for h, f in self.features.items():
-            for recording_idx, rf in enumerate(f.reference_recording_features):
+        for h, f in self.features.items(): # Iterate over features
+            for recording_idx, rf in enumerate(f.reference_recording_features): # Iterate over reference features
                 if not recordings[recording_idx]["is_reference_recording"]:
                     continue
                 # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
@@ -335,7 +331,6 @@ class Worker(Thread):
                             'video_frame_idx': recordings[idx]["video_frame_idcs"][reference_frame_index],
                         }
                 publish_message(self.showroom_video_reference_publisher, self.config['SHOW_ROOM_VIDEO_REFERENCE'], showroom_video_reference_message)
-                
 
             else: # Otherwise, we would like to compute a delta and see if this the reference pose matches the user pose etc.
                 # We calculate the differences between elements of our skelleton
@@ -366,7 +361,7 @@ class Worker(Thread):
             self.progress_velocity = 0
 
         self.progress = (self.progress + (self.t - self.last_t) * self.progress_velocity) % 1
-        self.progress_differences_this_rep = np.append(self.progress_differences_this_rep, self.progress - last_progress)
+        self.progress_differences_this_rep[idx] = np.append(self.progress_differences_this_rep[idx], self.progress - last_progress)
 
         self.showroom_reference_progress_publisher.publish(int(self.progress * 100))
 
@@ -375,8 +370,8 @@ class Worker(Thread):
         return best_reference_pose, smallest_delta
 
 
-    @logy.trace_time("analyze_feature_progressions", period=100)
-    def analyze_feature_progressions(self) -> Tuple[bool, bool, dict, Any]:
+    @logy.trace_time("detect_repetition", period=100)
+    def detect_repetition(self) -> Tuple[bool, bool, dict, Any]:
         """Detect done and bad repetitions by analyzing the feature's progressions.
             
         Returns:
@@ -421,12 +416,12 @@ class Worker(Thread):
 
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
-                self.log_with_metadata(logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+                self.log_with_metadata(logy.info, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition_dict[idx] = True
 
             # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
             if in_beginning_state and self.bad_repetition_dict.get(idx, None):
-                self.log_with_metadata(logy.info, "Bad repetition aborted. Resetting feature progressions and repetition data...")
+                self.log_with_metadata(logy.debug, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
                 for feature in self.features.values():
                     f = feature.reference_recording_features[idx]
                     f.progression = 0
@@ -438,16 +433,16 @@ class Worker(Thread):
                 increase_reps = False
 
             if increase_reps:
-                self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions...")
+                self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
                 self.beginning_of_next_repetition_detected[idx] = True
 
             # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
             if not in_beginning_state and self.beginning_of_next_repetition_detected[idx]:
-                self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition...")
+                self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
                 self.skelleton_deltas_since_rep_start = []
                 self.beginning_of_next_repetition_detected[idx] = False
                 self.alignments_this_rep[idx] = np.array([self.alignments_this_rep[idx][-1]])
-                self.progress_differences_this_rep = np.array([self.alignments_this_rep[idx][-1]])
+                self.progress_differences_this_rep[idx] = np.array([self.alignments_this_rep[idx][-1]])
                 self.progress = 0
 
             # If one reference recording has detected a repetition, we let it count

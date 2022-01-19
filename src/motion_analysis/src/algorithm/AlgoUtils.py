@@ -193,12 +193,12 @@ class PoseDefinitionAdapter():
         already_added_nodes.add(self.body_build_order[0][0])
         for joint in self.body_build_order:
             if joint[0] not in already_added_nodes:
-                rp.logerr(f"ERROR: Index {joint[0]} (first index) was not added in the Set before")
+                raise ValueError(f"ERROR: Index {joint[0]} (first index) was not added in the Set before")
             if joint[1] in already_added_nodes:
-                rp.logerr(f"ERROR: Index {joint[0]} (second index) was added in the Set before")
+                raise ValueError(f"ERROR: Index {joint[0]} (second index) was added in the Set before")
             already_added_nodes.add(joint[1])
-        rp.logerr(f"Total number of joints: {len(already_added_nodes)}")
-        rp.logerr(already_added_nodes)
+        print(f"Total number of joints: {len(already_added_nodes)}")
+        print(already_added_nodes)
 
     def normalize_skelleton(self, input_skelleton, is_pelvis_center=True):
         """Utility method to normalize size, position and orientation of skelleton."""

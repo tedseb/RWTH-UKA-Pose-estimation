@@ -292,6 +292,8 @@ class Worker(Thread):
 
         for h, f in self.features.items():
             for recording_idx, rf in enumerate(f.reference_recording_features):
+                if not recordings[recording_idx]["is_reference_recording"]:
+                    continue
                 # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
                 discretization_reference_trajectory_indices_tensor = rf.discretization_reference_trajectory_indices_tensor[0]
                 discrete_feature_trajectory = np.array(f.discretized_values)
@@ -327,7 +329,7 @@ class Worker(Thread):
             reference_frame_index = int(len(recording) * progress_estimate)
             reference_pose = recording[reference_frame_index]
 
-            if not recordings[idx]["is_reference_recording"]:
+            if recordings[idx].get("video_file_name", False):
                 showroom_video_reference_message = {
                             'video_file_name': recordings[idx]["video_file_name"],
                             'video_frame_idx': recordings[idx]["video_frame_idcs"][reference_frame_index],
@@ -383,12 +385,15 @@ class Worker(Thread):
         """
         total_increase_reps = False
         rep_recording_idx = None
+        recordings = self.spot_info_dict['exercise_data']['recordings']
         
         def num_features_to_progress(num_features):
             # Simple formula to determine the number of feature that have to finish before exercise is finished
             return int(num_features/self.config['NUM_FEATURE_TO_PROGRESS_ALPHA'] + self.config['NUM_FEATURE_TO_PROGRESS_BETA'])
 
         for idx in range(len(next(iter(self.features.values())).reference_recording_features)): # TODO: The iterator here is a little hacky and only works if all recordings use the same features, come up with something better here
+            if not recordings[idx]["is_reference_recording"]:
+                continue
             increase_reps = True
             in_beginning_state = True
             num_features_progressed = 0

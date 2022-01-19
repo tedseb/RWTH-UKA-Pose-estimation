@@ -419,7 +419,7 @@ class Feature(BaseFeature):
                 self.hankel_tensor, \
                     self.feature_states_matrix, \
                         self.scale = compute_discrete_trajectories_hankel_matrices_and_feature_states(filtered_trajectories, self.resolution, self.lower_boundary, self.upper_boundary, self.config)
-        
+
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(self.feature_states_matrix)
 

@@ -370,7 +370,11 @@ class Worker(Thread):
 
     @logy.trace_time("detect_repetition", period=100)
     def detect_repetition(self) -> Tuple[bool, bool, dict, Any]:
-        """Detect done and bad repetitions by analyzing the feature's progressions.
+        """Detect "dones" and bad repetitions by analyzing the feature's progressions.
+
+        This method assumes that we have already added the current skelleton to all features and calculated filtered values and such.
+        Features calculate if their boundaries have been crossed and we check this here for all features and all recordings
+        to dicide wether we count a repetition or not.
             
         Returns:
             increase_reps (bool): Is true if a repetition was detected
@@ -382,7 +386,7 @@ class Worker(Thread):
         
         def num_features_to_progress(num_features):
             # Simple formula to determine the number of feature that have to finish before exercise is finished
-            return int(num_features/self.config['NUM_FEATURE_TO_PROGRESS_ALPHA'] + self.config['NUM_FEATURE_TO_PROGRESS_BETA'])
+            return int((num_features/self.config['NUM_FEATURE_TO_PROGRESS_ALPHA']) + self.config['NUM_FEATURE_TO_PROGRESS_BETA'])
 
         for idx in range(len(next(iter(self.features.values())).reference_recording_features)): # TODO: The iterator here is a little hacky and only works if all recordings use the same features, come up with something better here
             if not recordings[idx]["is_reference_recording"]:
@@ -397,6 +401,7 @@ class Worker(Thread):
                 f = feature.reference_recording_features[idx]
                 beginning_state = f.median_beginning_state
                 number_of_dicided_state_changes_for_repetition = f.number_of_dicided_state_changes
+
                 if f.state == beginning_state:
                     num_features_in_beginning_state += 1
                 else:
@@ -407,19 +412,19 @@ class Worker(Thread):
                     num_features_progressed_too_far += 1
                 elif f.progression == number_of_dicided_state_changes_for_repetition:
                     num_features_progressed += 1
-
+            
             # We calculate the number of features that have to have progressed in order to count this repetition
             if num_features_progressed < num_features_to_progress(len(self.features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']: # TODO: This is a parameter to be tuned!!
                 increase_reps = False
 
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
-                self.log_with_metadata(logy.info, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+                self.log_with_metadata(logy.error, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition_dict[idx] = True
 
             # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
-            if in_beginning_state and self.bad_repetition_dict.get(idx, None):
-                self.log_with_metadata(logy.debug, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
+            if in_beginning_state and self.bad_repetition_dict.get(idx, False):
+                self.log_with_metadata(logy.error, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
                 for feature in self.features.values():
                     f = feature.reference_recording_features[idx]
                     f.progression = 0
@@ -427,16 +432,16 @@ class Worker(Thread):
                 self.beginning_of_next_repetition_detected[idx] = True
                 self.skelleton_deltas_since_rep_start = []
                 
-            if self.bad_repetition_dict.get(idx, None):
+            if self.bad_repetition_dict.get(idx, False):
                 increase_reps = False
 
             if increase_reps:
-                self.log_with_metadata(logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
+                self.log_with_metadata(logy.error, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
                 self.beginning_of_next_repetition_detected[idx] = True
 
             # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
             if not in_beginning_state and self.beginning_of_next_repetition_detected[idx]:
-                self.log_with_metadata(logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
+                self.log_with_metadata(logy.error, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
                 self.skelleton_deltas_since_rep_start = []
                 self.beginning_of_next_repetition_detected[idx] = False
                 self.alignments_this_rep[idx] = np.array([self.alignments_this_rep[idx][-1]])
@@ -460,27 +465,22 @@ class Worker(Thread):
         return total_increase_reps, rep_recording_idx
 
     def calculate_repetition_score(self): # TODO: This should be placed in the Algorithm file, but for now needs quite a lot of data from the Worker object so we leave it here
-        """ This is a simple first approach to calculating the repetition score for a repetition. 
-        
-        TODO: Values have been chosen with few shots and should be improved heuristically! 
+        """ Calculates the current repetition score.
+
+        This method implements a nonlinear function that maps a set of skelleton deltas to a score between 0 and 100.
+        The parameters for this can be configured and have been heuristically chosen by me, Artur.
+
+        Returns:
+            score (int): The score, a number between 0 and 100
         """
         x = self.skelleton_deltas_since_rep_start
-        alpha = 1/40 # This has to be heuristically determined, as is depends on the size of the normal skelleton
-        critical_freq = 0.3 # TODO: Choose heuristically!!
+        x = np.absolute(x) * self.config["SCORE_ALPHA"]
+        x = np.mean(x)
+        x = np.clip(1 - x + self.config["SCORE_BETA"], 0, 1)
+        x = np.clip(np.power(x, self.config["SCORE_GAMMA"]), 0, 1)
 
-        # Filter scores in order to minimize impact of faulty reference skelleton predictions
-        b, a = signal.butter(min(4, max(1, int(len(self.skelleton_deltas_since_rep_start)/4))), critical_freq, analog=False)
-        x = signal.filtfilt(b, a, x, padlen=max(0, min(12, len(x) - 1)))
-
-        average_delta = np.median(x) # TODO: Try average and median here, see which one works better
-        delta_score = np.absolute(average_delta * alpha)
-
-        delta_score = np.clip(1 - delta_score, 0, 1)
-
-        delta_score = np.power(delta_score, 3)
-
-        # We need our score to be between 0 and 1
-        score = 100 * delta_score
+        # We need our score to be between 0 and 100
+        score = 100 * x
 
         # TODO: Remove these scores. We log them all the time for now to let us choose parameters heuristically
         logy.log_mean("LowestScore:ExerciseName:" + str(self.spot_info_dict['exercise_data']['name']), value=float(np.min(self.skelleton_deltas_since_rep_start)))

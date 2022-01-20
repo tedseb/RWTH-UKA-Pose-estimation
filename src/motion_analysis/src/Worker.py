@@ -143,6 +143,9 @@ class Worker(Thread):
         _, _, spot_info_key, spot_feature_key = generate_redis_key_names(self.spot_key, self.config)
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
+        # We start with all repetitions being "bad" such that we have to enter a valid beginning state before we start counting
+        for idx in range(len(next(iter(self.features.values())).reference_recording_features)): # TODO: The iterator here is a little hacky and only works if all recordings use the same features, come up with something better here
+            self.bad_repetition_dict[idx] = True
 
         def array_factory():
             return np.array([0])
@@ -412,6 +415,7 @@ class Worker(Thread):
                     num_features_progressed_too_far += 1
                 elif f.progression == number_of_dicided_state_changes_for_repetition:
                     num_features_progressed += 1
+
             
             # We calculate the number of features that have to have progressed in order to count this repetition
             if num_features_progressed < num_features_to_progress(len(self.features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']: # TODO: This is a parameter to be tuned!!
@@ -475,7 +479,7 @@ class Worker(Thread):
         """
         x = self.skelleton_deltas_since_rep_start
         x = np.absolute(x) * self.config["SCORE_ALPHA"]
-        x = np.mean(x)
+        x = np.mean(x)  # TODO: Optimize this for a running average instead of taking the mean every step!
         x = np.clip(1 - x + self.config["SCORE_BETA"], 0, 1)
         x = np.clip(np.power(x, self.config["SCORE_GAMMA"]), 0, 1)
 

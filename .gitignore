@@ -27,4 +27,4 @@ src/AI/metrabs/models/metrabs_singleperson_smpl
 src/AI/metrabs/cdf37_1-dist/
 *.pt
 data
-src/rosnodejsNodes/showroom-application/webtarget/assets
+src/rosnodejsNodes/showroom-application/webtarget

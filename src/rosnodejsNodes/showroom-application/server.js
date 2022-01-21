@@ -54,6 +54,9 @@ else {
 let websocketCache = [];
 let start = Date.now();
 let getDelta = () => { return Date.now() - start; };
+setInterval(() => {
+    websocketCache = [];
+}, 10000);
 // Parameters and Constants:
 const PORT = config.PORT;
 const app = express();
@@ -73,14 +76,6 @@ wss.on('connection', (ws, req) => {
     console.log(query);
     websockets.push(ws);
     if (isRos) {
-        ws.on('message', msg => {
-            const res = new rosTypes[0]({
-                stationID: msg['stationID'],
-                isActive: msg['isActive'],
-                exerciseName: msg['exerciseName']
-            });
-            publishers.forEach(publisher => publisher.publish(msg));
-        });
     }
 });
 // WebServer
@@ -162,6 +157,8 @@ if (args['rosnodejs'] === 'on') {
             usage: 'reference_frame',
             data: obj.video_frame_idx
         };
+        if (obj.video_file_name.includes("squats_1") || obj.video_file_name.includes("deadlift_1") || obj.video_file_name.includes("military_press_2"))
+            return;
         console.log(res);
         websockets.forEach(ws => {
             if (ws.readyState === ws_1.default.OPEN) {
@@ -178,9 +175,22 @@ if (args['rosnodejs'] === 'on') {
     });
     const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
         const data = msg['data'];
+        const parsed = JSON.parse(data).data;
+        console.log("dis stirng", parsed);
+        const reps = parsed.repetitions;
+        const score = parsed.repetition_score;
+        const exercise_score = parsed.exercise_score;
         websockets.forEach(client => {
             if (client.readyState === ws_1.default.OPEN) {
-                //client.send(data);
+                let res = {
+                    usage: 'user_state',
+                    data: {
+                        reps: reps,
+                        score: score,
+                        exercise_score: exercise_score
+                    }
+                };
+                client.send(JSON.stringify(res));
             }
             ;
         });
@@ -194,8 +204,19 @@ if (args['rosnodejs'] === 'on') {
             ;
         });
     });
-    const showroom_exercise = nh.advertise('/showroom_exercise', StationUsage);
-    publishers.push(showroom_exercise);
+    const signal_show = nh.subscribe('/signal/person', StringMsg, (msg) => {
+        websockets.forEach(client => {
+            if (client.readyState === ws_1.default.OPEN) {
+                let signal = msg['data'];
+                let res = {
+                    usage: 'signal_person',
+                    data: signal
+                };
+                websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
+                client.send(JSON.stringify(res));
+            }
+        });
+    });
 }
 else {
     console.log("rosnodejs is off");

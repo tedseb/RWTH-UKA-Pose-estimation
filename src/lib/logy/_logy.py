@@ -471,7 +471,7 @@ def trace_time(name, period=50, smoothing=0.0):
     return trace_time_decorator
 
 class TraceTime:
-    def __init__(self, name, period=50, smoothing=0.9):
+    def __init__(self, name, period=50, smoothing=0.0):
         self._name = name
         self._period = 50
         self._smoothing = smoothing

@@ -10,18 +10,45 @@ import argparse
 import sys
 import logy
 from multiprocessing import Lock
+import math
+
+ROTATE_DIM_X = -25
+ROTATE_DIM_Y = 0
+ROTATE_DIM_Z = 0
 
 metrabs_pose = [
     (1,4),(1,0),(2,5),(2,0),(3,6),(3,0),(4,7),(5,8),(6,9),(7,10),(8,11),(9,12),(12,13),(12,14),(12,15),(13,16),(14,17),(16,18),(17,19),
     (18,20),(19,21),(20,22),(21,23)
 ]
 
-
 spinvis_pose = [
     (2, 3), (3, 4), (5,6),(6,7),(27, 9),(9,12),(27,28), (27, 10), (10, 11), (12,13),(9,10), (28, 12), (28, 13) , (13,14), (14, 21), (21, 20),(21, 19),(20,19),(11,24),(24,22),(22,23),(23,24),(5,28),(2,27),(5,2),
     (42,17),(42,18),(42,0),(0,15),(0,16),(15,16),(17,43),(18,43),(1,37),(37,43),(41,37),(41,39)
 ]
 
+def rotate_dim_x(coordinates, degree):
+    radians = math.radians(degree)
+    rotated_coordinates = [0., 0., 0.]
+    rotated_coordinates[0] = coordinates[0]
+    rotated_coordinates[1] = coordinates[1] * math.cos(radians) - coordinates[2] * math.sin(radians)
+    rotated_coordinates[2] = coordinates[1] * math.sin(radians) + coordinates[2] * math.cos(radians)
+    return rotated_coordinates
+
+def rotate_dim_y(coordinates, degree):
+    radians = math.radians(degree)
+    rotated_coordinates = [0., 0., 0.]
+    rotated_coordinates[1] = coordinates[1]
+    rotated_coordinates[2] = coordinates[2] * math.cos(radians) - coordinates[0] * math.sin(radians)
+    rotated_coordinates[0] = coordinates[2] * math.sin(radians) + coordinates[0] * math.cos(radians)
+    return rotated_coordinates
+
+def rotate_dim_z(coordinates, degree):
+    radians = math.radians(degree)
+    rotated_coordinates = [0., 0., 0.]
+    rotated_coordinates[2] = coordinates[2]
+    rotated_coordinates[0] = coordinates[0] * math.cos(radians) - coordinates[1] * math.sin(radians)
+    rotated_coordinates[1] = coordinates[0] * math.sin(radians) + coordinates[1] * math.cos(radians)
+    return rotated_coordinates
 
 class RealtimeVisualization():
     def __init__(self, ai):
@@ -83,6 +110,37 @@ class RealtimeVisualization():
         marker.lifetime = rospy.Duration(1)  # 1 second
         return marker
 
+    def translation(self, persons_data):
+        dim_height = 2
+        min_height = 9999
+        persons : Persons = persons_data
+        for person in persons:
+            move_x = person.bodyParts[0].point.x
+            move_y = person.bodyParts[0].point.y
+            move_z = person.bodyParts[0].point.z
+            for bodypart in person.bodyParts:
+                coordinates = [bodypart.point.x, bodypart.point.y, bodypart.point.z]
+                # Move to Origin
+                coordinates[0] -= move_x
+                coordinates[1] -= move_y
+                coordinates[2] -= move_z
+                # Rotate
+                coordinates = rotate_dim_x(coordinates, ROTATE_DIM_X)
+                coordinates = rotate_dim_y(coordinates, ROTATE_DIM_Y)
+                coordinates = rotate_dim_z(coordinates, ROTATE_DIM_Z)
+
+                if coordinates[dim_height] < min_height:
+                    min_height = coordinates[dim_height]
+
+                bodypart.point = Point(coordinates[0], coordinates[1], coordinates[2])
+
+            for bodypart in person.bodyParts:
+                coordinates = [bodypart.point.x, bodypart.point.y, bodypart.point.z]
+                # Move up
+                coordinates[dim_height] -= min_height
+                bodypart.point = Point(coordinates[0], coordinates[1], coordinates[2])
+        return persons
+
     @logy.catch_ros
     def frame_callback(self, data):
         '''
@@ -92,8 +150,9 @@ class RealtimeVisualization():
         idx = 0
         camera_id = int(data.header.frame_id[3:])
         marker_array = MarkerArray()
+        persons = self.translation(data.persons)
 
-        for person in data.persons:
+        for person in persons:
             marker_color = self.colors[person_counter % len(self.colors)]
             for bodypart in person.bodyParts:
                 if bodypart.score < 0.1:
@@ -106,7 +165,7 @@ class RealtimeVisualization():
                 m.ns = ''
                 m.color = ColorRGBA(0.98, 0.30, 0.30, 1.00)
                 m.scale = self.skeleton_scale
-                m.pose.position.x, m.pose.position.y, m.pose.position.z = bodypart.point.x, (bodypart.point.y), bodypart.point.z
+                m.pose.position.x, m.pose.position.y, m.pose.position.z = bodypart.point.x, bodypart.point.y, bodypart.point.z
                 m.type = 2
                 m.action = 0
                 m.lifetime = rospy.Duration(0.2)
@@ -126,7 +185,7 @@ class RealtimeVisualization():
                 m.points = [person.bodyParts[pair[0]].point, person.bodyParts[pair[1]].point]
                 m.type = 4
                 m.action = 0
-                m.lifetime = rospy.Duration(0.5)
+                m.lifetime = rospy.Duration(0.2)
                 marker_array.markers.append(m)
 
         # publish the markers

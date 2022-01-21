@@ -26,7 +26,7 @@ from gymy_tools import ResetTimer
 DEBUG_STATION_ID = 999
 MAX_STATIONS = 8
 CAMERA_CHANNEL_INFO = "/image/channel_{0}"
-PERSON_TIME = 10
+PERSON_TIME_S = 20
 
 class ComputerWorkload:
     def __init__(self):
@@ -102,22 +102,39 @@ class StationManager():
         data["person_active"] = False
         response_json = json.dumps(data)
         self._publisher_persons.publish(response_json)
+        del self._last_person_detected[self._next_person_time_out_station]
+
+        if self._last_person_detected:
+            self._next_person_time_out_station = min(self._last_person_detected, key=self._last_person_detected.get)
+            elapsed_time = time.time() - self._last_person_detected[self._next_person_time_out_station]
+            self._person_timer.reset(PERSON_TIME_S - elapsed_time)
+        else:
+            del self._person_timer
+            self._person_timer = None
 
     @logy.catch_ros
     def callback_bbox(self, box: Bboxes):
-        station_id = box.debug_id
+        station_id = box.stationID[0]
+
         if len(box.data) == 0:
             return
 
         if not self.__param_updater.is_station_valid(station_id):
             return
 
-        #if station_id not in self._last_person_detected:
+        if station_id not in self._last_person_detected:
+            data = {}
+            data["station_id"] = station_id
+            data["person_active"] = True
+            response_json = json.dumps(data)
+            self._publisher_persons.publish(response_json)
+            self._next_person_time_out_station = station_id
         self._last_person_detected[station_id] = time.time()
 
         if self._person_timer is None:
             self._next_person_time_out_station = station_id
-            self._person_timer = ResetTimer(PERSON_TIME, self.person_time_out)
+            self._person_timer = ResetTimer(PERSON_TIME_S, self.person_time_out)
+            self._person_timer.start()
             return
 
         if station_id != self._next_person_time_out_station:
@@ -125,7 +142,7 @@ class StationManager():
 
         self._next_person_time_out_station = min(self._last_person_detected, key=self._last_person_detected.get)
         elapsed_time = time.time() - self._last_person_detected[self._next_person_time_out_station]
-        self._person_timer.reset(PERSON_TIME - elapsed_time)
+        self._person_timer.reset(PERSON_TIME_S - elapsed_time)
         #logy.warn("received boxes")
 
     def start_person_detection(self):

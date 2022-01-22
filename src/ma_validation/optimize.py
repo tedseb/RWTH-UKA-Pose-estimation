@@ -8,6 +8,10 @@ from subprocess import Popen, PIPE
 import yaml
 import os
 import signal
+import pymongo
+
+mongo_client = pymongo.MongoClient("mongodb://mongoadmin:secret@localhost:27888/?authSource=admin") # Careful! This value is also set in the motion analysis config and might lead to inconsistency!
+exercises_db = mongo_client.trainerai.exercises
 
 # Put estimates here on how much timebuffer the setup of the test should get and how long we need until the camera node starts and the evaluation begins
 TEST_SETUP_TIME_S = 20
@@ -19,6 +23,7 @@ VALIDATION_TEMP_CONFIG_PATH = '/tmp/ma_validation_config.yml'
 STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion_analysis/config.yml'
 VIDEO_TIMECODE_PATH = "/home/trainerai/trainerai-core/data/videos/timecodes.yml"
 
+best_scores = dict()
 
 def clean_files():
     try:
@@ -47,8 +52,10 @@ def validation_objective_function(hps):
         with open(STANDARD_CONFIG_PATH, 'r') as infile:
             config = yaml.safe_load(infile)
         config.update(hps)
+        config.update({"FORCE_CONFIG": True})
+
         with open(VALIDATION_TEMP_CONFIG_PATH, 'w') as outfile:
-            config = yaml.dump(config, outfile)
+            yaml.dump(config, outfile)
 
         with open(VIDEO_TIMECODE_PATH) as stream:
             timecode_data = yaml.safe_load(stream)
@@ -93,8 +100,14 @@ def validation_objective_function(hps):
         num_exercises = 0
         total_score = 0
         for name, exercise in report.items():
-            total_score += exercise[1]
+            name = str(name)
+            score = exercise[1]
+            total_score += score
             num_exercises += 1
+            exercise_data = exercises_db.find_one({"name": name})
+            if exercise_data and score > exercise_data.get("optimized_config_score", 0):
+                exercises_db.update_one({'_id': exercise_data['_id']},{'$set': {'optimized_config_score': score, "optimized_config": config}}, upsert=False)
+
         score = total_score / min(num_exercises, 1)
 
         clean_files()
@@ -158,8 +171,8 @@ if __name__ == '__main__':
         }
         ]),
 
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.3, 0.45),
-        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.3, 0.45),
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER', 0.1, 0.45),
+        'REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER': hp.uniform('REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER', 0.1, 0.45),
         'FEATURE_TRAJECTORY_RESOLUTION_FACTOR': hp.uniform('FEATURE_TRAJECTORY_RESOLUTION_FACTOR', 0.03, 0.3),
         'REMOVE_JITTER_RANGE': hp.quniform('REMOVE_JITTER_RANGE', 2, 7, 1),
         'JUMPY_PROGRESS_ALPHA': hp.uniform('JUMPY_PROGRESS_ALPHA', 2, 4),
@@ -169,7 +182,7 @@ if __name__ == '__main__':
         
     }
     
-    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=244)
+    best_hps = fmin(validation_objective_function, space, algo=tpe.suggest, max_evals=25)
 
     rp.logerr("Best Parameters are:")
     rp.logerr(str(best_hps))

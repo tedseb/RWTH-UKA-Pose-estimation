@@ -94,8 +94,15 @@ class WorkerHandler(QThread):
 
     @logy.catch_ros
     def callback(self, station_usage_data: Any) -> NoReturn:
+        """Creates or destroys Workers to analyze user data.
+
+        This method fetches exercise data from the Mongo DB and calls all needed analysis methods.
+        The analyzed data is given to an InterCom, usually Redis, for workers to fetch.
+        A worker instance is then created if the station has gone active.
+        Otherwise a worker instance for that station is destroyed.
+        """
         station_id = station_usage_data.stationID
-        spot_queue_key, spot_past_queue_key, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
+        _, _, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
 
         self.features_interface.delete(spot_featuers_key)
         self.spot_queue_interface.delete(station_id)
@@ -103,49 +110,84 @@ class WorkerHandler(QThread):
         logy.debug("Updating info for spot with key: " + str(spot_info_key))
 
         if station_usage_data.isActive:
-            exercise_data = self.exercises.find_one({"name": station_usage_data.exerciseName})
+            exercise_data_list = self.exercises.find({"name": station_usage_data.exerciseName})
 
-            if exercise_data is None:
+            if not exercise_data_list:
                 logy.error("Exercise with key " + str(station_usage_data.exerciseName) + " could not be found in database. Exercise has not been started.")
                 return
 
-            # TODO: In the future: Possibly use multiple recordings
-            recording, video_frame_idxs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
-            recording = self.pose_definition_adapter.normalize_skelletons(recording)
+            recordings = []
+            features_dict = {} # Save features in respective containers per feature hash, we initialize the collections further down with the first recording analysis
+            for exercise_data in exercise_data_list:
+                # See if we can reference this exercise with an optimize config
+                if not self.config.get("FORCE_CONFIG", False):
+                    optimized_config = exercise_data.get("optimized_config", None)
+                    if optimized_config:
+                        config = optimized_config
+                    else:
+                        config = self.config
+                        logy.warn_throttle("One or more exercise data entries with are without optimized config. Optimize for this exercise or import data to exercise DB!", throttel_time_ms=500)
+                else:
+                    config = self.config
+                                
+                # We track feature hashes to secure that ALL recordings have the same features set.
+                feature_hashes_to_go = set(features_dict.keys())
+                
+                recording, video_frame_idcs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
+                recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
-            recordings = [recording]
-            feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
+                recording_dict = {"recording": recording, "video_frame_idcs": video_frame_idcs, "is_reference_recording": exercise_data.get("is_reference_recording", True), "video_file_name": exercise_data.get("video_file_name", None)}
+                recordings.append(recording_dict)
 
-            # For now, we have the same pose definition adapter for all recordings
-            reference_data = [(exercise_data["name"], r, self.pose_definition_adapter) for r in recordings]
-            reference_recording_feature_collections = [ReferenceRecordingFeatureCollection(self.config, feature_hash, feature_specification, reference_data) for feature_hash, feature_specification in feature_of_interest_specification.items()]
+                feature_of_interest_specification = extract_feature_of_interest_specification_dictionary(hmi_features=exercise_data['features'], pose_definition_adapter=self.pose_definition_adapter)
+
+                for feature_hash, feature_specification in feature_of_interest_specification.items():
+                    if feature_hash in features_dict.keys():
+                        if feature_hash in feature_hashes_to_go:
+                            feature_hashes_to_go.remove(feature_hash)
+                        else:
+                            logy.error("Multiple recordings for one exercise have different feature specifications!")
+                            raise ValueError("Exercise definition Error")
+                    elif feature_hashes_to_go: # This means that the first recording has already initialized the reference features and we have feature hashes to go, but another recording omits the feature
+                        logy.error("Multiple recordings for one exercise have different feature specifications!")
+                        raise ValueError("Exercise definition Error")
+                    
+                    # On anaylsis of the first recording, we add the reference feature collection
+                    if not features_dict.get(feature_hash):
+                        # We use the general config for the collection
+                        # Featuers added later will use their respective optimized recording configs
+                        features_dict[feature_hash] = Feature(self.config, feature_hash, feature_specification)
+
+                    # Add this recording to the reference recording feature collections, we use the same pose definition adapter for all recordings for now
+                    features_dict[feature_hash].add_recording(exercise_data["name"], recording, self.pose_definition_adapter, config)
+
+            # After we have set the trajectories with some recordings, we update the statistics
+            for f in features_dict.values():
+                f.update_static_data()
 
             # Initialize features
-            features_dict = {c.feature_hash: Feature(self.config, c) for c in reference_recording_feature_collections}
             self.features_interface.set(spot_featuers_key, features_dict)
 
             # Set all entries that are needed by the handler threads later on
-            exercise_data['recordings'] = {fast_hash(r): r for r in recordings}
-            exercise_data['video_frame_idxs'] = video_frame_idxs
+            exercise_data['recordings'] = recordings
             del exercise_data['features'] # We replace features with their specification dictionary, so we do not need them anymore here
             exercise_data['feature_of_interest_specification'] = feature_of_interest_specification
-            exercise_data['reference_feature_collections'] = reference_recording_feature_collections
 
             spot_info_dict = {'start_time': time.time_ns(), "exercise_data": exercise_data, 'repetitions': 0, 'station_usage_hash': station_usage_data.stationUsageHash}
 
             self.spot_metadata_interface.set_spot_info_dict(spot_info_key, spot_info_dict)
 
             current_worker = self.workers.get(station_id, None)
+            feature_hashes = features_dict.keys()
 
-            feature_hashes = [c.feature_hash for c in reference_recording_feature_collections]
-
+            # If a current worker is running, this station has not gone offline by mistake and we first destroy the worker
             if current_worker:
                 current_worker.running = False
                 del self.workers[station_id]
                 self.spot_metadata_interface.delete(spot_info_key)    
                 self.gui.update_available_spots(spot_name=station_id, active=False)
 
-            self.workers[station_id] = Worker(self.config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
+            self.workers[station_id] = Worker(config, spot_key=station_id, gui=self.gui, pose_definition_adapter_class=self.pose_definition_adapter.__class__)
             self.gui.update_available_spots(spot_name=station_id, active=True, feature_hashes=feature_hashes)
 
             logy.info("New worker started for spot with key " + str(spot_info_key))

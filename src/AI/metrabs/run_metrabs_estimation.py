@@ -319,6 +319,9 @@ class PoseEstimator():
 
             self._publisher.publish(msg)
 
+            if len(cropped_images) == 0:
+                return
+
             if len(cropped_images) > 1:
                 max_h = 0
                 for img in cropped_images:
@@ -337,7 +340,7 @@ class PoseEstimator():
                 image_message = self._opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
             except:
                 logy.warn("FAIL: " + str(cropped_images))
-                logy.warn(str(img.shape))
+                #logy.warn(str(img.shape))
                 return
             pub = self._publisher_crop.get(camera_id)
             if pub is not None:

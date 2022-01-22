@@ -14,7 +14,7 @@ ROS_SKELLETON_DEFINITION: 'skelleton_name'
 ROS_MOTION_ANALYSIS_INPUT_VISUALIZER_TOPIC: "motion_analysis_input_markers"
 ROS_MOTION_ANALYSIS_REFERENCE_POSE_VISUALIZER_TOPIC: "motion_analysis_reference_prediction_markers"
 
-SHOW_ROOM_REFERENCE_FRAME_TIME_TOPIC: "showroom_reference_frame" # Number of the frame in the original recording
+SHOW_ROOM_VIDEO_REFERENCE: "showroom_video_reference" # Number of the frame in the original recording
 SHOW_ROOM_REFERENCE_PROGRESS_TOPIC: "showroom_reference_progress" # Number between 0 and 100 that represents the progress
 
 REDIS_MAXIMUM_QUEUE_SIZE: 1000
@@ -52,31 +52,38 @@ REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER: 0.41
 REDUCED_RANGE_OF_MOTION_TOLERANCE_HIGHER: 0.41
 
 # The final feature trajectory resolution is: FEATURE_TRAJECTORY_RESOLUTION_FACTOR  * range of motion of a single feature
-FEATURE_TRAJECTORY_RESOLUTION_FACTOR: 0.1
+FEATURE_TRAJECTORY_RESOLUTION_FACTOR: 0.03
 
 DIGITIZED_FEATURE_TRAJECTORY_MAX_MEMORY_SIZE: 60
 FEATURE_TRAJECTORY_MAX_MEMORY_SIZE: 90
 STATES_TRAJECTORY_MAX_MEMORY_SIZE: 30
 
 # We have a resolution of ten steps between minimum and maximum of a trajectory. We remove 4 such steps of jittering, if found.
-REMOVE_JITTER_RANGE: 5
+REMOVE_JITTER_RANGE: 10
 
+ENABLE_JUMPY_PROGRESS_CHECK: False
 JUMPY_PROGRESS_ALPHA: 3
 JUMPY_PROGRESS_BETA: 4
 
-TRUST_REGION_FILTER_FACTOR: 2
+TRUST_REGION_FILTER_FACTOR: 10
 
-ENABLE_FEATURE_ALIGNMENT_CHECK: True
-MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT: 0.8
+ENABLE_FEATURE_ALIGNMENT_CHECK: False
+MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT: 0.80
 
 # We use this fading factor for a exponentially dying error 
 JOINT_DIFFERENCE_FADING_FACTOR: 0.8
 
 ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK: False
-NUM_FEATURE_TO_PROGRESS_ALPHA: 4
+NUM_FEATURE_TO_PROGRESS_ALPHA: 1.5
 NUM_FEATURE_TO_PROGRESS_BETA: 0.9
 
 ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK: False
 NUM_FEATURES_PROGRESSED_TOO_FAR_MU: 1
 
 PROGRESS_VELOCITY_EPSILON: 0.6
+
+
+# These has to be heuristically determined, as is depends on the size of the normal skelleton! Careful!
+SCORE_ALPHA: 0.1 # We divide our bare delta by this number -> scale directly with this!
+SCORE_BETA: 0.3 # We add this to our number before clipping it
+SCORE_GAMMA: 5 # We take our number to the power of gamma to emphasize bad scores as being much more near to zero

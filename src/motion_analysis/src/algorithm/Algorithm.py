@@ -22,6 +22,7 @@ except (ModuleNotFoundError, ImportError):
     from src.algorithm.AlgoUtils import *
     from src.algorithm.GUI import *
 
+
 class CorrectionDirection(Flag):
     # Alias for features states, i.e. "low angle, high angle, ...., low distance, high distance."
     BACKWARDS = auto()
@@ -30,7 +31,7 @@ class CorrectionDirection(Flag):
     RIGHT = auto()
     UP = auto()
     DOWN = auto()
-    
+
 
 def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarray, max_weight: float, min_weight: float):
     """Compute a custom metric that represents the differences between a trajectory and the reference trajectory or shifted versions thereof.
@@ -43,25 +44,24 @@ def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarra
         feature_trajectory: The discretized trajectory of a feature of the user that we want to compare against
         max_weight_: Dictates how strong the newest values are weighted
         min_weight: Dictates how weak the oldest values are weighted
-    
+
     Returns:
         An error for every step in the feature_trajectory
     """
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
     feature_trajectory_shortened = feature_trajectory[-comparing_length:]
-    distances = np.power(hankel_matrix_shortened - feature_trajectory_shortened, 2)
-    distances = np.array(distances, dtype=np.float16) # CAREFUL! numpy creates an error if we do not use this seemingly useless line!
-    fading_factor = np.geomspace(min_weight, max_weight, comparing_length) # Let older signals have less influence on the error
+    distances = np.power(hankel_matrix_shortened -
+                         feature_trajectory_shortened, 2)
+    # CAREFUL! numpy creates an error if we do not use this seemingly useless line!
+    distances = np.array(distances, dtype=np.float16)
+    # Let older signals have less influence on the error
+    fading_factor = np.geomspace(min_weight, max_weight, comparing_length)
     errors = np.linalg.norm(distances * fading_factor, axis=1)
     _sum = np.sum(errors)
     if _sum == 0.:
-        return errors # This should not happen, as an empty trajectory is useless
+        return errors  # This should not happen, as an empty trajectory is useless
     return errors / _sum
-
-
-def total_joint_difference(pose: np.ndarray, reference_pose: np.ndarray):
-    return np.average(pose - reference_pose)
 
 
 def calculate_corrections(pose: np.ndarray, reference_pose: np.ndarray, pose_definition_adapter):
@@ -71,58 +71,12 @@ def calculate_corrections(pose: np.ndarray, reference_pose: np.ndarray, pose_def
     chest_centered_pose = pose_definition_adapter.normalize_skelleton(pose, )
     for joint in pose_definition_adapter.upper_body_correction_joints:
         pass
-    
+
     for joint, weight in pose_definition_adapter.joint_weights.items():
         pass
 
 
-
-# class Predictor(ABC):
-#     def __init__(self, features: List[Feature]):
-#         self.features = features
-
-#     @abstractmethod
-#     def __call__(self, pose: np.ndarray) -> np.ndarray:
-#         """Updates all features with the pose and predicts the best possible reference pose."""
-#         raise NotImplementedError
-
-
-# class ExercisePredictor(Predictor):
-#     """This Predictor lets us predict an exercise out of all exercises."""
-#     def __init__(self, features: List[Feature]):
-#         super().__init__(features)
-#         raise NotImplementedError
-
-
-# class RecordingPredictor(Predictor):
-#     """This Predictor lets us predict a recording out of several recordings of an exercise."""
-#     def __init__(self, features: List[Feature]):
-#         super().__init__(features)
-#         raise NotImplementedError
-
-
-# class PosePredictor(Predictor):
-#     """This Predictor lets us predict a pose, given a recording."""
-#     def __init__(self, features: List[Feature]):
-#         super().__init__(features)
-        
-    # def __call__(self, pose: np.ndarray):
-        # # TODO: This should be only one dimension in the hanel tensor. Check if this works!!!
-        # reference_trajectory_hankel_matrix = self.hankel_tensor[0]
-        # errors = trajectory_distance(reference_trajectory_hankel_matrix, feature.discrete_feature_trajectory, 100, 1)
-        # prediction = np.argmin(errors)
-        # # TODO: This should be only one dimension in this tensor. Check if this works!!!
-        # self.index = self.discretization_reference_trajectory_indices_tensor[0][prediction]
-        # median_resampled_values_reference_trajectory_fraction_dict = self.median_trajectory_discretization_ranges[prediction]
-        # progress = np.mean([median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_from"], median_resampled_values_reference_trajectory_fraction_dict["median_resampled_values_reference_trajectory_fraction_to"]])
-        # self.progress_vector = map_progress_to_vector(progress)
-        # self.median_resampled_values_reference_trajectory_fraction_dict = median_resampled_values_reference_trajectory_fraction_dict
-        # self.reference_pose = self.recording[int(len(self.recording) * progress)]
-
-        # joint_difference = total_joint_difference(pose, self.reference_pose)
-        # self.moving_average_total_joint_difference = self.moving_average_total_joint_difference * JOINT_DIFFERENCE_FADING_FACTOR + joint_difference * (1 - JOINT_DIFFERENCE_FADING_FACTOR)
-        # self.total_joint_differences_this_rep.append(joint_difference)
-
+# We might need this later
 # From https://simple-pid.readthedocs.io/en/latest/_modules/simple_pid/PID.html
 
 # def _clamp(value, limits):
@@ -134,7 +88,7 @@ def calculate_corrections(pose: np.ndarray, reference_pose: np.ndarray, pose_def
 #     elif (lower is not None) and (value < lower):
 #         return lower
 #     return value
-    
+
 # class PID(object):
 #     """A simple PID controller."""
 

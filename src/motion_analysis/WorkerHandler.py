@@ -94,6 +94,13 @@ class WorkerHandler(QThread):
 
     @logy.catch_ros
     def callback(self, station_usage_data: Any) -> NoReturn:
+        """Creates or destroys Workers to analyze user data.
+
+        This method fetches exercise data from the Mongo DB and calls all needed analysis methods.
+        The analyzed data is given to an InterCom, usually Redis, for workers to fetch.
+        A worker instance is then created if the station has gone active.
+        Otherwise a worker instance for that station is destroyed.
+        """
         station_id = station_usage_data.stationID
         _, _, spot_info_key, spot_featuers_key = generate_redis_key_names(station_id, self.config)
 
@@ -122,9 +129,10 @@ class WorkerHandler(QThread):
                         logy.warn_throttle("One or more exercise data entries with are without optimized config. Optimize for this exercise or import data to exercise DB!", throttel_time_ms=500)
                 else:
                     config = self.config
-                
+                                
+                # We track feature hashes to secure that ALL recordings have the same features set.
                 feature_hashes_to_go = set(features_dict.keys())
-
+                
                 recording, video_frame_idcs = self.pose_definition_adapter.recording_to_ndarray(exercise_data['recording'])
                 recording = self.pose_definition_adapter.normalize_skelletons(recording)
 
@@ -153,6 +161,7 @@ class WorkerHandler(QThread):
                     # Add this recording to the reference recording feature collections, we use the same pose definition adapter for all recordings for now
                     features_dict[feature_hash].add_recording(exercise_data["name"], recording, self.pose_definition_adapter, config)
 
+            # After we have set the trajectories with some recordings, we update the statistics
             for f in features_dict.values():
                 f.update_static_data()
 
@@ -171,6 +180,7 @@ class WorkerHandler(QThread):
             current_worker = self.workers.get(station_id, None)
             feature_hashes = features_dict.keys()
 
+            # If a current worker is running, this station has not gone offline by mistake and we first destroy the worker
             if current_worker:
                 current_worker.running = False
                 del self.workers[station_id]

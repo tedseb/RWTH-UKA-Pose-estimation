@@ -61,7 +61,7 @@ functions = {a: b for a, b in functions}
 #             reference_features_dict = {c.feature_hash: c.asdict() for c in reference_recording_feature_collections}
 
 #             return_value = yaml.dumps(reference_features_dict)
-        
+
 #         elif data["extraction_method"] == "motion_analysis":
 #             exercise_data = yaml.safe_load(data["exercise_data"])
 #             reference_recording, _ = adapter.recording_to_ndarray(data["reference_recording"])

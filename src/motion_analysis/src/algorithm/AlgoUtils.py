@@ -407,8 +407,9 @@ class PoseDefinitionAdapter():
         delta = 0
         for joint_name, weight in self.joint_weights.items():
             joint_index = self.joints_used_labels.index(joint_name)
-            delta += np.abs(np.linalg.norm(
+            d = np.abs(np.linalg.norm(
                 pose_a[joint_index] - pose_b[joint_index])) * weight
+            delta += d
             weights += weight
 
         return delta / (weights * np.linalg.norm(self.normal_bone_length(pose_a)) * np.linalg.norm(self.normal_bone_length(pose_b)))

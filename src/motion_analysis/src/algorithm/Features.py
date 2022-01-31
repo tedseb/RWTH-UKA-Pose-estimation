@@ -255,7 +255,8 @@ class ReferenceRecordingFeature(BaseFeature):
     """A reference feature corresponds to one repetition of an exercise.
 
     It stores all properties of a repetition that are of meaning to our algorithm.
-    In order to identify the repetition it belongs to among all repetitions that we analyze, we hash the recording itself."""
+    In order to identify the repetition it belongs to among all repetitions that we analyze, we hash the recording itself.
+    """
 
     def __init__(self,
                  config: dict,
@@ -513,7 +514,7 @@ def discretize_feature_values(value, last_discritized_value, resolution):
 
     Returns:
         A list of discritized value between value and last_discritized_value, $resolution apart
-        """
+    """
     new_resampled_feature_values = []
     delta = value - last_discritized_value
     remaining_delta = abs(delta)

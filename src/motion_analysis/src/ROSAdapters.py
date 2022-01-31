@@ -43,17 +43,17 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
 
     # We define weights for joints that should overlap with expert joints. Each key corresponds to the name of the joint in the joint_labels array, the value is the weight.
     joint_weights = {
-        'L_Ankle': 20,
-        'R_Ankle': 20,
-        'L_Knee': 50,
-        'R_Knee': 50,
-        'L_Wrist': 20,
-        'R_Wrist': 20,
-        'L_Elbow': 50,
-        'R_Elbow': 50,
-        'Head': 50,
-        'L_Shoulder': 100,
-        'R_Shoulder': 100,
+        'L_Ankle': 60,
+        'R_Ankle': 60,
+        'L_Knee': 70,
+        'R_Knee': 70,
+        'L_Wrist': 50,
+        'R_Wrist': 50,
+        'L_Elbow': 100,
+        'R_Elbow': 100,
+        'Head': 60,
+        'L_Shoulder': 60,
+        'R_Shoulder': 60,
     }
 
     upper_body_correction_joints = [
@@ -61,7 +61,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         'R_Wrist',
         'L_Elbow',
         'R_Elbow',
-        # 'Head',
+        'Head',
         # 'L_Shoulder',
         # 'R_Shoulder',
     ]
@@ -71,7 +71,7 @@ class MetrabsPoseDefinitionAdapter(PoseDefinitionAdapter):
         'R_Ankle',
         'L_Knee',
         'R_Knee',
-        # 'Head',
+        'Head',
         # 'L_Shoulder',
         # 'R_Shoulder',
     ]

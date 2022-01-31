@@ -204,6 +204,7 @@ class Worker(Thread):
                         pose)
 
                     self.skelleton_deltas_since_rep_start.append(delta)
+                    self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-150:] # TODO: Parameterize the 150!
                     score = self.calculate_repetition_score()
 
                     # Compare joints with expert system data
@@ -473,33 +474,32 @@ class Worker(Thread):
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
                 self.log_with_metadata(
-                    logy.error, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
+                    logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition_dict[idx] = True
 
             # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
             if in_beginning_state and self.bad_repetition_dict.get(idx, False):
                 self.log_with_metadata(
-                    logy.error, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
+                    logy.debug, "Bad repetition aborted. Resetting feature progressions and repetition data at recording " + str(idx) + "...")
                 for feature in self.features.values():
                     f = feature.reference_recording_features[idx]
                     f.progression = 0
                 self.bad_repetition_dict[idx] = False
                 self.beginning_of_next_repetition_detected[idx] = True
-                self.skelleton_deltas_since_rep_start = []
 
             if self.bad_repetition_dict.get(idx, False):
                 increase_reps = False
 
             if increase_reps:
                 self.log_with_metadata(
-                    logy.error, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
+                    logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
                 self.beginning_of_next_repetition_detected[idx] = True
 
             # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
             if not in_beginning_state and self.beginning_of_next_repetition_detected[idx]:
                 self.log_with_metadata(
-                    logy.error, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
-                self.skelleton_deltas_since_rep_start = []
+                    logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
+                self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-5:] # TODO: Possibly introduce new HP that controlls the '5' in this term
                 self.beginning_of_next_repetition_detected[idx] = False
                 self.alignments_this_rep[idx] = np.array(
                     [self.alignments_this_rep[idx][-1]])
@@ -534,10 +534,12 @@ class Worker(Thread):
         """
         x = self.skelleton_deltas_since_rep_start
         x = np.absolute(x) * self.config["SCORE_ALPHA"]
-        # TODO: Optimize this for a running average instead of taking the mean every step!
-        x = np.mean(x)
+        x = np.median(x)
+        
         x = np.clip(1 - x + self.config["SCORE_BETA"], 0, 1)
+        x = (np.tanh((x - 0.5) * self.config["SCORE_SIGMA"]) / 2 ) + 0.5
         x = np.clip(np.power(x, self.config["SCORE_GAMMA"]), 0, 1)
+        x = np.clip(x + self.config["SCORE_YOTTA"], 0, 1)
 
         # We need our score to be between 0 and 100
         score = 100 * x

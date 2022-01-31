@@ -84,6 +84,8 @@ PROGRESS_VELOCITY_EPSILON: 0.6
 
 
 # These has to be heuristically determined, as is depends on the size of the normal skelleton! Careful!
-SCORE_ALPHA: 0.1 # We divide our bare delta by this number -> scale directly with this!
-SCORE_BETA: 0.3 # We add this to our number before clipping it
-SCORE_GAMMA: 5 # We take our number to the power of gamma to emphasize bad scores as being much more near to zero
+SCORE_ALPHA: 0.1 # We scale directly with this!
+SCORE_BETA: 0.13 # We add this to our number before clipping it
+SCORE_GAMMA: 4 # We take our number to the power of gamma to emphasize bad scores as being much more near to zero
+SCORE_SIGMA: 2.8 # Have a look at the code to see what happens inside the tanh here
+SCORE_YOTTA: 0.23 # Add this in the end to get scores closer to 1 if they are quite good

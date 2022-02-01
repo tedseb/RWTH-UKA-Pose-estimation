@@ -37,7 +37,7 @@ class ComputerWorkload:
 
 class StationManager():
 
-    def __init__(self, camera_path, transform_node_path, station_selection_path, data_manager, verbose=False, debug_frames_ms=0, with_gui=True):
+    def __init__(self, camera_path, transform_node_path, station_selection_path, data_manager, verbose=False, debug_frames_ms=0, with_gui=True, showroom_mode=False):
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage, queue_size=5)
         self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo, queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
@@ -47,10 +47,15 @@ class StationManager():
         except ROSException:
             ("Time out on channel  'ai/weight_detection'")
 
+        logy.info('Showroom mode: ' + str(showroom_mode))
+        if showroom_mode:
+            logy.debug('Start Station Manager in showroom mode')
+
         self._debug_frames_ms = debug_frames_ms
         self._data_manager = data_manager
         self._occupied_camera_channels = {}
 
+        self._showroom_mode = showroom_mode
         self._with_gui = with_gui
         self._verbose = verbose
         self._path_camera_node = camera_path
@@ -243,6 +248,36 @@ class StationManager():
                 break
         return new_channel
 
+    def fullfill_station_login_condition(self, user_id: str, station_id: int):
+        sleeping_time_s = 0.01
+        logged_in_user = self.__active_stations.get(station_id, False)
+        logged_in_station = self.__active_stations.get(user_id, False)
+
+        if logged_in_user and user_id != logged_in_user:
+            logy.debug(f'Another user than "{user_id}" is logged in. Logout user "{logged_in_user}".')
+            self.logout_station(logged_in_user)
+            time.sleep(sleeping_time_s)
+
+        if logged_in_station and station_id != logged_in_station:
+            logy.debug(f'User "{user_id}" is already logged into station "{logged_in_station}". Logout user.')
+            self.logout_station(station_id)
+            time.sleep(sleeping_time_s)
+
+    def fullfill_exercise_start_condition(self, user_id: str, station_id: int):
+        sleeping_time_s = 0.01
+
+        logged_in_station = self.__active_stations.get(user_id, None)
+
+        if logged_in_station != station_id:
+            logy.debug(f'User "{user_id}" tries to start an exercise but is not loged into station "{station_id}". Log into right station')
+            self.logout_station(user_id, station_id)
+
+        running_exercise = self.__active_exercises.get(user_id, None)
+        if running_exercise is not None:
+            logy.debug(f'User "{user_id}" is doing the exercise "{running_exercise}". Stop exercise')
+            self.stop_exercise(user_id)
+            time.sleep(sleeping_time_s)
+
     ##################################################################################################################
     #################################### Server Callback functions ###################################################
     ##################################################################################################################
@@ -258,6 +293,9 @@ class StationManager():
         return self.login_station(user_id, station_id)
 
     def login_station(self, user_id: str, station_id: int):
+        if self._showroom_mode:
+            self.fullfill_station_login_condition(user_id, station_id)
+
         with self._exercise_station_mutex:
             if not self.__param_updater.is_station_valid(station_id):
                 return SMResponse(501, 4, {"station" : station_id})
@@ -293,12 +331,15 @@ class StationManager():
         return self.logout_station(user_id)
 
     def logout_station(self, user_id):
+
+        running_exercise = self.__active_exercises.get(user_id, None)
+        if running_exercise is not None:
+            logy.debug(f'User "{user_id}" is doing the exercise "{running_exercise}". Stop exercise.')
+            self.stop_exercise(user_id)
+
         with self._exercise_station_mutex:
             if user_id not in self.__active_stations:
                 return SMResponse(502, 12, {})
-
-            if user_id in self.__active_exercises:
-                self.__active_exercises.pop(user_id)
 
             station_id = self.__active_stations.get(user_id)
             if station_id is None:
@@ -337,6 +378,9 @@ class StationManager():
         return answer
 
     def start_exercise(self, user_id: str, station_id: int, exercise_id: int, set_id = 1):
+        if self._showroom_mode:
+            self.fullfill_exercise_start_condition(user_id, station_id)
+
         with self._exercise_station_mutex:
             if user_id not in self.__active_stations:
                 return SMResponse(503, 10, {"station": station_id, "exercise": exercise_id, "set_id" : set_id}), None

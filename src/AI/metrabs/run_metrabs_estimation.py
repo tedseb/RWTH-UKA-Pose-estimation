@@ -261,7 +261,6 @@ class PoseEstimator():
 
     def start_ai(self, data, images, boxes, fake_images):
         ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
-        logy.debug_throttle(f"{images.shape[0]}", 1000)
 
         with logy.TraceTime("matrabs_multi_image"):
             if AI_MODEL == 0:

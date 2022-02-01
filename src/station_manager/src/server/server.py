@@ -71,15 +71,15 @@ class ServerSocket(WebSocketServerProtocol):
             return
 
         data_str = str(payload.decode('utf8'))
-        logy.warn(data_str)
+        #logy.warn(data_str)
         try:
             data = json.loads(data_str)
         except json.decoder.JSONDecodeError:
                 self.send_error("Wrong JSON Format", 8)
                 return
 
-        logy.warn(str(data))
-        logy.warn(type(data))
+        #logy.warn(str(data))
+        #logy.warn(type(data))
         #self.factory._logger.debug("Received Data ", str(data))
         #user_id = data.get("id")
         # if user_id is None:

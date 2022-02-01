@@ -19,6 +19,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="Verbose mode.", action="store_true")
+    parser.add_argument("-s", "--showroom-mode", help="Verbose mode.", action="store_true")
     parser.add_argument("-d", "--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
     parser.add_argument("--without-gui", action="store_true", help="Start without gui")
 
@@ -41,7 +42,8 @@ if __name__ == '__main__':
 
     with_gui = not args.without_gui
     data_manager = DataManager()
-    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager, verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui)
+    station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager,
+        verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui, showroom_mode=args.showroom_mode)
     logy.info("Station Manager is Ready")
     reactor.listenTCP(3030, station_manager._server_controller)
     reactor.run()

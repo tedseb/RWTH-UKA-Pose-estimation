@@ -19,7 +19,7 @@ class CameraStationController():
 
         self._camera_station_frames = self._data_manager.get_station_frame_lists()
         self._stations = self._data_manager.get_stations()
-        logy.warn(self._stations)
+        logy.debug(f"Station list: {self._stations}")
         #self._camera_weight_frames = self._data_manager.get_weight_frame_lists()
         #for camera_id, station_dict in frames.items():
             #self._camera_list[camera_id] = station_dict

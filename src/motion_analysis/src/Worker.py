@@ -161,7 +161,7 @@ class Worker(Thread):
 
         def array_factory():
             return np.array([0])
-        self.alignments_this_rep = defaultdict(array_factory)
+        self.bad_alignments_this_rep = defaultdict(array_factory)
         self.progress_differences_this_rep = defaultdict(array_factory)
 
         def false_factory():
@@ -233,19 +233,18 @@ class Worker(Thread):
                             for k in self.bad_repetition_dict.keys():
                                 self.bad_repetition_dict[k] = True
                             increase_reps = False
-                            self.alignments_this_rep[increase_recording_idx] = np.array(
-                                [self.alignments_this_rep[increase_recording_idx][-1]])
+                            self.bad_alignments_this_rep[increase_recording_idx] = np.array(
+                                [self.bad_alignments_this_rep[increase_recording_idx][-1]])
 
-                    # If the feature alignment in this repetitions is too high, we do not count the repetition
-                    if increase_reps and np.mean(self.alignments_this_rep[increase_recording_idx]) < self.config['MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT'] and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
+                    # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
+                    if increase_reps and len(self.bad_alignments_this_rep[increase_recording_idx]) >= 10  and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
                         logy.debug("Feature missalignment for recording " + str(
                             increase_recording_idx) + "  during this repetition. Repetition falsified.")
+                        self.bad_repetition_dict[increase_recording_idx] = True
                         increase_reps = False
-                        self.alignments_this_rep[increase_recording_idx] = np.array(
-                            [self.alignments_this_rep[increase_recording_idx][-1]])
 
                     update_gui_progress(self.gui, self.progress, np.mean([np.mean(
-                        alignments) for alignments in self.alignments_this_rep.values()]), self.progress_alignment_vector, score, self.last_score)
+                        alignments) for alignments in self.bad_alignments_this_rep.values()]), self.progress_alignment_vector, score, self.last_score)
 
                     # Send info back to App
                     if increase_reps:
@@ -351,7 +350,7 @@ class Worker(Thread):
             f.errors = errors
             f.progress_vector = progress_vector
             f.prediction = prediction
-
+            
             update_gui_features(self.gui, f)
 
         smallest_delta = np.inf
@@ -365,8 +364,9 @@ class Worker(Thread):
             recording = recordings[idx]['recording']
             progress_estimate, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(
                 vectors=vectors)
-            self.alignments_this_rep[idx] = np.append(
-                self.alignments_this_rep[idx], alignment)
+            if alignment < self.config["MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT"]:
+                self.bad_alignments_this_rep[idx] = np.append(
+                    self.bad_alignments_this_rep[idx], alignment)
             reference_frame_index = int(len(recording) * progress_estimate)
             reference_pose = recording[reference_frame_index]
 
@@ -501,10 +501,10 @@ class Worker(Thread):
                     logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
                 self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-5:] # TODO: Possibly introduce new HP that controlls the '5' in this term
                 self.beginning_of_next_repetition_detected[idx] = False
-                self.alignments_this_rep[idx] = np.array(
-                    [self.alignments_this_rep[idx][-1]])
+                self.bad_alignments_this_rep[idx] = np.array(
+                    [self.bad_alignments_this_rep[idx][-1]])
                 self.progress_differences_this_rep[idx] = np.array(
-                    [self.alignments_this_rep[idx][-1]])
+                    [self.bad_alignments_this_rep[idx][-1]])
                 self.progress = 0
 
             # If one reference recording has detected a repetition, we let it count

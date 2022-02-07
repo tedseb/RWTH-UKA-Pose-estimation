@@ -64,8 +64,7 @@ class CameraNode():
         elif self._camera_mode is VideoMode.DISK_VIDEO:
             self.set_disk_video(video_info)
             self._disk_mode = True
-
-        if not self._cap.isOpened() or self._cap is None:
+        elif not self._cap.isOpened() or self._cap is None:
             self.set_youtube_stream()
             self._youtube_mode = True
     
@@ -119,7 +118,7 @@ class CameraNode():
             frame_num += 1
             rate.sleep()
 
-    def start_video_publisher(self, calculate_timestamps=True):
+    def start_dataset_recording_publisher(self, calculate_timestamps=True):
         """ Same as a camera publisher, only that it takes a video as input and publishes the time of the video in parallel. Stops after playback"""
         self._timecode_pub = rospy.Publisher('ma_validation_video_timing', Int32, queue_size=100)
         self.ma_validation_done_pub = rospy.Publisher('ma_validation_done', Int32, queue_size=100)
@@ -274,6 +273,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
     parser.add_argument("--channel", default="image", type=str, help="Image channel Name")
     parser.add_argument("--debug-frames", default=0, type=int, help="Debug Frame time in ms. At 0 there are no debug frames.")
+    parser.add_argument("--dataset-recording", default=False, type=bool, help="True if this is a dataset recording session.")
 
     arg_count = len(sys.argv)
     last_arg = sys.argv[arg_count - 1]
@@ -317,8 +317,8 @@ if __name__ == '__main__':
     try:
         print("INFO:", info)
         node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames, channel=args.channel)
-        if args.disk:
-            node.start_video_publisher()
+        if args.dataset_recording:
+            node.start_dataset_recording_publisher()
         else:
             node.start_camera_publisher()
     except rospy.ROSInterruptException:

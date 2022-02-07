@@ -6,6 +6,7 @@ import subprocess
 import argparse
 import sys
 import signal
+import glob
 import psutil
 #from data_manager import data_manager
 import logy
@@ -66,7 +67,8 @@ class StationManager():
         self.__camera_process = {}
         self.__transform_process = {}
         self.__param_updater = CameraStationController(self._data_manager)
-        self.__param_updater.add_debug_station(DEBUG_STATION_ID, DEBUG_STATION_ID, [0, 0, 4000, 4000])
+        for _id in range(DEBUG_STATION_ID, DEBUG_STATION_ID + 50):
+            self.__param_updater.add_debug_station(_id, _id, [0, 0, 4000, 4000])
 
         #Mutex
         self._exercise_station_mutex = Lock()
@@ -157,11 +159,12 @@ class StationManager():
         logy.debug("Register Message Callback")
         self._client_callbacks[client_id] = callback
 
-    def start_camera(self, camera_id: int, debug_station = False):
+    def start_camera(self, camera_id: int, debug_station = False, cam_info=None):
         logy.debug(f"Start Camera with id {camera_id}")
         if debug_station:
             cam_type = 3
-            cam_info = "/home/trainerai/trainerai-core/data/videos/video.mp4"
+            if not cam_info:
+                cam_info = "/home/trainerai/trainerai-core/data/videos/video.mp4"
         else:
             cam_type = self._data_manager.get_camera_type(camera_id)
             cam_info = self._data_manager.get_camera_type_info(camera_id)
@@ -281,7 +284,10 @@ class StationManager():
 
         logy.debug(f"Turn on: {turn_on}")
         for cam_index in turn_on:
-            self.start_camera(cam_index, station_id==DEBUG_STATION_ID)
+            avis = glob.glob("/home/trainerai/trainerai-core/data/*.avi")
+            mp4s = glob.glob("/home/trainerai/trainerai-core/data/*.mp4")
+            _videos = avis + mp4s
+            self.start_camera(cam_index, station_id>=DEBUG_STATION_ID, cam_info=_videos[station_id-DEBUG_STATION_ID])
 
         with self._exercise_station_mutex:
             self.__active_stations[user_id] = station_id

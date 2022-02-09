@@ -28,7 +28,6 @@ class CameraStationController():
     def is_station_valid(self, station_id) -> bool:
         if station_id in self._stations:
             return True
-        #logy.warn(str(self._stations))
         return False
 
     def add_debug_station(self, station_id, camera_id, frame):

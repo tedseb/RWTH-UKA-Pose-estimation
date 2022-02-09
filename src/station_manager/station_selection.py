@@ -7,6 +7,7 @@ import signal
 import time
 import json
 import copy
+import glob
 from typing import Callable, Dict
 from websocket import create_connection
 import autobahn.exception as aex
@@ -16,7 +17,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QListWidgetItem, QDialog
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QObject
 from PyQt5.QtGui import QIntValidator, QColor
 
-
+DEBUG_STATION_ID = 999 # TODO: Careful, we currently cannot impor this from station_manager so it is defined twice!
 
 from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory
 
@@ -131,7 +132,14 @@ class StationSelection(StationSelectionUi, QObject):
 
         for station_id, station_name in stations.items():
             self.station_combobox.addItem(station_name, station_id)
-        self.station_combobox.addItem("video ./data/video.avi", 999)
+
+        avis = glob.glob("/home/trainerai/trainerai-core/data/*.avi")
+        mp4s = glob.glob("/home/trainerai/trainerai-core/data/*.mp4")
+        _videos = avis + mp4s
+        highest_station_id = DEBUG_STATION_ID - 1
+        for _video in _videos:
+            highest_station_id += 1
+            self.station_combobox.addItem(_video, highest_station_id)
         #self.station_combo.addItems(station_names)
         #self.video_combobox.addItems(names)
         self._main_window.show()

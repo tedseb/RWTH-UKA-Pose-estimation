@@ -91,6 +91,19 @@ app.get('/api/connections/dict', (req, res) => {
 app.get('/api/websocket/cache', (req, res) => {
     res.send(JSON.stringify(websocketCache));
 });
+app.get('/api/mock/personsignal', (req, res) => {
+    websockets.forEach(client => {
+        if (client.readyState === ws_1.default.OPEN) {
+            let signal = "mock";
+            let res = {
+                usage: 'signal_person',
+                data: signal
+            };
+            //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
+            client.send(JSON.stringify(res));
+        }
+    });
+});
 if (args['isolated'] === 'on') {
     console.log("running in isolated environment, reloading websocketCache");
     const cached = require('./websocket.json');
@@ -117,7 +130,7 @@ if (args['rosnodejs'] === 'on') {
     rosnodejs.initNode('/showroom');
     const nh = rosnodejs.nh;
     const std_msgs = rosnodejs.require('std_msgs');
-    console.log(std_msgs);
+    //tscconsole.log(std_msgs);
     const int16 = std_msgs.msg.Int16;
     const StringMsg = std_msgs.msg.String;
     const StationUsage = rosnodejs.require("backend").msg.StationUsage;
@@ -133,7 +146,7 @@ if (args['rosnodejs'] === 'on') {
             };
             pose[skeleton.labels[index]] = point;
         });
-        websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(pose) });
+        //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(pose)});
         websockets.forEach(ws => {
             ws.send(JSON.stringify(pose));
         });
@@ -145,7 +158,7 @@ if (args['rosnodejs'] === 'on') {
                     usage: 'reference_progress',
                     data: msg
                 };
-                websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
+                //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 ws.send(JSON.stringify(res));
             }
         });
@@ -168,7 +181,7 @@ if (args['rosnodejs'] === 'on') {
                     data: obj.video_frame_idx
                 };
                 console.log(res);
-                websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
+                //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 ws.send(JSON.stringify(res));
             }
         });
@@ -212,7 +225,7 @@ if (args['rosnodejs'] === 'on') {
                     usage: 'signal_person',
                     data: signal
                 };
-                websocketCache.push({ 'date': getDelta(), 'message': JSON.stringify(res) });
+                //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 client.send(JSON.stringify(res));
             }
         });

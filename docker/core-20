@@ -59,16 +59,16 @@ RUN pip3 install nvidia-ml-py3 pytest
 # RUN pip3 install PyQt5==5.15.4
 # RUN pip3 install pymongo
 
-RUN sudo ln -s /usr/local/cuda-11.2/lib64/libcusolver.so.11 /usr/local/cuda-11.2/lib64/libcusolver.so.10
+RUN sudo ln -s /usr/local/cuda-11.5/lib64/libcusolver.so.11 /usr/local/cuda-11.5/lib64/libcusolver.so.10
 
-RUN echo "LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:\$LD_LIBRARY_PATH" >> /home/trainerai/.bashrc
+RUN echo "LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:\$LD_LIBRARY_PATH" >> /home/trainerai/.bashrc
 RUN echo "PYTHONPATH=\$PYTHONPATH:/home/trainerai/trainerai-core/src/lib/" >> /home/trainerai/.bashrc
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 
 RUN chmod 777 -R /home/trainerai/.config
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
-RUN sudo ln -s /usr/bin/pip3 /usr/bin/pip
+#RUN sudo ln -s /usr/bin/pip3 /usr/bin/pip
 
 ENTRYPOINT ["/home/trainerai/start_script.sh"]
 

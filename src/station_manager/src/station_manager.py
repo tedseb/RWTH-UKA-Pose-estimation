@@ -325,7 +325,8 @@ class StationManager():
             avis = glob.glob("/home/trainerai/trainerai-core/data/*.avi")
             mp4s = glob.glob("/home/trainerai/trainerai-core/data/*.mp4")
             _videos = avis + mp4s
-            self.start_camera(cam_index, station_id>=DEBUG_STATION_ID, cam_info=None)
+            cam_info = None if station_id<DEBUG_STATION_ID else _videos[station_id-DEBUG_STATION_ID]
+            self.start_camera(cam_index, station_id>=DEBUG_STATION_ID, cam_info=cam_info)
 
         with self._exercise_station_mutex:
             self.__active_stations[user_id] = station_id

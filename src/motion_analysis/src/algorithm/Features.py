@@ -228,7 +228,8 @@ class BaseFeature(ABC):
 
     @values.setter
     def values(self, v):
-        self._values = v[-self.config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE']:]
+        lowest_idx = max(len(v)-self.config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE'], 0)
+        self._values = v[lowest_idx:]
 
     @property
     def discretized_values(self):
@@ -236,7 +237,8 @@ class BaseFeature(ABC):
 
     @discretized_values.setter
     def discretized_values(self, dv):
-        self._discretized_values = dv[-self.max_digitized_traj_len:]
+        lowest_idx = max(len(dv)-self.max_digitized_traj_len, 0)
+        self._discretized_values = dv[lowest_idx:]
 
     @property
     def states(self):

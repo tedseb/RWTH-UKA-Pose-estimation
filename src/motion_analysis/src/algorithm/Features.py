@@ -148,7 +148,7 @@ class BaseFeature(ABC):
             self.discretized_values = np.append(
                 self.discretized_values, scale[np.argmin(abs(scale - value))])
 
-        self.discretized_values = remove_jitter_from_last_samples(
+        self.discretized_values = remove_bump_from_last_samples(
             self.discretized_values, self.config['REMOVE_JITTER_RANGE'])
 
         self.values = np.append(self.values, value)
@@ -527,9 +527,10 @@ def discretize_feature_values(value, last_discritized_value, resolution):
     return new_resampled_feature_values
 
 
-def remove_jitter_from_last_samples(trajectory, _range):
-    """Remove repeated ups and downs only from the last samples of a (discretized) trajectory.
+def remove_bump_from_last_samples(trajectory, _range) -> np.ndarray:
+    """Remove ONE up or down only from the last samples of a (discretized) trajectory.
 
+    This method is to be called at every trajectory update.
     A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
     For example measurements of an angle can jitter if the adjecent joints jitter.
     With this method we remove such measurements from a trajectory.
@@ -544,10 +545,18 @@ def remove_jitter_from_last_samples(trajectory, _range):
     trajectory = np.array(trajectory)
     last_samples = trajectory[-_range:]
     rest = trajectory[:-_range]
-    return np.append(rest, remove_jitter_from_trajectory(last_samples, _range))
+    idx_max = np.argmax(last_samples)
+    idx_min = np.argmin(last_samples)
+
+    # This works only if we call this method after every trajectory update
+    if idx_max == len(last_samples) - 1 or idx_min == len(last_samples) - 1:
+        return trajectory
+    else:
+        return np.append(rest, last_samples[:max(idx_max, idx_min)])
+    
 
 
-def remove_jitter_from_trajectory(trajectory, _range):
+def remove_bumps_from_trajectory(trajectory, _range) -> np.ndarray:
     """Remove repeated ups and downs in a (discretized) trajectory.
 
     A trajectory may be subjected to quick up and down movement as unreliable measurements are taken.
@@ -630,7 +639,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
                     feature_states.append(feature_state)
                     last_feature_state = feature_state
 
-        discrete_values = remove_jitter_from_trajectory(
+        discrete_values = remove_bumps_from_trajectory(
             discrete_values, config['REMOVE_JITTER_RANGE'])
 
         discrete_trajectories_tensor.append(discrete_values)
@@ -718,7 +727,6 @@ def compute_median_discrete_trajectory_median_feature_states_and_reference_traje
         The median feature states
         The discretization ranges
     """
-    import rospy as rp
     # Construction of a median feature trajectory
     # Tells us where in the overall reference trajectory this resampled median value lies as a fraction
     discretization_ranges = list()

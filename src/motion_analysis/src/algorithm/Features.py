@@ -209,7 +209,8 @@ class BaseFeature(ABC):
 
     @filtered_values.setter
     def filtered_values(self, filtered_values):
-        self._filtered_values = filtered_values[-self.config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE']:]
+        lowest_idx = max(len(filtered_values)-self.config['FEATURE_TRAJECTORY_MAX_MEMORY_SIZE'], 0)
+        self._filtered_values = filtered_values[lowest_idx:]
 
     @property
     def digitized_value(self):

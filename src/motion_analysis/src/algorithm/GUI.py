@@ -335,6 +335,9 @@ class MotionAnaysisGUI(QMainWindow):
         self._progress_vector_x = np.array([0, progress_alignment_vector[0]])
         self._progress_vector_y = np.array([0, progress_alignment_vector[1]])
 
+        if np.isnan(alignment):
+            return
+
         # Set alignment widget
         pen_color = tuple(np.array(GYMY_ORANGE) *
                           (1 - alignment) + np.array(GYMY_GREEN) * alignment)

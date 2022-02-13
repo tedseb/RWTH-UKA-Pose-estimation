@@ -195,8 +195,6 @@ class Worker(Thread):
 
                     for f in self.features.values():
                         f.update_pose(pose, self.pose_definition_adapter)
-                        for rf in f.reference_recording_features:
-                            rf.update_pose(pose, self.pose_definition_adapter)
 
                     # Calculate poses before we test for repetition increase, because that might erase feature values for this repetition!
                     # Calculate a new reference pose mapping

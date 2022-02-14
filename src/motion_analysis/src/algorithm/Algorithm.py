@@ -51,8 +51,7 @@ def trajectory_distance(hankel_matrix: np.ndarray, feature_trajectory: np.ndarra
     comparing_length = min((len(feature_trajectory), len(hankel_matrix)))
     hankel_matrix_shortened = hankel_matrix[:, -comparing_length:]
     feature_trajectory_shortened = feature_trajectory[-comparing_length:]
-    distances = np.power(hankel_matrix_shortened -
-                         feature_trajectory_shortened, 2)
+    distances = hankel_matrix_shortened - feature_trajectory_shortened
     # CAREFUL! numpy creates an error if we do not use this seemingly useless line!
     distances = np.array(distances, dtype=np.float16)
     # Let older signals have less influence on the error

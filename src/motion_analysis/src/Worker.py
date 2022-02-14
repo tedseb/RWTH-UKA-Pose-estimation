@@ -124,6 +124,12 @@ class Worker(Thread):
 
         self.skelleton_deltas_since_rep_start = []
 
+        self.last_worst_recordings_mapping_delta_ms = 0
+        self.best_reference_recording_idx = 0
+        
+        self._t = 0
+        self.t_0 = 0
+
         self.start()
 
     def log_with_metadata(self, logger: object, msg: str) -> NoReturn:
@@ -148,6 +154,13 @@ class Worker(Thread):
         msg.bodyParts = self.pose_definition_adapter.ndarray_to_body_parts(
             pose)
         publisher.publish(msg)
+
+    def logtime(self, _id): # TODO: Remove me!
+        """A utility function to time this code and find bottlenecks."""
+        t_old = self._t
+        self._t = (time.time_ns() / 1e+6) - self.t_0
+        t_d =  self._t - t_old
+        rp.logerr(str(_id) + ": t:" + str(self._t) + " td: " + str(t_d))
 
     def run(self) -> NoReturn:
         _, _, spot_info_key, spot_feature_key = generate_redis_key_names(
@@ -175,6 +188,9 @@ class Worker(Thread):
         while(self.running):
             try:
                 with logy.TraceTime("motion_analysis_full_algorithm_iter_t"):
+                    self.t_0 = time.time_ns() / 1e+6
+                    self._t = 0
+
                     self.spot_info_dict.update(self.spot_metadata_interface.get_spot_info_dict(
                         spot_info_key, ["exercise_data_hash", "start_time", "station_usage_hash"]))
                     self.spot_info_dict.update(self.get_exercise_data(
@@ -189,12 +205,13 @@ class Worker(Thread):
                     self.last_t = self.t if self.t else present_joints_with_timestamp[
                         'ros_timestamp']
                     self.t = present_joints_with_timestamp['ros_timestamp']
-
                     pose = self.pose_definition_adapter.normalize_skelleton(
                         pose)
 
                     for f in self.features.values():
                         f.update_pose(pose, self.pose_definition_adapter)
+                        for rf in f.reference_recording_features:
+                            rf.update_pose(pose, self.pose_definition_adapter)
 
                     # Calculate poses before we test for repetition increase, because that might erase feature values for this repetition!
                     # Calculate a new reference pose mapping
@@ -204,6 +221,7 @@ class Worker(Thread):
                     self.skelleton_deltas_since_rep_start.append(delta)
                     self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-150:] # TODO: Parameterize the 150!
                     score = self.calculate_repetition_score()
+
 
                     # Compare joints with expert system data
                     increase_reps, increase_recording_idx = self.detect_repetition()
@@ -322,9 +340,21 @@ class Worker(Thread):
             [] for h in recordings]
         progress_vectors = [[] for h in recordings]
 
+        compute_all = False
+        if self.t - self.last_worst_recordings_mapping_delta_ms >= self.config["MAP_WORST_RECORDINGS_EVERY_N_S"]:
+            # If MAP_WORST_RECORDINGS_EVERY_N_MS ms have passed, compute all mappings
+            self.last_worst_recordings_mapping_delta_ms = self.t
+            compute_all = True
+
         for h, f in self.features.items():  # Iterate over features
             # Iterate over reference features
             for recording_idx, rf in enumerate(f.reference_recording_features):
+                if recording_idx == self.best_reference_recording_idx or recordings[recording_idx].get("video_file_name", False):
+                    # If this is the best recording or a video recording, compute at every step
+                    pass
+                elif not compute_all:
+                    continue
+
                 # For our algorithm, we compare the discretized trajectories of our reference trajectories and our user's trajectory
                 discretization_reference_trajectory_indices_tensor = rf.discretization_reference_trajectory_indices_tensor[
                     0]
@@ -363,6 +393,7 @@ class Worker(Thread):
             progress_estimate, alignment, progress_alignment_vector = map_vectors_to_progress_and_alignment(
                 vectors=vectors)
             if alignment < self.config["MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT"]:
+                self.log_with_metadata(logy.info, "Repetition aborted because of too little feature alignment.")
                 self.bad_alignments_this_rep[idx] = np.append(
                     self.bad_alignments_this_rep[idx], alignment)
             reference_frame_index = int(len(recording) * progress_estimate)
@@ -386,9 +417,9 @@ class Worker(Thread):
 
                 if delta < smallest_delta:
                     smallest_delta = delta
-                    best_reference_pose = reference_pose
-                    best_reference_frame_index = reference_frame_index
-                    best_reference_recording_idx = idx
+                    self.best_reference_pose = reference_pose
+                    self.best_reference_frame_index = reference_frame_index
+                    self.best_reference_recording_idx = idx
 
         self.progress_alignment_vector = np.mean(progress_alignment_vectors)
         last_progress = self.progress
@@ -416,7 +447,7 @@ class Worker(Thread):
 
         self.progress = np.mean(progress_estimates)
 
-        return best_reference_pose, smallest_delta
+        return self.best_reference_pose, smallest_delta
 
     @logy.trace_time("detect_repetition", period=100)
     def detect_repetition(self) -> Tuple[bool, bool, dict, Any]:

@@ -149,7 +149,7 @@ class BaseFeature(ABC):
                 self.discretized_values, scale[np.argmin(abs(scale - value))])
 
         self.discretized_values = remove_bump_from_last_samples(
-            self.discretized_values, self.config['REMOVE_JITTER_RANGE'])
+            self.discretized_values, self.config['REMOVE_BUMPS_RANGE'], self.remove_less_bumps_upper_boundary, self.remove_less_bumps_lower_boundary, self.config["REMOVE_BUMPS_NEAR_TURNING_POINT"])
 
         self.values = np.append(self.values, value)
         has_changed_progression = self.compute_new_feature_progression(
@@ -293,6 +293,10 @@ class ReferenceRecordingFeature(BaseFeature):
 
         self.update_data()
 
+        self.reference_values = self.values
+        self.reference_filtered_values = self.filtered_values
+        self.reference_discretized_values = self.discretized_values
+
     def add_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter = None):
         """Add a pose to this reference feature's trajectory.
 
@@ -320,6 +324,8 @@ class ReferenceRecordingFeature(BaseFeature):
 
         # We then compute the boundaries as the range of motion of reference tractories, with tolerances
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
+        self.remove_less_bumps_upper_boundary = self.highest_value * (1 - self.config['REMOVE_BUMPS_NEAR_TURNING_POINT_ALPHA'])
+        self.remove_less_bumps_lower_boundary = self.lowest_value * (1 + self.config['REMOVE_BUMPS_NEAR_TURNING_POINT_ALPHA'])
         self.resolution = self.range_of_motion * \
             self.config['FEATURE_TRAJECTORY_RESOLUTION_FACTOR']
         self.lower_boundary = self.lowest_value + self.range_of_motion * \
@@ -339,7 +345,7 @@ class ReferenceRecordingFeature(BaseFeature):
             self.hankel_tensor, \
             self.feature_states_matrix, \
             self.scale = compute_discrete_trajectories_hankel_matrices_and_feature_states(
-                [self.filtered_values], self.resolution, self.lower_boundary, self.upper_boundary, self.config)
+                [self.filtered_values], self.resolution, self.lower_boundary, self.upper_boundary, self.remove_less_bumps_lower_boundary, self.remove_less_bumps_upper_boundary, self.config)
 
         self.discretized_values = discrete_trajectories_tensor[0]
 
@@ -441,6 +447,8 @@ class Feature(BaseFeature):
         self.range_of_motion = abs(self.highest_value - self.lowest_value)
         self.resolution = self.range_of_motion * \
             self.config['FEATURE_TRAJECTORY_RESOLUTION_FACTOR']
+        self.remove_less_bumps_upper_boundary = self.highest_value * (1 - self.config['REMOVE_BUMPS_NEAR_TURNING_POINT_ALPHA'])
+        self.remove_less_bumps_lower_boundary = self.lowest_value * (1 + self.config['REMOVE_BUMPS_NEAR_TURNING_POINT_ALPHA'])
         self.lower_boundary = self.lowest_value + self.range_of_motion * \
             self.config['REDUCED_RANGE_OF_MOTION_TOLERANCE_LOWER']
         self.upper_boundary = self.highest_value - self.range_of_motion * \
@@ -457,7 +465,7 @@ class Feature(BaseFeature):
             self.hankel_tensor, \
             self.feature_states_matrix, \
             self.scale = compute_discrete_trajectories_hankel_matrices_and_feature_states(
-                filtered_trajectories, self.resolution, self.lower_boundary, self.upper_boundary, self.config)
+                filtered_trajectories, self.resolution, self.lower_boundary, self.upper_boundary, self.remove_less_bumps_lower_boundary, self.remove_less_bumps_upper_boundary, self.config)
 
         # TODO: Maybe do this for every feature trajectory separately and take the median of these as the number of state changes
         median_feature_states_array = compute_median_feature_states(
@@ -530,7 +538,7 @@ def discretize_feature_values(value, last_discritized_value, resolution):
     return new_resampled_feature_values
 
 
-def remove_bump_from_last_samples(trajectory, _range) -> np.ndarray:
+def remove_bump_from_last_samples(trajectory, _range, remove_less_bumps_lower_boundary, remove_less_bumps_upper_boundary, remove_less_range) -> np.ndarray:
     """Remove ONE up or down only from the last samples of a (discretized) trajectory.
 
     This method is to be called at every trajectory update.
@@ -545,6 +553,9 @@ def remove_bump_from_last_samples(trajectory, _range) -> np.ndarray:
     Return:
         The trimmed trajectory
     """
+    if trajectory[-1] < remove_less_bumps_lower_boundary or trajectory[-1] > remove_less_bumps_upper_boundary:
+        _range = remove_less_range
+
     trajectory = np.array(trajectory)
     last_samples = trajectory[-_range:]
     rest = trajectory[:-_range]
@@ -595,7 +606,7 @@ def remove_bumps_from_trajectory(trajectory, _range) -> np.ndarray:
     return trajectory
 
 
-def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, resolution, lower_boundary, upper_boundary, config):
+def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_trajectories, resolution, lower_boundary, upper_boundary, rm_less_bumps_lower_boundary,  rm_less_bumps_upper_boundary, config):
     """Discritize a list of trajectories and compute their hankel tensor and features states.
 
     Args:
@@ -643,7 +654,7 @@ def compute_discrete_trajectories_hankel_matrices_and_feature_states(feature_tra
                     last_feature_state = feature_state
 
         discrete_values = remove_bumps_from_trajectory(
-            discrete_values, config['REMOVE_JITTER_RANGE'])
+            discrete_values, config["REMOVE_BUMPS_REFERENCE_TRAJECTORY"])
 
         discrete_trajectories_tensor.append(discrete_values)
         hankel_matrix = hankel(discrete_values, np.roll(discrete_values, -1))

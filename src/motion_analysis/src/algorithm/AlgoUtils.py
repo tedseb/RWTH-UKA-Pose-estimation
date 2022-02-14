@@ -503,9 +503,9 @@ def update_gui_features(gui, feature):
                 spec = feature.specification_dict
                 spec.pop("type")
                 widget.update_static_data.emit(
-                    np.array(sample_reference_feature.values),
-                    np.array(sample_reference_feature.filtered_values),
-                    np.array(sample_reference_feature.discretized_values),
+                    np.array(sample_reference_feature.reference_values),
+                    np.array(sample_reference_feature.reference_filtered_values),
+                    np.array(sample_reference_feature.reference_discretized_values),
                     str(feature.type),
                     str(spec))
             except KeyError:

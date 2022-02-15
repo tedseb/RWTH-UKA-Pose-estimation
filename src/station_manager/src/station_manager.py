@@ -109,7 +109,7 @@ class StationManager():
         data["person_active"] = False
         response_json = json.dumps(data)
         self._publisher_persons.publish(response_json)
-        del self._last_person_detected[self._next_person_time_out_station]
+        self._last_person_detected.pop(self._next_person_time_out_station, None)
 
         if self._last_person_detected:
             self._next_person_time_out_station = min(self._last_person_detected, key=self._last_person_detected.get)
@@ -419,7 +419,7 @@ class StationManager():
             if user_id not in self.__active_stations or user_id not in self.__active_exercises:
                 return SMResponse(504, 12, {}), None
             station_id = self.__active_stations[user_id]
-            exercise_data = self.__active_exercises[user_id]
+            exercise_data = self.__active_exercises.pop(user_id, None)
             exercise_id = exercise_data[0]
             set_id = exercise_data[1]
 
@@ -427,8 +427,8 @@ class StationManager():
         self._publisher_station_usage.publish(StationUsage(station_id, False , str(exercise_id), station_usage_hash))
         logy.info(f"Stop exercise {exercise_id} on Station {station_id}")
 
-        with self._exercise_station_mutex:
-            self.__active_exercises.pop(user_id)
+        #with self._exercise_station_mutex:
+        #self.__active_exercises.pop(user_id, None)
 
         return SMResponse(504, 1, {"station": station_id, "exercise": exercise_id, "set_id": set_id}), station_usage_hash
 

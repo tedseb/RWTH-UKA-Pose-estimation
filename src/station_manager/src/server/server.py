@@ -30,6 +30,7 @@ class ServerSocket(WebSocketServerProtocol):
         9 : "Wrong user ID",
         10 : "User already loged in into another station or station does not exist",
         11 : "User started already an exercise. This should be finished first.",
+        12 : "User not loged into a station/ecercise"
     }
 
     def onConnect(self, request):

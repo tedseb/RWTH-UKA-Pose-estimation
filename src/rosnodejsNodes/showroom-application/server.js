@@ -1,9 +1,4 @@
 "use strict";
-/*
-    SHOWROOM APPLICATION
-    Node.js-Server
-    @comcuoglu
-*/
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
@@ -23,214 +18,172 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express = require('express');
-const bodyParser = require('body-parser');
-const config = require('./config.json');
-var url = require('url');
 const ws_1 = __importStar(require("ws"));
+const body_parser_1 = __importDefault(require("body-parser"));
+const express = require('express');
 const args = require('minimist')(process.argv.slice(2));
-let isRos = args['rosnodejs'] === 'on';
-let ai = args['spin'];
-let isIsolated = args['isolated'] === 'on';
+const config = require('./config.json');
 let skeleton;
-// Skeleton Usage
-if (args['ai'] === 'spin') {
+if (args.ai === 'metrabs') {
     skeleton = {
         used: config.metrabs.used,
         labels: config.metrabs.labels,
-        connections: config.metrabs.connections
+        connections: config.metrabs.connections,
     };
-    console.log(skeleton);
 }
 else {
     skeleton = {
         used: config.ownpose.used,
         labels: config.ownpose.labels,
-        connections: config.ownpose.connections
+        connections: config.ownpose.connections,
     };
 }
-// local usage
-let websocketCache = [];
-let start = Date.now();
-let getDelta = () => { return Date.now() - start; };
-setInterval(() => {
-    websocketCache = [];
-}, 10000);
-// Parameters and Constants:
-const PORT = config.PORT;
 const app = express();
-const server = app.listen(PORT, () => { console.log("Listening on port " + PORT); });
-app.use(bodyParser.json());
-app.use(express.static(process.cwd() + '/dist/'));
-app.use(bodyParser.urlencoded({
-    limit: '50mb',
-    extended: true
-}));
-// WebSocket Handlers
-const wss = new ws_1.WebSocketServer({ server });
-var websockets = new Array();
-wss.on('connection', (ws, req) => {
-    let url_parts = url.parse(req.url, true);
-    let query = url_parts.query;
-    console.log(query);
-    websockets.push(ws);
-    if (isRos) {
-    }
+const server = app.listen(config.PORT, () => {
+    const startMessage = String.raw `
+                                                
+    )                                      
+    ( /(       (  (    (                 )    
+  (   )\())  (   )\))(   )(    (    (     (     
+  )\ ((_)\   )\ ((_)()\ (()\   )\   )\    )\  ' 
+  ((_)| |(_) ((_)_(()((_) ((_) ((_) ((_) _((_))  
+  (_-<| ' \ / _ \\ V  V /| '_|/ _ \/ _ \| '  \() 
+  /__/|_||_|\___/ \_/\_/ |_|  \___/\___/|_|_|_|  
+                                              
+  `;
+    console.log(startMessage);
+    console.log(`Listening on http://localhost:${config.PORT}`);
 });
-// WebServer
-app.use(express.static(process.cwd() + '/webtarget'));
+app.use(body_parser_1.default.json());
+app.use(express.static(`${process.cwd()}/webtarget/`));
+app.use(body_parser_1.default.urlencoded({
+    limit: '50mb',
+    extended: true,
+}));
+const wss = new ws_1.WebSocketServer({ server });
+const websockets = [];
+wss.on('connection', (ws) => {
+    websockets.push(ws);
+});
 app.get('/', (req, res) => {
-    res.sendFile(process.cwd() + '/webtarget/index.html');
+    res.sendFile(`${process.cwd()}/webtarget/index.html`);
 });
 app.get('/api/connections/dict', (req, res) => {
-    console.log("WAS IST DAS HIER");
-    console.log(skeleton, "SKELETON HIER");
     res.send(skeleton);
 });
-app.get('/api/websocket/cache', (req, res) => {
-    res.send(JSON.stringify(websocketCache));
-});
 app.get('/api/mock/personsignal', (req, res) => {
-    websockets.forEach(client => {
+    websockets.forEach((client) => {
         if (client.readyState === ws_1.default.OPEN) {
-            let signal = "mock";
-            let res = {
+            const signal = 'mock';
+            const msg = {
                 usage: 'signal_person',
-                data: signal
+                data: signal,
             };
-            //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
-            client.send(JSON.stringify(res));
+            client.send(JSON.stringify(msg));
         }
     });
+    res.status(200);
 });
-if (args['isolated'] === 'on') {
-    console.log("running in isolated environment, reloading websocketCache");
-    const cached = require('./websocket.json');
-    let deployCacheOnWebSocket = () => {
-        cached.forEach((delta, index) => {
-            let todo = () => {
-                websockets.forEach(ws => ws.send(JSON.stringify(JSON.parse(delta['message']))));
-                if (index === cached.length - 1) {
-                    deployCacheOnWebSocket();
-                }
-                ;
-            };
-            setTimeout(todo, delta['date']);
-        });
-    };
-    deployCacheOnWebSocket();
-}
-let publishers = [];
-let rosTypes = [];
 // rosnodejs
-if (args['rosnodejs'] === 'on') {
-    console.log("rosnodejs usage is on");
+if (args.rosnodejs === 'on') {
+    console.log('rosnodejs usage is on');
+    // eslint-disable-next-line global-require
     const rosnodejs = require('rosnodejs');
     rosnodejs.initNode('/showroom');
-    const nh = rosnodejs.nh;
-    const std_msgs = rosnodejs.require('std_msgs');
-    //tscconsole.log(std_msgs);
-    const int16 = std_msgs.msg.Int16;
-    const StringMsg = std_msgs.msg.String;
-    const StationUsage = rosnodejs.require("backend").msg.StationUsage;
-    rosTypes.push(StationUsage);
-    const skeleton_coordinates = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
-        let pose = {};
-        let bodyParts = msg.persons[0]['bodyParts'];
-        skeleton.used.forEach(index => {
-            let point = {
+    const { nh } = rosnodejs;
+    const stdMsgs = rosnodejs.require('std_msgs');
+    // tscconsole.log(std_msgs);
+    const int16 = stdMsgs.msg.Int16;
+    const StringMsg = stdMsgs.msg.String;
+    nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
+        const pose = {};
+        const { bodyParts } = msg.persons[0];
+        skeleton.used.forEach((index) => {
+            const point = {
                 x: bodyParts[index].point.x,
                 y: bodyParts[index].point.z,
-                z: bodyParts[index].point.y
+                z: bodyParts[index].point.y,
             };
             pose[skeleton.labels[index]] = point;
         });
-        //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(pose)});
-        websockets.forEach(ws => {
+        // websocketCache.push({'date': getDelta(), 'message': JSON.stringify(pose)});
+        websockets.forEach((ws) => {
             ws.send(JSON.stringify(pose));
         });
     });
-    const showroom_reference_progress = nh.subscribe('showroom_reference_progress', int16, (msg) => {
-        websockets.forEach(ws => {
+    nh.subscribe('showroom_reference_progress', int16, (msg) => {
+        websockets.forEach((ws) => {
             if (ws.readyState === ws_1.default.OPEN) {
-                let res = {
+                const res = {
                     usage: 'reference_progress',
-                    data: msg
+                    data: msg,
                 };
-                //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 ws.send(JSON.stringify(res));
             }
         });
     });
-    const showroom_reference_frame = nh.subscribe('showroom_video_reference', StringMsg, (msg) => {
-        let obj = JSON.parse(msg.data).data;
-        console.log(obj);
-        let res = {
+    nh.subscribe('showroom_video_reference', StringMsg, (msg) => {
+        const obj = JSON.parse(msg.data).data;
+        const res = {
             usage: 'reference_frame',
-            data: obj.video_frame_idx
+            data: obj.video_frame_idx,
         };
-        if (obj.video_file_name.includes("squats_1") || obj.video_file_name.includes("deadlift_1") || obj.video_file_name.includes("military_press_2"))
+        if (obj.video_file_name.includes('squats_1') || obj.video_file_name.includes('deadlift_1') || obj.video_file_name.includes('military_press_2'))
             return;
-        console.log(res);
-        websockets.forEach(ws => {
+        websockets.forEach((ws) => {
             if (ws.readyState === ws_1.default.OPEN) {
-                let obj = JSON.parse(msg.data).data;
-                let res = {
-                    usage: 'reference_frame',
-                    data: obj.video_frame_idx
-                };
                 console.log(res);
-                //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
+                // websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 ws.send(JSON.stringify(res));
             }
         });
     });
-    const user_state = nh.subscribe('/user_state', StringMsg, (msg) => {
-        const data = msg['data'];
+    nh.subscribe('/user_state', StringMsg, (msg) => {
+        const { data } = msg;
         const parsed = JSON.parse(data).data;
-        console.log("dis stirng", parsed);
+        console.log('dis stirng', parsed);
         const reps = parsed.repetitions;
         const score = parsed.repetition_score;
-        const exercise_score = parsed.exercise_score;
-        websockets.forEach(client => {
+        const exerciseScore = parsed.exercise_score;
+        websockets.forEach((client) => {
             if (client.readyState === ws_1.default.OPEN) {
-                let res = {
+                const res = {
                     usage: 'user_state',
                     data: {
-                        reps: reps,
-                        score: score,
-                        exercise_score: exercise_score
-                    }
+                        reps,
+                        score,
+                        exerciseScore,
+                    },
                 };
                 client.send(JSON.stringify(res));
             }
-            ;
         });
     });
-    const user_correction = nh.subscribe('/user_correction', StringMsg, (msg) => {
-        const data = msg['data'];
-        websockets.forEach(client => {
+    /* nh.subscribe('/user_correction', StringMsg, (msg: any) => {
+      // const { data } = msg;
+      websockets.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          // client.send(data);
+        }
+      });
+    }); */
+    nh.subscribe('/signal/person', StringMsg, (msg) => {
+        websockets.forEach((client) => {
             if (client.readyState === ws_1.default.OPEN) {
-                //client.send(data);
-            }
-            ;
-        });
-    });
-    const signal_show = nh.subscribe('/signal/person', StringMsg, (msg) => {
-        websockets.forEach(client => {
-            if (client.readyState === ws_1.default.OPEN) {
-                let signal = msg['data'];
-                let res = {
+                const signal = msg.data;
+                const res = {
                     usage: 'signal_person',
-                    data: signal
+                    data: signal,
                 };
-                //websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 client.send(JSON.stringify(res));
             }
         });
     });
 }
 else {
-    console.log("rosnodejs is off");
+    console.log('rosnodejs is off');
 }

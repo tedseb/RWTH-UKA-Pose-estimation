@@ -24,7 +24,7 @@ CRITICAL = 50
 USE_NEPTUNE = False
 LOG_TO_TERMINAL = True
 LOG_TO_TERMINAL_LEVEL = DEBUG
-LOG_TO_FILE = True
+LOG_TO_FILE = False
 LOG_TO_FILE_LEVEL = DEBUG
 DEFAULT_FILE_PREFIX = "/home/trainerai/trainerai-core/data/logs/log"
 PIPE_WAIT_TIME = 0.5
@@ -479,5 +479,5 @@ if __name__ == '__main__':
     if args.tag is not None and args.tag != "msg":
         tags = str(args.tag).split()
 
-    test_case = args.test is not None
+    test_case = args.test #is not None
     main(args.neptune, tags=tags, log_level_terminal=args.log_level, test_case=test_case)

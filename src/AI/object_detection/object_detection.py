@@ -23,7 +23,7 @@ from scheduler import BoxChecker
 YOLO_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5'
 MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5s.pt'
 IMAGE_QUEUE_LEN = 2
-THREAD_WAIT_TIME_MS = 30
+THREAD_WAIT_TIME_MS = 5
 AI_HEIGHT = 720
 AI_WIDTH = 1280
 

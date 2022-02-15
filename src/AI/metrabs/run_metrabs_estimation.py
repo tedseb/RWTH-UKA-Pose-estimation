@@ -19,7 +19,7 @@ from gymy_tools import Queue
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
-THREAD_WAIT_TIME_MS = 20 #40 ms are the time beween two images at 25fps
+THREAD_WAIT_TIME_MS = 5 #40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
 AI_WIDTH = 1280
 AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4

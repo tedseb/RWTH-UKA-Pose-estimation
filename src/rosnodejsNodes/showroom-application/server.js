@@ -99,6 +99,7 @@ if (args.rosnodejs === 'on') {
     // tscconsole.log(std_msgs);
     const int16 = stdMsgs.msg.Int16;
     const StringMsg = stdMsgs.msg.String;
+    const StationUsage = rosnodejs.require("backend").msg.StationUsage;
     nh.subscribe('/fused_skelleton', 'backend/Persons', (msg) => {
         const pose = {};
         const { bodyParts } = msg.persons[0];
@@ -145,7 +146,6 @@ if (args.rosnodejs === 'on') {
     nh.subscribe('/user_state', StringMsg, (msg) => {
         const { data } = msg;
         const parsed = JSON.parse(data).data;
-        console.log('dis stirng', parsed);
         const reps = parsed.repetitions;
         const score = parsed.repetition_score;
         const exerciseScore = parsed.exercise_score;
@@ -157,6 +157,22 @@ if (args.rosnodejs === 'on') {
                         reps,
                         score,
                         exerciseScore,
+                    },
+                };
+                client.send(JSON.stringify(res));
+            }
+        });
+    });
+    nh.subscribe('/station_usage', StationUsage, (msg) => {
+        console.log(msg);
+        websockets.forEach((client) => {
+            if (client.readyState === ws_1.default.OPEN) {
+                const res = {
+                    usage: 'station_usage',
+                    data: {
+                        'stationID': msg.stationID,
+                        'isActive': msg.isActive,
+                        'exerciseNumber': msg.exerciseName
                     },
                 };
                 client.send(JSON.stringify(res));

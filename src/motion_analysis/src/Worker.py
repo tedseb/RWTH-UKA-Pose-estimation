@@ -79,7 +79,7 @@ class Worker(Thread):
                  pose_definition_adapter_class: PoseDefinitionAdapter = MetrabsPoseDefinitionAdapter,
                  features_interface_interface_class: FeaturesInterface = RedisFeaturesInterface,):
         super().__init__()
-
+        logy.basic_config(debug_level=logy.DEBUG, module_name="Worker")
         self.config = config
 
         self.spot_queue_interface = spot_queue_interface_class(self.config)
@@ -221,7 +221,7 @@ class Worker(Thread):
                         pose)
 
                     self.skelleton_deltas_since_rep_start.append(delta)
-                    self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-150:] # TODO: Parameterize the 150!
+                    self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-60:] # TODO: Parameterize this! 
                     score = self.calculate_repetition_score()
 
 
@@ -255,7 +255,7 @@ class Worker(Thread):
                             
                         # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
                         if score < self.config['MINMUM_ALLOWED_SCORE'] and self.config['ENABLE_SCORE_CHECK']:
-                            self.log_with_metadata(logy.debug, "Bad score for recording " + str(
+                            self.log_with_metadata(logy.debug, "Bad score" + str(score) + " for recording " + str(
                                 increase_recording_idx) + "  during this repetition. Repetition falsified.")
                             self.bad_repetition_dict[increase_recording_idx] = True
                             increase_reps = False
@@ -272,6 +272,14 @@ class Worker(Thread):
 
                     # Send info back to App
                     if increase_reps:
+                        # If repetition is actually increased, set all features to bad rep
+                        for idx in range(len(next(iter(self.features.values())).reference_recording_features)):
+                            for feature in self.features.values():
+                                f = feature.reference_recording_features[idx]
+                                f.progression = 0
+                                if idx != increase_recording_idx:
+                                    self.bad_repetition_dict[idx] = True
+
                         self.last_score = score
                         self.spot_info_dict['repetitions'] = int(
                             self.spot_info_dict['repetitions']) + 1
@@ -559,14 +567,6 @@ class Worker(Thread):
             if increase_reps and not total_increase_reps:
                 rep_recording_idx = idx
             total_increase_reps = total_increase_reps or increase_reps
-
-        if total_increase_reps:
-            for idx in range(len(next(iter(self.features.values())).reference_recording_features)):
-                for feature in self.features.values():
-                    f = feature.reference_recording_features[idx]
-                    f.progression = 0
-                    if idx != rep_recording_idx:
-                        self.bad_repetition_dict[idx] = True
 
         return total_increase_reps, rep_recording_idx
 

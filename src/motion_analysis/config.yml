@@ -88,7 +88,7 @@ NUM_FEATURES_PROGRESSED_TOO_FAR_MU: 1
 PROGRESS_VELOCITY_EPSILON: 0.6
 
 ENABLE_SCORE_CHECK: True 
-MINMUM_ALLOWED_SCORE: 82
+MINMUM_ALLOWED_SCORE: 75
 
 
 # These has to be heuristically determined, as is depends on the size of the normal skelleton! Careful!

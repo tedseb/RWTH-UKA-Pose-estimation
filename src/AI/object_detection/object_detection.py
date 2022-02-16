@@ -176,7 +176,7 @@ class ObjectDetectionPipeline:
 
             result_np = results.xyxy[i].cpu().detach().numpy() #x1, y1, x2, y2
             if result_np.size == 0:
-                logy.warn_throttle("No Results in Object Detection", 1000)
+                #logy.warn_throttle("No Results in Object Detection", 1000)
                 #yolo_data_results.append(None)
                 continue
 
@@ -215,8 +215,8 @@ class ObjectDetectionPipeline:
             if station_id in station_boxes or yolo_data.confs[index] < self._threshold:
                 continue
 
-            extra_width_w = img_w * 0.03
-            extra_width_h = img_h * 0.03
+            extra_width_w = 0 #img_w * 0.03
+            extra_width_h = 0 #img_h * 0.03
             x = box[0] - extra_width_w
             y = box[1] - extra_width_h
             w = box[2] + extra_width_w - x

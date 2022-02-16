@@ -303,7 +303,7 @@ class PoseEstimator():
                 bb = image_boxes[prediction_index]
                 debug_image_shapes.append(image.shape)
                 cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
-                logy.info(f"{int(bb[1])}:{int(bb[1]+bb[3])},{int(bb[0])}:{int(bb[0]+bb[2])}")
+                #logy.info(f"{int(bb[1])}:{int(bb[1]+bb[3])},{int(bb[0])}:{int(bb[0]+bb[2])}")
                 cropped_images.append(cropped_image)
                 debug_crop_shapes.append(cropped_image.shape)
                 debug_crop_boxes.append(bb)

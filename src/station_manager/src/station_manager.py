@@ -237,7 +237,7 @@ class StationManager():
         payload = {
             "repetitions": repetition,
             "exercise": exercise,
-            "set_id": set_id
+            "set_id": int(set_id)
         }
         callback = self._client_callbacks[user_id]
         callback(response_code=509, satus_code=1, payload=payload)
@@ -273,7 +273,7 @@ class StationManager():
 
         if logged_in_station != station_id:
             logy.debug(f'User "{user_id}" tries to start an exercise but is not loged into station "{station_id}". Log into right station')
-            self.logout_station(user_id, station_id)
+            self.login_station(user_id, station_id)
 
         running_exercise = self.__active_exercises.get(user_id, None)
         if running_exercise is not None:
@@ -452,6 +452,7 @@ class StationManager():
             result: WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
             return SMResponse(507, 1, {"weight": result.weight, "probability": 1})
 
+    @logy.catch_ros
     def user_state_callback(self, msg):
         data = str(msg.data)
         data = json.loads(data)

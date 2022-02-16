@@ -167,6 +167,7 @@ class Worker(Thread):
             self.spot_key, self.config)
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
+
         # We start with all repetitions being "bad" such that we have to enter a valid beginning state before we start counting
         # TODO: The iterator here is a little hacky and only works if all recordings use the same features, come up with something better here
         for idx in range(len(next(iter(self.features.values())).reference_recording_features)):
@@ -530,9 +531,14 @@ class Worker(Thread):
             if self.bad_repetition_dict.get(idx, False):
                 increase_reps = False
 
+            # If we detect a repetition, reset and beginn next repetition
             if increase_reps:
                 self.log_with_metadata(
-                    logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
+                    logy.error, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
+                for feature in self.features.values():
+                    f = feature.reference_recording_features[idx]
+                    f.progression = 0
+                self.bad_repetition_dict[idx] = False
                 self.beginning_of_next_repetition_detected[idx] = True
 
             # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition

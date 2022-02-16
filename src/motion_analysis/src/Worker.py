@@ -246,27 +246,27 @@ class Worker(Thread):
                             pos_median = 0
                         # We do not want negative and positive progresses to relate to each other as follows: (If they do, we mark this repetition as bad)
                         if self.config['ENABLE_JUMPY_PROGRESS_CHECK'] and (neg_mean > pos_median * self.config['JUMPY_PROGRESS_ALPHA']) and self.config['JUMPY_PROGRESS_BETA'] * len(negative_progress_differences) > len(positive_progresses_differences):
-                            logy.warn(
-                                "Progression was too jumpy for recording in this repetition. Marking this repetition as bad...")
+                            self.log_with_metadata(logy.debug, "Progression was too jumpy for recording in this repetition. Marking this repetition as bad...")
                             for k in self.bad_repetition_dict.keys():
                                 self.bad_repetition_dict[k] = True
                             increase_reps = False
                             self.bad_alignments_this_rep = np.array(
                                 [self.bad_alignments_this_rep[-1]])
+                            
+                        # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
+                        if score < self.config['MINMUM_ALLOWED_SCORE'] and self.config['ENABLE_SCORE_CHECK']:
+                            self.log_with_metadata(logy.debug, "Bad score for recording " + str(
+                                increase_recording_idx) + "  during this repetition. Repetition falsified.")
+                            self.bad_repetition_dict[increase_recording_idx] = True
+                            increase_reps = False
 
-                    # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
-                    if increase_reps and len(self.bad_alignments_this_rep) >= 30  and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
-                        logy.debug("Feature missalignment for recording " + str(
-                            increase_recording_idx) + "  during this repetition. Repetition falsified.")
-                        self.bad_repetition_dict[increase_recording_idx] = True
-                        increase_reps = False
+                        # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
+                        if (increase_reps and len(self.bad_alignments_this_rep) >= 30) and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
+                            self.log_with_metadata(logy.debug, "Feature missalignment for recording " + str(
+                                increase_recording_idx) + "  during this repetition. Repetition falsified.")
+                            self.bad_repetition_dict[increase_recording_idx] = True
+                            increase_reps = False
 
-                    # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
-                    if score < self.config['MINMUM_ALLOWED_SCORE'] and self.config['ENABLE_SCORE_CHECK']:
-                        logy.debug("Bad score for recording " + str(
-                            increase_recording_idx) + "  during this repetition. Repetition falsified.")
-                        self.bad_repetition_dict[increase_recording_idx] = True
-                        increase_reps = False
 
                     update_gui_progress(self.gui, self.progress, np.mean(self.bad_alignments_this_rep), self.progress_alignment_vector, score, self.last_score)
 
@@ -313,10 +313,10 @@ class Worker(Thread):
                 logy.error_throttle(
                     "Encountered an error during motion analysis :" + format_exc(), throttel_time_ms=3000)
 
-        # Enqueue data for feature progressions and resampled feature lists
-        self.features_interface.set(self.spot_key, self.features)
-        self.spot_metadata_interface.set_spot_info_dict(
-            spot_info_key, self.spot_info_dict)
+        # # Enqueue data for feature progressions and resampled feature lists
+        # self.features_interface.set(self.spot_key, self.features)
+        # self.spot_metadata_interface.set_spot_info_dict(
+        #     spot_info_key, self.spot_info_dict)
 
         self.spot_info_dict = None
         self.skelleton_deltas_since_rep_start = []
@@ -432,7 +432,6 @@ class Worker(Thread):
         last_progress = self.progress
 
         if best_alignment and best_alignment < self.config["MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT"]:
-            self.log_with_metadata(logy.info, "Repetition aborted because of too little feature alignment.")
             self.bad_alignments_this_rep = np.append(
                 self.bad_alignments_this_rep, alignment)
 
@@ -510,7 +509,11 @@ class Worker(Thread):
             # We calculate the number of features that have to have progressed in order to count this repetition
             # TODO: This is a parameter to be tuned!!
             if num_features_progressed < num_features_to_progress(len(self.features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
+                self.log_with_metadata(logy.debug, "Too many featuers have progressed!")
                 increase_reps = False
+            elif not in_beginning_state and not self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
+                increase_reps = False
+
 
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
@@ -534,7 +537,7 @@ class Worker(Thread):
             # If we detect a repetition, reset and beginn next repetition
             if increase_reps:
                 self.log_with_metadata(
-                    logy.error, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
+                    logy.debug, "All features have progressed. Repetition detected. Resetting feature progressions at recording " + str(idx) + "...")
                 for feature in self.features.values():
                     f = feature.reference_recording_features[idx]
                     f.progression = 0
@@ -544,7 +547,7 @@ class Worker(Thread):
             # As long as we have not gone into a new repetition (out of the beginning state), we always reset the following things to not clutter measurements over the next repetition
             if not in_beginning_state and self.beginning_of_next_repetition_detected[idx]:
                 self.log_with_metadata(
-                    logy.debug, "Last repetition started and ended, measuring feature alignment and progress differences for new repetition at recording " + str(idx) + "...")
+                    logy.debug, "Last repetition ended, new repetition started. Statistic reset at recording " + str(idx) + "...")
                 self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-5:] # TODO: Possibly introduce new HP that controlls the '5' in this term
                 self.beginning_of_next_repetition_detected[idx] = False
                 self.bad_alignments_this_rep = np.array(

@@ -289,6 +289,9 @@ class PoseEstimator():
             msg.header = info[2]
             msg.persons = list()
             cropped_images = []
+            debug_crop_shapes = []
+            debug_crop_boxes = []
+            debug_image_shapes = []
 
             if len(pred_output_list[img_index]) == 0:
                 rospy.logerr_throttle(5, "Station is active but Pose Estimator could not detect people.")
@@ -298,8 +301,12 @@ class PoseEstimator():
 
                 joints = detection
                 bb = image_boxes[prediction_index]
+                debug_image_shapes.append(image.shape)
                 cropped_image = image[int(bb[1]):int(bb[1]+bb[3]),int(bb[0]):int(bb[0]+bb[2])]
+                logy.info(f"{int(bb[1])}:{int(bb[1]+bb[3])},{int(bb[0])}:{int(bb[0]+bb[2])}")
                 cropped_images.append(cropped_image)
+                debug_crop_shapes.append(cropped_image.shape)
+                debug_crop_boxes.append(bb)
 
                 lenPoints=len(joints)       # TODO: use fixed number of joints to save calculation time
                 person_msg = Person()
@@ -344,8 +351,12 @@ class PoseEstimator():
                 image_message = self._opencv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
             except:
                 logy.warn("FAIL: " + str(cropped_images))
-                #logy.warn(str(img.shape))
                 return
+                # logy.warn("crop shapes: " + str(debug_crop_shapes))
+                # logy.warn("box shapes:" + str(debug_crop_boxes))
+                # logy.warn("image shapes:" + str(debug_image_shapes))
+                #logy.warn(str(img.shape))
+                #return
             pub = self._publisher_crop.get(camera_id)
             if pub is not None:
                 pub.publish(image_message)

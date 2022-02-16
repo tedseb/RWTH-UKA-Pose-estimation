@@ -137,7 +137,6 @@ if (args.rosnodejs === 'on') {
             return;
         websockets.forEach((ws) => {
             if (ws.readyState === ws_1.default.OPEN) {
-                console.log(res);
                 // websocketCache.push({'date': getDelta(), 'message': JSON.stringify(res)});
                 ws.send(JSON.stringify(res));
             }
@@ -159,6 +158,7 @@ if (args.rosnodejs === 'on') {
                         exerciseScore,
                     },
                 };
+                console.log(res);
                 client.send(JSON.stringify(res));
             }
         });

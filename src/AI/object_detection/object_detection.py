@@ -148,7 +148,7 @@ class ObjectDetectionPipeline:
                 for i, yolo_data in enumerate(yolo_data_results):
                     if yolo_data is None:
                         continue
-                    station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i]) #[x, y, w, h]
+                    station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i], shape[1], shape[0]) #[x, y, w, h]
                     #logy.warn(f"boxes = {station_boxes}")
                     logy.log_fps("publish_boxes")
                     self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
@@ -193,7 +193,7 @@ class ObjectDetectionPipeline:
         logy.log_var("yolo_batch_size", len(yolo_data_results), period=25)
         return yolo_data_results
 
-    def _get_person_boxes_in_station(self, yolo_data : YoloData, camera_id : int):
+    def _get_person_boxes_in_station(self, yolo_data : YoloData, camera_id : int, img_w : int, img_h : int):
         '''Function for checking labels and assigning BBOX to stations'''
 
         fake_station_id = 1000
@@ -215,11 +215,16 @@ class ObjectDetectionPipeline:
             if station_id in station_boxes or yolo_data.confs[index] < self._threshold:
                 continue
 
-            extra_width = (box[2] - box[0]) * 0.1
-            x = box[0] - extra_width
-            y = box[1] - extra_width
-            w = box[2] + extra_width - x
-            h = box[3] + 2 * extra_width - y
+            extra_width_w = img_w * 0.03
+            extra_width_h = img_h * 0.03
+            x = box[0] - extra_width_w
+            y = box[1] - extra_width_h
+            w = box[2] + extra_width_w - x
+            h = box[3] + 2 * extra_width_h - y
+            x = max(x, 0)
+            y = max(y, 0)
+            w = min(w, img_w - x)
+            h = min(h, img_h - y)
             station_boxes[station_id] = [x,y,w,h]
         return station_boxes
 

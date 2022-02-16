@@ -522,12 +522,15 @@ class Worker(Thread):
             elif not in_beginning_state and not self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
                 increase_reps = False
 
-
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:
                 self.log_with_metadata(
                     logy.debug, "A feature has progressed through too many states. Marking this repetition as bad. Feature specification: " + str(f.specification_dict))
                 self.bad_repetition_dict[idx] = True
+
+            # Before we check if if we want to reset anything, increase reps needs to be set
+            if self.bad_repetition_dict.get(idx, False):
+                increase_reps = False
 
             # If we are in a beginning state and the repetition is bad, reset and beginn next repetition
             if in_beginning_state and self.bad_repetition_dict.get(idx, False):
@@ -538,9 +541,6 @@ class Worker(Thread):
                     f.progression = 0
                 self.bad_repetition_dict[idx] = False
                 self.beginning_of_next_repetition_detected[idx] = True
-
-            if self.bad_repetition_dict.get(idx, False):
-                increase_reps = False
 
             # If we detect a repetition, reset and beginn next repetition
             if increase_reps:

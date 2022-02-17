@@ -293,9 +293,18 @@ class ReferenceRecordingFeature(BaseFeature):
 
         self.update_data()
 
+        self.reference_states = self.states
         self.reference_values = self.values
         self.reference_filtered_values = self.filtered_values
         self.reference_discretized_values = self.discretized_values
+        
+    def reset_live_trajectories(self):
+        self.progression = 0
+        self._values = np.array([])
+        self._filtered_values = np.array([])
+        self._discretized_values = np.array([])
+        self._states = np.array([])
+
 
     def add_pose(self, pose: np.ndarray, pose_definition_adapter: PoseDefinitionAdapter = None):
         """Add a pose to this reference feature's trajectory.

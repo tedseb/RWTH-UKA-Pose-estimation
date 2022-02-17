@@ -167,6 +167,9 @@ class Worker(Thread):
             self.spot_key, self.config)
         # Fetch last feature data
         self.features = self.features_interface.get(spot_feature_key)
+        for f in self.features.values():
+            for rf in f.reference_recording_features:
+                rf.reset_live_trajectories()
 
         # We start with all repetitions being "bad" such that we have to enter a valid beginning state before we start counting
         # TODO: The iterator here is a little hacky and only works if all recordings use the same features, come up with something better here
@@ -517,11 +520,11 @@ class Worker(Thread):
 
             # We calculate the number of features that have to have progressed in order to count this repetition
             # TODO: This is a parameter to be tuned!!
-            if num_features_progressed < num_features_to_progress(len(self.features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
+            if increase_reps and (num_features_progressed < num_features_to_progress(len(self.features.values())) and self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']):
                 self.log_with_metadata(logy.debug, "Too many featuers have progressed!")
-                increase_reps = False
+                self.bad_repetition_dict[idx] = True
             elif not in_beginning_state and not self.config['ENABLE_NUM_FEATURES_TO_PROGRESS_CHECK']:
-                increase_reps = False
+                self.bad_repetition_dict[idx] = True
 
             # We do not want too many features to progress too far (i.e. to have progressed into the next repetition before we end this repetition)
             if num_features_progressed_too_far * self.config['NUM_FEATURES_PROGRESSED_TOO_FAR_MU'] > num_features_in_beginning_state and self.config['ENABLE_NUM_FEATURES_PROGRESSED_TOO_FAR_CHECK']:

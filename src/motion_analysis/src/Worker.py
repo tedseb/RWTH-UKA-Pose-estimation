@@ -507,6 +507,7 @@ class Worker(Thread):
                     num_features_in_beginning_state += 1
                 else:
                     in_beginning_state = False
+                    increase_reps = False
                 if f.progression < number_of_dicided_state_changes_for_repetition:
                     increase_reps = False
                 elif f.progression > number_of_dicided_state_changes_for_repetition:

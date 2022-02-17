@@ -38,7 +38,7 @@ const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const StationUsage = rosnodejs.require("backend").msg.StationUsage;
-const comparing_system_messages = rosnodejs.require("comparing_system");
+const motion_analysis_messages = rosnodejs.require("motion_analysis");
 const pose_estimation_messages = rosnodejs.require("backend");
 const url = require('url');
 const config = require('./config');
@@ -95,7 +95,8 @@ wss.on('connection', (ws, req) => {
         const msg = new StationUsage({
             stationID: qr['stationID'],
             isActive: qr['isActive'],
-            exerciseName: qr['exerciseName']});
+            exerciseName: qr['exerciseName'],
+            stationUsageHash: '0'}); // Put an actual hash here if you want to use this.
             station_usage_publisher.publish(msg)  // Refine this
     });
     ws.send(JSON.stringify({ topic: 'start', data: { display_text: 'Übung wird gestartet. Viel Erfolg!', positive_correction: true, id: "StartMessage" } }));

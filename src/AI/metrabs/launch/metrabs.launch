@@ -1,0 +1,3 @@
+<launch>
+  <node name="PoseEstimator" pkg="metrabs" type="run_metrabs_estimation.py" output="log"/>
+</launch>

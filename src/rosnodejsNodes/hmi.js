@@ -4,22 +4,36 @@ const express = require('express');
 const https = require('https');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
+const args = require('minimist')(process.argv.slice(2))
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-const StationUsage = rosnodejs.require("backend").msg.StationUsage;
 const pose_estimation_messages = rosnodejs.require("backend");
-const comparing_system_messages = rosnodejs.require("comparing_system");
+const motion_analysis_messages = rosnodejs.require("motion_analysis");
 const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
 var MongoClient = require('mongodb').MongoClient;
 const { stringify } = require('querystring');
+const { features } = require('process');
 
-
-// Parameters and Constants:
-const PORT = config.PORT;
-const ownpose_labels = config.ownpose_labels;
-const ownpose_used = config.ownpose_used;
-const ownpose = config.ownpose;
+if (args['ai'] == 'spin') {
+  // Parameters and Constants:
+  PORT = config.PORT;
+  ownpose_labels = config.ownpose_labels_spin;
+  ownpose_used = config.ownpose_used_spin;
+  ownpose = config.ownpose_spin;
+  exercises_db_string = "spin_exercises"
+  recordings_db_string = "spin_recordings"
+  hmiExercises_db_string = "spin_hmiExercises"
+} else {
+  // Parameters and Constants:
+  PORT = config.PORT;
+  ownpose_labels = config.matrabs_labels;
+  ownpose_used = config.matrabs_used;
+  ownpose = config.matrabs;
+  exercises_db_string = "exercises"
+  recordings_db_string = "recordings"
+  hmiExercises_db_string = "hmiExercises"
+}
 
 // Web App Code:
 const app = express();
@@ -29,7 +43,7 @@ app.use(bodyParser.urlencoded({
   limit: '50mb',
   extended: true
 }));
-app.use(express.static(process.cwd() + '/dist/'));
+app.use(express.static(process.cwd() + '/src/rosnodejsNodes/dist/'));
 const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
 let coordinateClients = [];
@@ -46,49 +60,11 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
 
   //get trainerai DB and exercises collection
   const db = client.db("trainerai");
-  const exercises = db.collection("exercises");
-  const recordings = db.collection("recordings");
-  const hmiExercises = db.collection("hmiExercises");
+  const exercises = db.collection(exercises_db_string);
+  const recordings = db.collection(recordings_db_string);
+  const hmiExercises = db.collection(hmiExercises_db_string);
 
-  nh.subscribe('/station_usage', StationUsage, async (msg) => {
-    console.log(msg);
-    exercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
-      if (err) throw err;
-      if (result) {
-        const stringified = YAML.stringify(result);
-        nh.setParam('exercise' + msg['stationID'], stringified);
-        const obj = {
-          stationID: msg['stationID'],
-          isActive: msg['isActive'],
-          exerciseName: msg['exerciseName'],
-          parameterServerKey: 'exercise' + msg['stationID']
-        }
-        pubex.publish({'data': YAML.stringify(obj)});
-      } else {
-        console.error(`No such exercise  ${msg['exerciseName']}`)
-      }
-    });
-    hmiExercises.findOne({ name: msg['exerciseName'] }, (err, result) => {
-      if (err) throw err;
-      if (result) {
-        const stringified = YAML.stringify(result);
-        nh.setParam('hmiExercise' + msg['stationID'], stringified);
-        console.log(result);
-        const obj = {
-          stationID: msg['stationID'],
-          isActive: msg['isActive'],
-          exerciseName: msg['exerciseName'],
-          parameterServerKey:'hmiExercise' + msg['stationID']
-        }
-        pubex.publish({'data': YAML.stringify(obj)});
-      } else {
-        console.error(`No such exercise  ${msg['exerciseName']}`)
-      }
-    });
-  });
-
-
-  app.post('/expert/exercise/recordings', (req, res) => {
+    app.post('/expert/exercise/recordings', (req, res) => {
     console.log(req.body);
     res.status(200).send();
   });
@@ -112,12 +88,23 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
 
   //req.body == recording raw
   app.post('/api/expert/recording/save', (req, res) => {
+    console.log("recording requested new");
+    if(req.body['features']){
+      console.log('hi');
+      let arr = [];
+      for (feature of req.body['features']){
+        const obj = {
+          'type': feature[0],
+          'value': feature[1]
+        }
+        arr.push(obj);
+      }
+      req.body['features'] = arr;
+    } else {
+      console.log('helooo');
+    }
     if (req) {
-      const recording = req.body;
-      const recObj = {
-        recording: recording
-      };
-      recordings.insertOne(recObj);
+      exercises.insertOne(req.body);
       res.status(200).send();
     } else {
       res.status(500).send('Malformed Recording');
@@ -142,8 +129,7 @@ const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg
   let pose = {};
   this.coordinates = msg;
   let bodyParts = msg.persons[0]['bodyParts'];
-  let labels = ['nose', 'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'];
-
+  
   ownpose_used.forEach(index => {
     let point = {};
     point.x = bodyParts[index].point.x;
@@ -163,7 +149,7 @@ const fused_skelleton = nh.subscribe('/fused_skelleton', 'backend/Persons', (msg
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(process.cwd() + './dist/index.html');
+  res.sendFile(process.cwd() + '/src/rosnodejsNodes/dist/index.html');
 });
 
 app.get('/api/coordinates', (req, res) => {
@@ -190,6 +176,11 @@ app.get('/api/connections', (req, res) => {
     else { dict[ownpose_labels[element[0]]] = [ownpose_labels[element[1]]] }
   });
   console.log(dict);
+  res.json(dict);
+});
+
+app.get('/api/connections/dict', (req, res) => {
+  const dict = {'ownpose_labels': ownpose_labels, 'ownpose_used': ownpose_used, 'ownpose': ownpose};
   res.json(dict);
 });
 

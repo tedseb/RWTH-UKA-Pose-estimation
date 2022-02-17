@@ -2,61 +2,74 @@ FROM registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-base-20:late
 USER root
 
 #System
-RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+#RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
 RUN echo ". devel/setup.bash" >>  /home/trainerai/.bashrc
-COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 
 #Software
+RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
 RUN apt-get update && apt-get -y install gedit iputils-ping
+#RUN apt-get -y install gedit iputils-ping
 RUN apt-get install python-software-properties || true
 RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y python3-opencv
 RUN apt-get install -y redis
 
 #NodeJS
 WORKDIR /home/trainerai/trainerai-core
-RUN apt-get install nodejs
+RUN apt-get install -y nodejs npm
 RUN npm config set unsafe-perm true
-RUN npm install @tensorflow/tfjs-node
-RUN npm install @tensorflow-models/posenet
+# RUN npm install @tensorflow/tfjs-node
+# RUN npm install @tensorflow-models/posenet
 
-RUN npm install opencv4nodejs
-RUN npm install rosnodejs
-RUN npm install express
-RUN npm install ws
-RUN npm install nodemon
-RUN npm install socket.io
-RUN npm install yaml
-RUN npm install mongodb
+RUN npm install opencv4nodejs rosnodejs express ws nodemon socket.io mongodb@3
+# RUN npm install rosnodejs
+# RUN npm install express
+# RUN npm install ws
+# RUN npm install nodemon
+# RUN npm install socket.io
+# RUN npm install yaml
+# RUN npm install mongodb
 
 #Python PIP
 #RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==1.14.0 pycocotools
-RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.4.1 pycocotools
+RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.7.0 pycocotools
 RUN pip3 install msgpack torchvision torchgeometry smplx chumpy
-RUN pip3 install pydrive
-RUN pip3 install pandas
-RUN pip3 install matplotlib
+RUN pip3 install pydrive pandas matplotlib
+# RUN pip3 install pandas
+# RUN pip3 install matplotlib
 RUN pip3 install torch==1.8.0+cu111 torchvision==0.9.0+cu111 torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
-RUN pip3 install redis
-RUN pip3 install rospy_message_converter
-RUN pip3 install mps-youtube
+RUN pip3 install redis rospy_message_converter mps-youtube youtube-dl
+# RUN pip3 install rospy_message_converter
+# RUN pip3 install mps-youtube
 RUN pip3 install pafy -U
-RUN pip3 install youtube-dl
+# RUN pip3 install youtube-dl
 RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-python==4.5.1.48 PyYAML==5.4.1
 
 RUN pip3 install msgpack_numpy
 
-RUN apt-get install libpq-dev
-RUN pip3 install psycopg2
-RUN pip3 install websocket-client
-RUN pip3 install autobahn
-RUN pip3 install twisted
-RUN pip3 install pyqtgraph
-RUN pip3 install websockets
-RUN pip3 install PyQt5==5.15.4
+RUN apt-get update
+RUN apt-get -y install libpq-dev
+RUN npm install yaml minimist
+RUN pip3 install psycopg2 websocket-client autobahn twisted pyqtgraph websockets PyQt5==5.15.4 pymongo pytube qt5reactor neptune-client Pillow>=8.4.0 requests>=2.23.0 filelock sklearn
+RUN pip3 install nvidia-ml-py3 pytest
+# RUN pip3 install websocket-client
+# RUN pip3 install autobahn
+# RUN pip3 install twisted
+# RUN pip3 install pyqtgraph
+# RUN pip3 install websockets
+# RUN pip3 install PyQt5==5.15.4
+# RUN pip3 install pymongo
+
+RUN sudo ln -s /usr/local/cuda-11.5/lib64/libcusolver.so.11 /usr/local/cuda-11.5/lib64/libcusolver.so.10
+
+RUN echo "LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:\$LD_LIBRARY_PATH" >> /home/trainerai/.bashrc
+RUN echo "PYTHONPATH=\$PYTHONPATH:/home/trainerai/trainerai-core/src/lib/" >> /home/trainerai/.bashrc
+COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
+COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
 
 RUN chmod 777 -R /home/trainerai/.config
-COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
+#RUN sudo ln -s /usr/bin/pip3 /usr/bin/pip
+
 ENTRYPOINT ["/home/trainerai/start_script.sh"]
 
 USER trainerai

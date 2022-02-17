@@ -6,4 +6,5 @@
 # make much more sense as it resembles
 # the data structure array.
 Header header
-Person[] persons 
+Person[] persons
+int32 channel

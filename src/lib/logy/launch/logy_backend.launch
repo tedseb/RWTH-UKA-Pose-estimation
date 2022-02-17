@@ -1,0 +1,7 @@
+<launch>
+  <arg name="log_level" default="info"/>
+  <arg name="log_tags" default="msg" />
+  <arg name="neptune" default="False" />
+  <arg name="test" default="False" />
+  <node name="logy_backend" pkg="logy_backend" output="screen" type="logy_backend.py" args="$(eval '--log-level ' + str(arg('log_level')) + ' -t \'' + arg('log_tags') + '\'' + (' -n' if arg('neptune') else '') + (' --test' if arg('test') else ''))"/>
+</launch>

@@ -1,0 +1,7 @@
+import rospy
+import logy
+
+DEBUG_MODE = False
+VERBOSE_MODE = True
+MAX_STATIONS_PER_PC = 8
+MAX_STATIONS_PER_GPU = 4

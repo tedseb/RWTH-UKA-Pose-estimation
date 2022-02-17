@@ -11,6 +11,7 @@ import pickle
 import time
 import rospy
 from sensor_msgs.msg import Image
+from backend.msg import ImageData
 from backend.msg import Person, Persons, Bodypart, Pixel,Bboxes
 from std_msgs.msg import Float32MultiArray
 
@@ -38,7 +39,7 @@ class run_spin():
 
         checkpoint_body_smplx='/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/pretrained_weights/smplx-03-28-46060-w_spin_mlc3d_46582-2089_2020_03_28-21_56_16.pt'
         checkpoint_body_smpl= '/home/trainerai/trainerai-core/src/AI/spin/extra_data/body_module/pretrained_weights/2020_05_31-00_50_43-best-51.749683916568756.pt'
-        smpl_dir='/home/trainerai/trainerai-core/src/AI/spin/extra_data/smpl/'
+        smpl_dir='/home/trainerai/trainerai-core/src/AI/spin/extra_data/smpl'
 
         checkpoint_path = checkpoint_body_smplx if use_smplx else checkpoint_body_smpl
         print("use_smplx", use_smplx)
@@ -46,16 +47,18 @@ class run_spin():
 
         # define a publisher to publish the 3D skeleton of multiple people
         self.publisher = rospy.Publisher('personsJS', Persons, queue_size=2)
-        self.publisher_crop = rospy.Publisher('cropImage', Image, queue_size=2)   
+        self.publisher_crop = rospy.Publisher('cropped_images', Image, queue_size=2)   
 
 
         # define a subscriber to retrive tracked bodies
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress)
         #rospy.Subscriber('bboxes1', Bboxes, self.callback_regress)
 
-        rospy.Subscriber('image', Image, self.callback_setImage)       
+        rospy.Subscriber('image', ImageData, self.callback_setImage)       
         #srospy.Subscriber('image1', Image, self.callback_setImage)
         self.spin()
+
+        self.img_original_bgr = None
 
 
     def spin(self):
@@ -64,10 +67,10 @@ class run_spin():
         '''
         rospy.spin()
 
-    def callback_setImage(self, msg):
-        self.msg_image = msg
-        shape = self.msg_image.height, self.msg_image.width, 3     #(480, 640, 3) --> (y,x,3) = (h,w,3)
-        img = np.frombuffer(self.msg_image.data, dtype=np.uint8)
+    def callback_setImage(self, msg: ImageData):
+        self.current_image_msg = msg.image
+        shape = self.current_image_msg.height, self.current_image_msg.width, 3     #(480, 640, 3) --> (y,x,3) = (h,w,3)
+        img = np.frombuffer(self.current_image_msg.data, dtype=np.uint8)
         self.img_original_bgr = img.reshape(shape)
 
     def callback_regress(self, body_bbox_list_station):
@@ -76,8 +79,11 @@ class run_spin():
         '''
         body_bbox_list_station_reshaped=np.array(body_bbox_list_station.data).reshape(-1,4)
         tmpTime = time.time()
- 
+
         #ToDo: differ between someone that is focused on the station and someone that is going through the camera and let to occlusion. Currently take the skeleton that is the biggest
+
+        if self.img_original_bgr is None:
+            return
 
         # Body Pose Regression
         pred_output_list = self.body_mocap.regress(self.img_original_bgr, body_bbox_list_station_reshaped)
@@ -85,10 +91,10 @@ class run_spin():
         fps = int(1/(time.time()-tmpTime))
         #print("result: ", np.shape(pred_output_list.extend(x)))
         print("FPS : ",fps)
-        self.publish_results(pred_output_list, self.msg_image,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
+        self.publish_results(pred_output_list, self.current_image_msg,  body_bbox_list_station.stationID,body_bbox_list_station.sensorID )
 
 
-    def publish_results(self,results, img_msg, stationID,sensorID):  
+    def publish_results(self,results, img_msg, stationID,sensorID):
         if len(results) == 0:
             return
         inc=0
@@ -133,9 +139,6 @@ class run_spin():
 
 
 if __name__ == '__main__':
-
-
-
     rospy.init_node('spin', anonymous=True)
     # instantiate the Comparator class
     run_spin_obj = run_spin()

@@ -1,0 +1,32 @@
+{
+  "name": "trainerai-core",
+  "version": "1.0.0",
+  "description": "## Getting started Have a look at our [Getting Started](https://git.rwth-aachen.de/trainerai/trainerai-core/-/wikis/Geting-Started) Wiki entry.",
+  "main": "index.js",
+  "dependencies": {
+    "@types/ws": "^8.2.2",
+    "minimist": "^1.2.5",
+    "mongodb": "^3.7.2",
+    "nodemon": "^2.0.13",
+    "opencv4nodejs": "^5.6.0",
+    "rosnodejs": "^3.0.2",
+    "socket.io": "^4.2.0",
+    "yaml": "^1.10.2"
+  },
+  "devDependencies": {
+    "express": "^4.17.2",
+    "tslint": "^6.1.3",
+    "typescript": "^4.5.4",
+    "websocket": "^1.0.34",
+    "ws": "^8.5.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@git.rwth-aachen.de:trainerai/trainerai-core.git"
+  },
+  "author": "",
+  "license": "ISC"
+}

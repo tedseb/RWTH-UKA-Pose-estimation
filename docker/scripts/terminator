@@ -19,11 +19,11 @@
       parent = ""
       position = 0:0
       size = 1920, 1015
-      title = GorillaWolfMotherFucker: ~/code/core
+      title = gymy docker console: ~/code/core
       type = Window
     [[[child1]]]
       order = 0
-      parent = child0	
+      parent = child0
       position = 504
       ratio = 0.49900990099
       type = VPaned
@@ -51,6 +51,121 @@
       profile = default
       type = Terminal
       uuid = 61665a54-8533-4f03-9013-8447d897bdf1
+    [[[terminal6]]]
+      order = 0
+      parent = child5
+      profile = default
+      type = Terminal
+      uuid = 7e6871ea-25f4-473d-acc0-b845834446bf
+      command = htop; bash
+    [[[terminal7]]]
+      order = 1
+      parent = child5
+      profile = default
+      type = Terminal
+      uuid = 99a31534-3ade-4629-a26e-dd7426b23618
+      command = roscore; bash
+  [[env]]
+    [[[child0]]]
+      fullscreen = False
+      last_active_term = 99a31534-3ade-4629-a26e-dd7426b23618
+      last_active_window = True
+      maximised = True
+      order = 0
+      parent = ""
+      position = 0:0
+      size = 1920, 1015
+      title = gymy docker console: ~/code/core
+      type = Window
+    [[[child1]]]
+      order = 0
+      parent = child0
+      position = 504
+      ratio = 0.49900990099
+      type = VPaned
+    [[[child2]]]
+      order = 0
+      parent = child1
+      position = 956
+      ratio = 0.499216710183
+      type = HPaned
+    [[[child5]]]
+      order = 1
+      parent = child1
+      position = 956
+      ratio = 0.499216710183
+      type = HPaned
+    [[[terminal3]]]
+      order = 0
+      parent = child2
+      profile = default
+      type = Terminal
+      uuid = 44949994-af84-40bd-8b98-bedf55a42b55
+    [[[terminal4]]]
+      order = 1
+      parent = child2
+      profile = default
+      type = Terminal
+      uuid = 61665a54-8533-4f03-9013-8447d897bdf1
+      command = sleep 3;rviz -d docker/scripts/default.rviz; echo "command: rviz -d docker/scripts/default.rviz"; bash
+    [[[terminal6]]]
+      order = 0
+      parent = child5
+      profile = default
+      type = Terminal
+      uuid = 7e6871ea-25f4-473d-acc0-b845834446bf
+      command = htop; bash
+    [[[terminal7]]]
+      order = 1
+      parent = child5
+      profile = default
+      type = Terminal
+      uuid = 99a31534-3ade-4629-a26e-dd7426b23618
+      command = roscore; bash
+  [[backend]]
+    [[[child0]]]
+      fullscreen = False
+      last_active_term = 99a31534-3ade-4629-a26e-dd7426b23618
+      last_active_window = True
+      maximised = True
+      order = 0
+      parent = ""
+      position = 0:0
+      size = 1920, 1015
+      title = gymy docker console: ~/code/core
+      type = Window
+    [[[child1]]]
+      order = 0
+      parent = child0
+      position = 504
+      ratio = 0.49900990099
+      type = VPaned
+    [[[child2]]]
+      order = 0
+      parent = child1
+      position = 956
+      ratio = 0.499216710183
+      type = HPaned
+    [[[child5]]]
+      order = 1
+      parent = child1
+      position = 956
+      ratio = 0.499216710183
+      type = HPaned
+    [[[terminal3]]]
+      order = 0
+      parent = child2
+      profile = default
+      type = Terminal
+      uuid = 44949994-af84-40bd-8b98-bedf55a42b55
+      command = sleep 3s;export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:\$LD_LIBRARY_PATH; export PYTHONPATH=$PYTHONPATH:/home/trainerai/trainerai-core/src/lib/; roslaunch launch/stack_3Dmetrabs.launch; bash
+    [[[terminal4]]]
+      order = 1
+      parent = child2
+      profile = default
+      type = Terminal
+      uuid = 61665a54-8533-4f03-9013-8447d897bdf1
+      command =  sleep 3s;rviz -d docker/scripts/default.rviz; echo "command: rviz -d docker/scripts/default.rviz"; bash
     [[[terminal6]]]
       order = 0
       parent = child5

@@ -514,7 +514,7 @@ def update_gui_features(gui, feature):
         widget.update_user_data.emit(np.array(feature.reference_recording_features[0].values),
                                      np.array(feature.reference_recording_features[0].filtered_values),
                                      np.array(feature.reference_recording_features[0].discretized_values),
-                                     np.array(feature.errors),
+                                     np.array(feature.reference_recording_features[0].errors),
                                      np.array([feature.progress_vector.real,
                                                feature.progress_vector.imag]),
                                      np.array(feature.prediction))

@@ -179,7 +179,8 @@ class Worker(Thread):
         def array_factory():
             return np.array([0])
         
-        self.bad_alignments_this_rep = np.array([0])
+        self.bad_alignments_this_rep = 0
+        self.alignments_this_rep = np.array([0.7])
         self.progress_differences_this_rep = defaultdict(array_factory)
 
         def false_factory():
@@ -253,8 +254,6 @@ class Worker(Thread):
                             for k in self.bad_repetition_dict.keys():
                                 self.bad_repetition_dict[k] = True
                             increase_reps = False
-                            self.bad_alignments_this_rep = np.array(
-                                [self.bad_alignments_this_rep[-1]])
                             
                         # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
                         if score < self.config['MINMUM_ALLOWED_SCORE'] and self.config['ENABLE_SCORE_CHECK']:
@@ -264,14 +263,17 @@ class Worker(Thread):
                             increase_reps = False
 
                         # If the feature alignments in this repetitions are too bad, we do not count the repetition for this recording
-                        if (increase_reps and len(self.bad_alignments_this_rep) >= 30) and self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
+                        if increase_reps and \
+                            (self.bad_alignments_this_rep >= 30) and \
+                            (len(self.alignments_this_rep)/self.bad_alignments_this_rep < 6)  and \
+                                self.config['ENABLE_FEATURE_ALIGNMENT_CHECK']:
                             self.log_with_metadata(logy.debug, "Feature missalignment for recording " + str(
                                 increase_recording_idx) + "  during this repetition. Repetition falsified.")
                             self.bad_repetition_dict[increase_recording_idx] = True
                             increase_reps = False
 
 
-                    update_gui_progress(self.gui, self.progress, np.mean(self.bad_alignments_this_rep), self.progress_alignment_vector, score, self.last_score)
+                    update_gui_progress(self.gui, self.progress, np.mean(self.alignments_this_rep), self.progress_alignment_vector, score, self.last_score)
 
                     # Send info back to App
                     if increase_reps:
@@ -442,9 +444,10 @@ class Worker(Thread):
         self.progress_alignment_vector = np.mean(progress_alignment_vectors)
         last_progress = self.progress
 
-        if best_alignment and best_alignment < self.config["MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT"]:
-            self.bad_alignments_this_rep = np.append(
-                self.bad_alignments_this_rep, alignment)
+        if best_alignment:
+            self.alignments_this_rep = np.append(self.alignments_this_rep, best_alignment)
+            if best_alignment < self.config["MINIMAL_ALLOWED_MEAN_FEATURE_ALIGNMENT"]:
+                self.bad_alignments_this_rep += 1
 
         # We try to calculate a progress velocity here and never use the estimated progress directly but update it based on a dacaying velocityyyyyy
         if self.t - self.last_t:
@@ -459,15 +462,16 @@ class Worker(Thread):
         else:
             self.progress_velocity = 0
 
-        self.progress = (self.progress + (self.t - self.last_t)
-                         * self.progress_velocity) % 1
+        progress = (progress + (self.t - self.last_t)
+                         * progress_velocity) % 1
         self.progress_differences_this_rep[idx] = np.append(
             self.progress_differences_this_rep[idx], self.progress - last_progress)
 
         self.showroom_reference_progress_publisher.publish(
             int(self.progress * 100))
 
-        self.progress = np.mean(progress_estimates)
+        if compute_all:
+            self.progress = np.mean(progress_estimates)
 
         return self.best_reference_pose, smallest_delta
 
@@ -562,8 +566,8 @@ class Worker(Thread):
                     logy.debug, "Last repetition ended, new repetition started. Statistic reset at recording " + str(idx) + "...")
                 self.skelleton_deltas_since_rep_start = self.skelleton_deltas_since_rep_start[-5:] # TODO: Possibly introduce new HP that controlls the '5' in this term
                 self.beginning_of_next_repetition_detected[idx] = False
-                self.bad_alignments_this_rep = np.array(
-                    [self.bad_alignments_this_rep[-1]])
+                self.bad_alignments_this_rep = 0
+                self.alignments_this_rep = self.alignments_this_rep[-5:]
                 self.progress_differences_this_rep[idx]= np.array([0])
                 self.progress = 0
 

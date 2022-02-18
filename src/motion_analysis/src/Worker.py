@@ -442,7 +442,9 @@ class Worker(Thread):
                     self.best_reference_recording_idx = idx
 
         self.progress_alignment_vector = np.mean(progress_alignment_vectors)
-        last_progress = self.progress
+        progress = self.progress
+        progress_velocity = self.progress_velocity
+        last_progress = progress
 
         if best_alignment:
             self.alignments_this_rep = np.append(self.alignments_this_rep, best_alignment)
@@ -453,14 +455,14 @@ class Worker(Thread):
         if self.t - self.last_t:
             delta = 0.5  # We always have to be lower than 50% progress delta
             for rep_term in [0, 1, -1]:  # The three repetitions terms let us see what happens if our progression would reach into the next repetition, this repetition or a previous repetition
-                delta_candidate = progress_estimate + rep_term - self.progress
+                delta_candidate = progress_estimate + rep_term - progress
                 if abs(delta) > abs(delta_candidate):
                     delta = delta_candidate
 
-            self.progress_velocity = self.progress_velocity * self.config['PROGRESS_VELOCITY_EPSILON'] + (
+            progress_velocity = progress_velocity * self.config['PROGRESS_VELOCITY_EPSILON'] + (
                 delta / (self.t - self.last_t)) * (1 - self.config['PROGRESS_VELOCITY_EPSILON'])
         else:
-            self.progress_velocity = 0
+            progress_velocity = 0
 
         progress = (progress + (self.t - self.last_t)
                          * progress_velocity) % 1
@@ -472,6 +474,7 @@ class Worker(Thread):
 
         if compute_all:
             self.progress = np.mean(progress_estimates)
+            self.progress_velocity = progress_velocity
 
         return self.best_reference_pose, smallest_delta
 

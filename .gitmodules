@@ -1,0 +1,3 @@
+[submodule "src/motion-analysis"]
+	path = src/motion-analysis
+	url = git@git.rwth-aachen.de:trainerai/motion-analysis.git

@@ -22,7 +22,7 @@
   <include file="$(find spin)/launch/spin.launch" if="$(eval arg('ai') == 'spin')"/>
 
   <include file="$(find object_detection)/launch/object_detection.launch" />
-  <include file="$(find motion_analysis)/launch/motion_analysis_dev.launch">
+  <include file="$(find motion-analysis)/launch/motion_analysis_dev.launch">
     <arg name="ai" value="$(arg ai)"/>
   </include>
   <!-- <include file="$(find weight_detection)/launch/weight_detection.launch"/> -->

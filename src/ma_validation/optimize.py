@@ -20,7 +20,7 @@ CAMERA_NODE_TIMEOUT_S = 10
 VALIDATION_REPORT_PATH = '/home/trainerai/trainerai-core/data/validation_report.yml'
 BEST_PARAMETERS_PATH = '/home/trainerai/trainerai-core/data/best_parameters.yml'
 VALIDATION_TEMP_CONFIG_PATH = '/tmp/ma_validation_config.yml'
-STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion-analysis/config.yml'
+STANDARD_CONFIG_PATH = '/home/trainerai/trainerai-core/src/motion_analysis/config.yml'
 VIDEO_TIMECODE_PATH = "/home/trainerai/trainerai-core/data/videos/timecodes.yml"
 
 best_scores = dict()

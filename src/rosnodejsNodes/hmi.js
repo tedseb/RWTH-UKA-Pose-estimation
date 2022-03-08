@@ -6,8 +6,6 @@ const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const args = require('minimist')(process.argv.slice(2))
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
-const pose_estimation_messages = rosnodejs.require("backend");
-const motion_analysis_messages = rosnodejs.require("motion_analysis");
 const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
@@ -48,11 +46,9 @@ const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
 let coordinateClients = [];
 
-rosnodejs.initNode('/hmi')
-
+rosnodejs.initNode('/hmi');
 // TODO: Shutdown gracefully to app: rosnodejs.on('shutdown', function() {  });
 const nh = rosnodejs.nh;
-
 const pubex = nh.advertise('/exercises', StringMsg);
 
 MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) => {

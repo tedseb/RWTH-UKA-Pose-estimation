@@ -79,6 +79,7 @@ class StationManager():
         self._exercise_station_mutex = Lock()
         self._camera_process_mutex = Lock()
         self._param_updater_mutex = Lock()
+        self._showrum_fullfill_mutex = Lock()
 
         self._use_person_detection = False
         self.start_person_detection()
@@ -263,13 +264,13 @@ class StationManager():
 
         if logged_in_station and station_id != logged_in_station:
             logy.debug(f'User "{user_id}" is already logged into station "{logged_in_station}". Logout user.')
-            self.logout_station(station_id)
+            self.logout_station(user_id)
             time.sleep(sleeping_time_s)
 
     def fullfill_exercise_start_condition(self, user_id: str, station_id: int):
         sleeping_time_s = 0.01
-
-        logged_in_station = self.__active_stations.get(user_id, None)
+        with self._showrum_fullfill_mutex:
+            logged_in_station = self.__active_stations.get(user_id, None)
 
         if logged_in_station != station_id:
             logy.debug(f'User "{user_id}" tries to start an exercise but is not loged into station "{station_id}". Log into right station')
@@ -297,7 +298,8 @@ class StationManager():
 
     def login_station(self, user_id: str, station_id: int):
         if self._showroom_mode:
-            self.fullfill_station_login_condition(user_id, station_id)
+            with self._showrum_fullfill_mutex:
+                self.fullfill_station_login_condition(user_id, station_id)
 
         with self._exercise_station_mutex:
             if not self.__param_updater.is_station_valid(station_id):
@@ -351,7 +353,7 @@ class StationManager():
             station_id = self.__active_stations.get(user_id)
             if station_id is None:
                 return SMResponse(502, 10, {})
-            logy.info(f"Logout from Station {station_id}")
+            logy.info(f"Logout '{user_id}' from Station {station_id}")
 
         with self._param_updater_mutex:
             self.__param_updater.set_station(int(station_id), False)

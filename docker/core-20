@@ -47,10 +47,10 @@ RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-pyt
 RUN pip3 install msgpack_numpy
 
 RUN apt-get update
-RUN apt-get -y install libpq-dev
+RUN apt-get -y install libpq-dev bluez python-dev libbluetooth-dev
 RUN npm install yaml minimist
 RUN pip3 install psycopg2 websocket-client autobahn twisted pyqtgraph websockets PyQt5==5.15.4 pymongo pytube qt5reactor neptune-client Pillow>=8.4.0 requests>=2.23.0 filelock sklearn
-RUN pip3 install nvidia-ml-py3 pytest
+RUN pip3 install nvidia-ml-py3 pytest pybluez
 # RUN pip3 install websocket-client
 # RUN pip3 install autobahn
 # RUN pip3 install twisted
@@ -65,11 +65,13 @@ RUN echo "LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:\$LD_LIBRARY_PATH" >> /home
 RUN echo "PYTHONPATH=\$PYTHONPATH:/home/trainerai/trainerai-core/src/lib/" >> /home/trainerai/.bashrc
 COPY docker/scripts/start_script.sh /home/trainerai/start_script.sh
 COPY docker/scripts/terminator /home/trainerai/.config/terminator/config
+COPY docker/scripts/dbus-org.bluez.service /etc/systemd/system/dbus-org.bluez.service
 
 RUN chmod 777 -R /home/trainerai/.config
 RUN ["chmod", "+x", "/home/trainerai/start_script.sh"]
 #RUN sudo ln -s /usr/bin/pip3 /usr/bin/pip
 
 ENTRYPOINT ["/home/trainerai/start_script.sh"]
+#CMD [ "/sbin/init" ]
 
 USER trainerai

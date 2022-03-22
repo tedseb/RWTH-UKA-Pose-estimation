@@ -147,7 +147,7 @@ class BleServerSocket:
         response["status_code"] = satus_code
         response["payload"] = payload
         response = str(json.dumps(response))
-        response = response.encode('utf8')
+        #response = response.encode('utf8')
         print("[RESPONSE]:", response)
         try:
             self.sendMessage(response, False)

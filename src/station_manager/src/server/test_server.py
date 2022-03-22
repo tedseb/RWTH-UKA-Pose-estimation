@@ -1,5 +1,5 @@
 from twisted.internet import reactor
-from .server import ServerController, ServerSocket, SMResponse
+from .server_websocket import ServerController, ServerSocket, SMResponse
 
 def login_station(user_id, payload):
     print("login into station. Payload: ", payload)

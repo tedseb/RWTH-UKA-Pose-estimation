@@ -86,6 +86,7 @@ docker run -it -d --rm \
         -v $(pwd):/home/trainerai/trainerai-core \
         -v /home/trainerai/trainerai-core/node_modules \
         -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+        -v /var/run/dbus/:/var/run/dbus/:z \
         $webcam_option \
         $gpu_option \
         registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 /sbin/init

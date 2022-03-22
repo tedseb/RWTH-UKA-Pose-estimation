@@ -52,6 +52,8 @@ class DataManager(DataManagerInterface):
         x = exercises.find()
         self._exercises = {}
         for data in x:
+            if "description" not in data or "name" not in data:
+                continue
             self._exercises[int(data["name"])] = data["description"]
         return True
 

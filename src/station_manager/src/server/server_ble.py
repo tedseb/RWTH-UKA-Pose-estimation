@@ -76,7 +76,7 @@ class BleServerSocket:
             if result.status_code != 1:
                 logy.warn(f"Client Connection Status {result.status_code}: {self._err_to_str[result.status_code]}")
         except Exception as exception:
-            self.send_error_ts(str(exception))
+            self.send_error(str(exception))
             trace = traceback.format_exc()
             self._factory.logger.error(f"Could not handle client request: \n {trace}")
             return
@@ -85,15 +85,16 @@ class BleServerSocket:
         if not result.request_requiered:
             return
 
-        self.send_msg_ts(result.response_code, result.status_code, result.payload)
+        self.send_msg(result.response_code, result.status_code, result.payload)
 
+    @logy.catch_thread
     def onMessage(self, payload, isBinary):
         if isBinary:
             self.send_error("Binary Messages currently not supported", 2)
             return
         self._factory.logger.info(f"New Message={payload}")
 
-        data_str = str(payload.decode('utf8'))
+        data_str = str(payload)
         #logy.warn(data_str)
         try:
             data = json.loads(data_str)
@@ -128,13 +129,15 @@ class BleServerSocket:
             return
 
         self._factory.logger.info("New Message, start Thread")
-        threading.Thread(target=self.callback_wrapper, args=(request_func, payload,), daemon=True)
+        thread = threading.Thread(target=self.callback_wrapper, args=(request_func, payload,), daemon=True)
+        thread.start()
         return
 
     def onClose(self, wasClean, code, reason):
         print("WebSocket connection closed: {0}".format(reason))
 
     def send_error(self, error="Error", satus_code=2, response_code=508):
+        self._factory.logger.error(f"error: satus_code {satus_code}, response_code {response_code}")
         self.send_msg(response_code, satus_code, {"error" : error})
 
     def send_msg(self, response_code=508, satus_code=2, payload=dict({})):

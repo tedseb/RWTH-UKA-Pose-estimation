@@ -38,3 +38,10 @@ class WebServerController(WebSocketServerFactory, ServerController):
         logger = logy.get_or_create_logger("WebServer", logy.DEBUG, "WEBSOCK")
         WebSocketServerFactory.__init__(self, uri)
         ServerController.__init__(self, logger)
+
+    def run(self):
+        reactor.listenTCP(3030, self)
+        reactor.run()
+
+    def kill(self):
+        reactor.callFromThread(reactor.stop)

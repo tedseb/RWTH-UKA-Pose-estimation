@@ -225,7 +225,7 @@ class Application(dbus.service.Object):
 class BleServerController(ServerController):
     def __init__(self):
         logger = logy.get_or_create_logger("BleServer", logy.DEBUG, "BLE")
-        ServerController.__init__(self, self._logger)
+        ServerController.__init__(self, logger)
         self._connections = 1
 
         ##### dbus Stuff ####
@@ -259,8 +259,8 @@ class BleServerController(ServerController):
             socket = BleServerSocket()
             ble_service = BleServerService(self._bus, '/org/bluez/ldsg', i, uuid)
             socket.init_socket(self, ble_service._characteristic.send_msg, self._logger)
-            ble_service._characteristic._on_msg = socket._on_message()
-            ble_service._characteristic._on_connect = socket._on_connection()
+            ble_service._characteristic._on_msg = socket._on_message
+            ble_service._characteristic._on_connect = socket._on_connection
             self._services[uuid] = (ble_service, socket)
         services = [serice_pair[0] for serice_pair in self._services.values()]
         self._app = Application(self._bus, services)
@@ -274,6 +274,9 @@ class BleServerController(ServerController):
                                         reply_handler=self.register_app_cb,
                                         error_handler=self.register_app_error_cb)
         self._mainloop.run()
+
+    def kill(self):
+        self._mainloop.quit()
 
     def register_ad_cb(self):
         self._logger.info('Advertisement registered OK')

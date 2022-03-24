@@ -9,15 +9,16 @@ from src.station_manager import StationManager
 from twisted.internet import reactor
 from src import DataManager
 from src.server import WebServerController, WebServerSocket, BleServerController
+from typing import List
 
-USE_BLE = False
+USE_BLE = True
+
 
 def signal_handler(signal, frame):
-    print("EXIT")
-    if not USE_BLE:
-        reactor.callFromThread(reactor.stop)
+    for socket in sockets:
+        socket.kill()
 
-if __name__ == '__main__':
+def main():
     rospy.init_node('station_manager', anonymous=False)
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
@@ -35,7 +36,6 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-
     logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
     logy.basic_config(debug_level=logy.DEBUG, module_name="SM")
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     with_gui = not args.without_gui
     data_manager = DataManager()
-    sockets = []
+
     if USE_BLE:
         sockets.append(BleServerController())
     else:
@@ -78,3 +78,6 @@ if __name__ == '__main__':
     # time.sleep(5)
     # station_manager.stop_exercise(my_id)
     # station_manager.logout_station(my_id)
+if __name__ == '__main__':
+    sockets = []
+    main()

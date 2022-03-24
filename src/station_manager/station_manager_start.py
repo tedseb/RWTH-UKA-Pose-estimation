@@ -8,9 +8,9 @@ import pathlib
 from src.station_manager import StationManager
 from twisted.internet import reactor
 from src import DataManager
-from src.server import ServerController, ServerSocket, BleServerController, BleServerSocket
+from src.server import WebServerController, WebServerSocket, BleServerController
 
-USE_BLE = True
+USE_BLE = False
 
 def signal_handler(signal, frame):
     print("EXIT")
@@ -49,13 +49,14 @@ if __name__ == '__main__':
     if USE_BLE:
         sockets.append(BleServerController())
     else:
-        controller = ServerController("ws://127.0.0.1:3030")
-        controller.protocol = ServerSocket
+        controller = WebServerController("ws://127.0.0.1:3030")
+        controller.protocol = WebServerSocket
         sockets.append(controller)
 
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager,
         verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui, showroom_mode=args.showroom_mode, server_sockets=sockets)
     logy.info("Station Manager is Ready")
+
     if USE_BLE:
         sockets[0].run()
     else:

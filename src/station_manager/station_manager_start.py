@@ -10,6 +10,7 @@ from twisted.internet import reactor
 from src import DataManager
 from src.server import WebServerController, WebServerSocket, BleServerController
 from typing import List
+import threading
 
 USE_BLE = True
 
@@ -48,20 +49,23 @@ def main():
 
     if USE_BLE:
         sockets.append(BleServerController())
-    else:
-        controller = WebServerController("ws://127.0.0.1:3030")
-        controller.protocol = WebServerSocket
-        sockets.append(controller)
+    controller = WebServerController("ws://127.0.0.1:3030")
+    controller.protocol = WebServerSocket
+    sockets.append(controller)
 
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager,
         verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui, showroom_mode=args.showroom_mode, server_sockets=sockets)
     logy.info("Station Manager is Ready")
 
     if USE_BLE:
-        sockets[0].run()
+        logy.warn("Start  Ble Loop")
+        thread = threading.Thread(target=sockets[0].run, daemon=True)
+        thread.start()
+        logy.warn("Start  Web Loop")
+
+        sockets[1].run()
     else:
-        reactor.listenTCP(3030, sockets[0])
-        reactor.run()
+        sockets[0].run()
 
     ## Use Station Manager Directly ##
     # def repetition_callback(response_code=508, satus_code=2, payload=dict({})):

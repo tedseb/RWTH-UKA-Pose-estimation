@@ -149,7 +149,8 @@ class ServerSocket(ABC):
 
     def start_new_thread(self, function, *argparams):
         self._logger.info("not reactor")
-        threading.Thread(target=function, args=argparams, daemon=True)
+        thread = threading.Thread(target=function, args=argparams, daemon=True)
+        thread.start()
 
     def _on_close(self):
         self._logger.debug("WebSocket connection closed")

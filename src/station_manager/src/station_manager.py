@@ -11,8 +11,8 @@ import psutil
 #from data_manager import data_manager
 import logy
 
-from . import DataManager, CameraStationController, VideoSelection, TwoWayDict, SMResponse
-
+from . import DataManager, CameraStationController, VideoSelection, SMResponse
+from gymy_tools import TwoWayDict
 import rospy
 import random
 

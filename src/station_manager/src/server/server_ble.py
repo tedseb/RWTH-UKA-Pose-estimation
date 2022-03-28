@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # Advertises, accepts a connection, creates the microbit temperature service, LED service and their characteristics
-
+from asyncio.log import logger
+import os
 from gzip import READ
 from xmlrpc.client import boolean
 from . import bluetooth_constants as bluetooth_constants
@@ -11,6 +12,7 @@ import dbus
 import dbus.exceptions
 import dbus.service
 import dbus.mainloop.glib
+import subprocess
 import sys
 import traceback
 import random
@@ -23,6 +25,8 @@ from gi.repository import GLib
 import json
 from ..station_manager_response import SMResponse
 from .abstract_server import ServerController, ServerSocket
+import time
+from gymy_tools import TwoWayDict
 sys.path.insert(0, '.')
 
 UUIDS = ["ac00", "ac01", "ac02", "ac03"]
@@ -137,6 +141,7 @@ class BleServerCharacteristic(bluetooth_gatt.Characteristic):
         self.logger.info(f"Adding Characteristic uuid {uuid}")
 
     def WriteValue(self, value, options):
+        self.logger.warn(str(options))
         ascii_bytes = bluetooth_utils.dbus_to_python(value)
         text = bytes(ascii_bytes)
         self.logger.info(f"Asciii bytes: {text}")
@@ -146,6 +151,7 @@ class BleServerCharacteristic(bluetooth_gatt.Characteristic):
             self._on_msg(text, False)
 
     def ReadValue(self, options):
+        self.logger.warn(str(options))
         self.logger.info('ReadValue in BleServer called')
         value = []
         value.append(dbus.int32(10))
@@ -226,7 +232,12 @@ class BleServerController(ServerController):
     def __init__(self):
         logger = logy.get_or_create_logger("BleServer", logy.DEBUG, "BLE")
         ServerController.__init__(self, logger)
-        self._connections = 1
+        self._connections : Dict[str, str] = TwoWayDict()
+        self._advertised_uuid : str = ""
+        #list_files = subprocess.run(["echo",  "1",  ">", "/home/trainerai/trainerai-core/bt_restart"])
+        os.system("echo 1 > /home/trainerai/trainerai-core/bt_restart")
+        time.sleep(2)
+        logger.debug("Bluetooth restarted")
 
         ##### dbus Stuff ####
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -252,6 +263,7 @@ class BleServerController(ServerController):
         self._adv_mgr_interface = dbus.Interface(self._bus.get_object(bluetooth_constants.BLUEZ_SERVICE_NAME, self._adapter_path), bluetooth_constants.ADVERTISING_MANAGER_INTERFACE)
         self._adv = Advertisement(self._bus, 0, 'peripheral')
         self._adv.set_service_uuid(UUIDS[0])
+        self._advertised_uuid = UUIDS[0]
         self.start_advertising()
 
         self._services = {}
@@ -292,26 +304,45 @@ class BleServerController(ServerController):
         self._logger.info('Failed to register application: ' + str(error))
         self._mainloop.quit()
 
-    def set_connected_status(self, status):
+    def set_connected_status(self, status : int, path : str):
         if (status == 1):
-            self._logger.info("connected")
+            self._logger.info("connected " + str(path))
             self.stop_advertising()
-            self._adv.set_service_uuid(UUIDS[self._connections])
-            self._connections += 1
-            self.start_advertising()
+            if self._advertised_uuid in self._connections:
+                self._logger.error(f"More than 1 Connection on UUID {self._advertised_uuid}")
+            if path in self._connections:
+                self._logger.error(f"User {path} is loged in multiple times")
+            self._logger.info(f"advertised uuid: {self._advertised_uuid}")
+            self._connections[self._advertised_uuid] = path
+            self._advertised_uuid = ""
+            for uuid in UUIDS:
+                if uuid not in self._connections:
+                    self._logger.info(f"advertise new uuid: {uuid}")
+                    self._advertised_uuid = uuid
+                    self._adv.set_service_uuid(uuid)
+                    self.start_advertising()
+                    break
         else:
             self._logger.info("disconnected")
+            if path not in self._connections:
+                self._logger.error(f"User not logged in properly")
+                return
+            if not self._advertised_uuid:
+                self._advertised_uuid = self._connections[path]
+                self._adv.set_service_uuid(self._advertised_uuid)
+                self.start_advertising()
+            del self._connections[path]
 
     def properties_changed(self, interface, changed, invalidated, path):
         if (interface == bluetooth_constants.DEVICE_INTERFACE):
             if ("Connected" in changed):
-                self.set_connected_status(changed["Connected"])
+                self.set_connected_status(changed["Connected"], path)
 
     def interfaces_added(self, path, interfaces):
         if bluetooth_constants.DEVICE_INTERFACE in interfaces:
             properties = interfaces[bluetooth_constants.DEVICE_INTERFACE]
             if ("Connected" in properties):
-                self.set_connected_status(properties["Connected"])
+                self.set_connected_status(properties["Connected"], path)
 
     def stop_advertising(self):
         self._logger.info("Unregistering advertisement", self._adv.get_path())

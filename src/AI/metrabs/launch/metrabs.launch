@@ -1,3 +1,5 @@
 <launch>
-  <node name="PoseEstimator" pkg="metrabs" type="run_metrabs_estimation.py" output="log"/>
+  <arg name="model" default="False"/>
+  <arg name="aug" default="False"/>
+  <node name="PoseEstimator" pkg="metrabs" type="run_metrabs_estimation.py" output="log" args="$(eval str(' -m ' + arg('model') if arg('model') else '') + str(' -a ' + arg('aug') if arg('aug') else ''))"/>
 </launch>

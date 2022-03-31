@@ -26,7 +26,7 @@ ERROR = 40
 CRITICAL = 50
 
 MONITORING_UPDATE = 2
-USE_NEPTUNE = False
+NEPTUNE_PROJ = None
 LOG_TO_TERMINAL = True
 LOG_TO_TERMINAL_LEVEL = DEBUG
 LOG_TO_FILE = False
@@ -140,7 +140,7 @@ class LogyBackend:
             message_output_level_file=MESSAGE_OUTPUT_LEVEL_FILE,
             file_prefix=DEFAULT_FILE_PREFIX,
             pipe_wait_time=PIPE_WAIT_TIME,
-            use_neptune=USE_NEPTUNE,
+            neptune_proj=NEPTUNE_PROJ,
             test_case = False,
             print_tags=[]):
 
@@ -151,7 +151,8 @@ class LogyBackend:
         self._log_to_file_level = log_to_file_level
         self._message_output_level_file = message_output_level_file
         self._pipe_wait_time = pipe_wait_time
-        self._use_neptune = use_neptune
+        self._use_neptune = neptune_proj != None
+        self._neptune_proj = neptune_proj
         self._log_file = None
         self._log_file_path = None
         self._pipe = None
@@ -491,7 +492,7 @@ class LogyBackend:
 
         if self._use_neptune:
             self._neptune_run = neptune.init(
-                project="basti95/test-project",
+                project=f"basti95/{self._neptune_proj}",
                 api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJlNGJiNzAyMi0wNmIwLTQxNjctOTRlMi1jNGNlMTEyODc0MDcifQ==",
                 source_files=[]
             )
@@ -512,7 +513,7 @@ class LogyBackend:
             if self._error_occured < ERROR:
                 self._neptune_run["Info"] = {"State": "SUCCESS"}
 
-def main(start_neptune=False, tags=[], log_level_terminal="warning", test_case=False):
+def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
     try:
         os.mkfifo(FIFO)
     except OSError as oe:
@@ -520,7 +521,7 @@ def main(start_neptune=False, tags=[], log_level_terminal="warning", test_case=F
             raise
 
     level = _name_to_level[log_level_terminal]
-    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case)
+    logger_backend = LogyBackend(neptune_proj=neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case)
     # def signal_handler(self, signal):
     #     nonlocal logger_backend
     #     logger_backend._shutdown = True
@@ -534,7 +535,7 @@ def main(start_neptune=False, tags=[], log_level_terminal="warning", test_case=F
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--neptune", help="Start with Neptune logging", action="store_true")
+    parser.add_argument("-n", "--neptune", type=str, help="Start with Neptune logging", default=None, choices=['prod', 'test'])
     parser.add_argument("-t", "--tag", type=str, help="All tags which should be printed on the terminal. e.g: 'msg frame'")
     parser.add_argument("--test", help="Log to test files", action="store_true")
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
@@ -551,6 +552,11 @@ if __name__ == '__main__':
     tags = []
     if args.tag is not None and args.tag != "msg":
         tags = str(args.tag).split()
+
+
+    if args.neptune is not None:
+        if args.neptune == 'prod':
+            args.neptune = 'test-project'
 
     test_case = args.test #is not None
     main(args.neptune, tags=tags, log_level_terminal=args.log_level, test_case=test_case)

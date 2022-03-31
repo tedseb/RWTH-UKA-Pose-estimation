@@ -5,7 +5,7 @@
   <arg name="debug_frames" default="3000" doc=" Debug Frame time in ms. At 0 there are no debug frames."/>
   <arg name="log_level" default="info" doc="    Choose from debug, info, warning, error, critical."/>
   <arg name="log_tags" default="msg" doc="      Logger tags which should be printed on the terminal."/>
-  <arg name="neptune" default="True" doc="     If Logy schould log to neptune."/>
+  <arg name="neptune" default="prod" doc="     If Logy schould log to neptune."/>
   <include file="$(find logy_backend)/launch/logy_backend.launch">
     <arg name="log_level" value="$(arg log_level)"/>
     <arg name="log_tags" value="$(arg log_tags)"/>

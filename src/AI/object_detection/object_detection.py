@@ -154,9 +154,9 @@ class ObjectDetectionPipeline:
                     self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
                     self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
                     self._publish_labels(yolo_data.labels, image_data[i])
-                logy.log_fps("object_detection_fps")
+                #logy.log_fps("object_detection_fps")
 
-    @logy.trace_time("detect_objects")
+    #@logy.trace_time("detect_objects")
     def detect_objects(self, imgs : List, resize_factors : Tuple) -> List[YoloData]:
         '''
         This function uses the Yolo object detector. It predicts BBOX with label and confidence values.
@@ -164,7 +164,7 @@ class ObjectDetectionPipeline:
             List[YoloData]: Yolo Predictions for each image. YoloData is None if there is no Prediction for this index.
         '''
 
-        with logy.TraceTime("yolo_model"):
+        with logy.TraceTime("time_yolo_model"):
             results = self._model(imgs, size=640)
 
         yolo_data_results = []

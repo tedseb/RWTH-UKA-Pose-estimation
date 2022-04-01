@@ -62,6 +62,7 @@ class LogType:
     MEAN = 2
     VARIABLE = 3
     TRACING = 4
+    STR = 5
 
 @dataclass
 class AverageData:
@@ -142,6 +143,7 @@ class LogyBackend:
             pipe_wait_time=PIPE_WAIT_TIME,
             neptune_proj=NEPTUNE_PROJ,
             test_case = False,
+            sub_name = None,
             print_tags=[]):
 
         self._log_to_terminal = log_to_terminal
@@ -165,6 +167,7 @@ class LogyBackend:
         self._tracing_data: Dict[VariableData] = {}
         self._test_case = test_case
         self._shutdown = False
+        self._sub_name = sub_name
 
         if self._use_neptune:
             self._log_message(" Logy: Log online with Neptune. neptune.ai", INFO)
@@ -261,6 +264,8 @@ class LogyBackend:
             self._log_var(data)
         elif message_type == LogType.TRACING:
             self._log_tracing(data)
+        elif message_type == LogType.STR:
+            self._log_str(data)
         else:
             self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
@@ -295,7 +300,7 @@ class LogyBackend:
 
         values_before.values.append(value)
 
-        if values_before.caller_hash != caller_hash:
+        if values_before.caller_hash != caller_hash and not self._test_case:
             self._log_message(f" Logy: The Mean log with name '{name}' is called from another location", WARNING)
 
     def _log_var(self, data: Dict):
@@ -316,7 +321,28 @@ class LogyBackend:
 
         values_before.time_stamps.append(time.time())
         values_before.values.append(value)
-        if values_before.caller_hash != caller_hash:
+        if values_before.caller_hash != caller_hash and not self._test_case:
+            self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
+
+    def _log_str(self, data: Dict):
+        caller_hash = data["hash"]
+        name = data["name"]
+        value = data["value"]
+
+        if self._use_neptune:
+            self._neptune_run[f"logs/{name}"].log(value)
+
+        if "str" in self._print_tags:
+            self._log_msg_to_terminal(f"VARIABLE:{name}: {value}", DEBUG)
+
+        values_before: VariableData = self._var_data.get(name)
+        if values_before is None:
+            self._var_data[name] = VariableData(caller_hash, [value], [time.time()])
+            return
+
+        values_before.time_stamps.append(time.time())
+        values_before.values.append(value)
+        if values_before.caller_hash != caller_hash and not self._test_case:
             self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
 
     def _log_tracing(self, data: Dict):
@@ -338,7 +364,7 @@ class LogyBackend:
 
         values_before.time_stamps.append(time.time())
         values_before.values.append(value)
-        if values_before.caller_hash != caller_hash:
+        if values_before.caller_hash != caller_hash and not self._test_case:
             self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
 
     def _log_data_message(self, data: Dict):
@@ -347,10 +373,10 @@ class LogyBackend:
 
         if self._use_neptune:
             if log_level == ERROR and self._error_occured <= ERROR:
-                self._neptune_run["Info"] = {"State": "ERROR"}
+                self._neptune_run["Info/State"] = "ERROR"
                 self._error_occured = ERROR
             if log_level == CRITICAL:
-                self._neptune_run["Info"] = {"State": "CRITICAL"}
+                self._neptune_run["Info/State"] = "CRITICAL"
                 self._error_occured = CRITICAL
 
         if log_level >= self._log_to_terminal_level:
@@ -511,7 +537,9 @@ class LogyBackend:
                 self._neptune_run["log_file"].upload(self._log_file_path)
                 print("upload file")
             if self._error_occured < ERROR:
-                self._neptune_run["Info"] = {"State": "SUCCESS"}
+                self._neptune_run["Info/State"] = "SUCCESS"
+            if self._sub_name is not None:
+                self._neptune_run["Info/Subname"] = self._sub_name
 
 def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
     try:
@@ -520,8 +548,17 @@ def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
         if oe.errno != errno.EEXIST:
             raise
 
+    if neptune is not None:
+        if neptune.startswith('test'):
+            splitted = neptune.split("-")
+            neptune = "test"
+            if len(splitted) < 2:
+                sub_name = "Unknown"
+            else:
+                sub_name = splitted[1]
+
     level = _name_to_level[log_level_terminal]
-    logger_backend = LogyBackend(neptune_proj=neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case)
+    logger_backend = LogyBackend(neptune_proj=neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case, sub_name=sub_name)
     # def signal_handler(self, signal):
     #     nonlocal logger_backend
     #     logger_backend._shutdown = True
@@ -535,7 +572,7 @@ def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--neptune", type=str, help="Start with Neptune logging", default=None, choices=['prod', 'test'])
+    parser.add_argument("-n", "--neptune", type=str, help="Start with Neptune logging", default=None)
     parser.add_argument("-t", "--tag", type=str, help="All tags which should be printed on the terminal. e.g: 'msg frame'")
     parser.add_argument("--test", help="Log to test files", action="store_true")
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])

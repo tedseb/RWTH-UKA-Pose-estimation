@@ -69,7 +69,7 @@ class PoseEstimator():
             self.model = tf.saved_model.load(CONFIG["model_path"])
         else:
             self.model = tf.saved_model.load(f"/home/trainerai/trainerai-core/src/AI/metrabs/models/{model_name}")
-            logy.info(f"Start model={self.model} with num_aug={self._num_aug}")
+            logy.info(f"Start model={model_name} with num_aug={num_aug}")
         self._num_aug = num_aug
         self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
         self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
@@ -178,7 +178,7 @@ class PoseEstimator():
         camera_id = int(body_bbox_list_station.header.frame_id[3:])
         if camera_id in self._box_queues:
                 self._box_queues[camera_id].put(body_bbox_list_station)
-                logy.log_fps("new_box_received", 100)
+                #logy.log_fps("new_box_received", 100)
 
     @logy.catch_thread_and_restart
     def thread_handler(self):
@@ -260,7 +260,7 @@ class PoseEstimator():
     def start_ai(self, data, images, boxes, fake_images):
         ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
 
-        with logy.TraceTime("matrabs_multi_image"):
+        with logy.TraceTime("time_metrabs"):
             if self._use_old_model:
                 pred_output_list = self.model.predict_multi_image(images, self._intrinsics, ragged_boxes)
             else:
@@ -322,7 +322,8 @@ class PoseEstimator():
                 msg.persons.append(person_msg)
 
             self._publisher.publish(msg)
-
+            logy.log_fps("publish_skeletons")
+            continue
             if len(cropped_images) == 0:
                 return
 
@@ -353,7 +354,7 @@ class PoseEstimator():
             pub = self._publisher_crop.get(camera_id)
             if pub is not None:
                 pub.publish(image_message)
-                logy.log_fps("Publish")
+                #logy.log_fps("publish skeletons")
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
@@ -386,7 +387,7 @@ if __name__ == '__main__':
         tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
     rospy.init_node('metrabs', anonymous=True)
-    run_spin_obj = PoseEstimator()
+    run_spin_obj = PoseEstimator(args.metrabs_model, args.num_aug)
     signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
     signal.signal(signal.SIGINT, run_spin_obj.shutdown)
     logy.info("Pose Estimator is listening")

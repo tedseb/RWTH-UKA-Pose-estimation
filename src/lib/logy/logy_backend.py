@@ -548,6 +548,7 @@ def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
         if oe.errno != errno.EEXIST:
             raise
 
+    sub_name = None
     if neptune is not None:
         if neptune.startswith('test'):
             splitted = neptune.split("-")

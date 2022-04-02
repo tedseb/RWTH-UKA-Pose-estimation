@@ -185,7 +185,7 @@ class GymyEnviroment:
         return self._valid
 
 LAUNCH_FILES_ALL = [
-    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
+    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True'],
     #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
     #['infrastructure', 'mobile_server.launch'],
     ['metrabs', 'metrabs.launch', 'log_level:=debug'],
@@ -583,10 +583,16 @@ class TestCollection:
             initial_counts_bbox[data[1]] = 0
             initial_counts_skeleton[data[1]] = 0
             assert station_manager.login_station_payload(f"user_{i}", {"station" : data[0]}) == SMResponse(501, 1, {"station": data[0]})
-            assert received_bbox_avg_s <= data[2]
-            assert received_skeleton_avg_s <= data[3]
             if i % step == (step - 1):
                 time.sleep(sleep_time_s)
+                print(f"###########################################")
+                print(f"############# {data[1]}:{received_bbox_avg_s}:{data[2]}")
+                print(f"############# {data[1]}:{received_skeleton_avg_s}:{data[3]}")
+                print(f"###########################################")
+                assert received_bbox_avg_s <= data[2]
+                assert received_skeleton_avg_s <= data[3]
+                assert received_bbox_num > 0
+                assert received_skeleton_num > 0
                 log_and_set_zero(f"{i + 1} Station", (i + 1))
 
         for i, data in enumerate(station_data):
@@ -599,10 +605,10 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Detection / Metrabs Speed test (one station / Camera) ####", "test")
         station_data = [
-            [1, 0, 0.06, 0.125],
-            [2, 1, 0.12, 0.19],
-            [3, 2, 0.15, 0.24],
-            [4, 3, 0.18, 0.28],
+            [1, 0, 0.03, 0.125],
+            [2, 1, 0.04, 0.25],
+            [3, 2, 0.05, 0.35],
+            [4, 3, 0.06, 0.37],
         ]
         self._detection_and_metrabs_speed(ros_env, station_data, 10)
         ros_env.logy.test(f"# OK", "test")
@@ -611,14 +617,14 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Detection / Metrabs Speed test (two stations / Camera) ####", "test")
         station_data = [
-            [10, 10, 0.5, 0.5],
-            [11, 10, 0.5, 0.5],
-            [12, 12, 0.5, 0.5],
-            [13, 12, 0.5, 0.5],
-            [14, 14, 0.5, 0.5],
-            [15, 14, 0.5, 0.5],
-            [16, 16, 0.5, 0.5],
-            [17, 16, 0.5, 0.5],
+            [10, 10, 0.04, 0.25],
+            [11, 10, 0.04, 0.25],
+            [12, 12, 0.06, 0.37],
+            [13, 12, 0.06, 0.37],
+            [14, 14, 0.125, 0.4],
+            [15, 14, 0.125, 0.4],
+            [16, 16, 0.2, 0.6],
+            [17, 16, 0.2, 0.6],
         ]
         self._detection_and_metrabs_speed(ros_env, station_data, 10, 2)
         ros_env.logy.test(f"# OK", "test")

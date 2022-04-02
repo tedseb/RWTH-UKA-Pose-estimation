@@ -252,6 +252,12 @@ class PoseEstimator():
                 time.sleep(thread_wait_time)
                 continue
 
+            # if len(images) < 4:
+            #     img_len = len(images)
+            #     for _ in (4 - img_len):
+            #         images.append(self._fake_image)
+            #         boxes.append(self._fake_person_boxes)
+
             images = np.stack(images)
             if images.shape[0] != len(self._box_queues):
                 logy.warn(f"only {images.shape[0]} boxes but {len(self._box_queues)}. Queue: {fake_images}")
@@ -323,7 +329,7 @@ class PoseEstimator():
 
             self._publisher.publish(msg)
             logy.log_fps("publish_skeletons")
-            continue
+            #continue
             if len(cropped_images) == 0:
                 return
 

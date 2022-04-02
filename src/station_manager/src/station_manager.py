@@ -22,7 +22,7 @@ from backend.msg import StationUsage, WeightColor, ChannelInfo, Bboxes
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from twisted.internet import reactor
 import time
-from gymy_tools import ResetTimer
+from gymy_tools import ResetTimer, Queue
 
 DEBUG_STATION_ID = 999
 MAX_STATIONS = 8
@@ -67,6 +67,7 @@ class StationManager():
             self._station_selection_process = subprocess.Popen([self._path_station_selection])
 
         # Thread Shared Data. Don't Use without Mutex lock!!!
+        self.__queued_stations = {}
         self.__active_stations = TwoWayDict({}) #Dict[station_id: user_id]
         self.__active_exercises: Dict[str, (int, int, int)] = {} #Dict[user_id: (exercise_id, set_id, repetition)]
         self.__camera_process = {}
@@ -295,6 +296,9 @@ class StationManager():
         logy.info(f"Login into Station {station_id}")
         return self.login_station(user_id, station_id)
 
+    def return_queued_list():
+        pass
+
     def login_station(self, user_id: str, station_id: int):
         if self._showroom_mode:
             self.fullfill_station_login_condition(user_id, station_id)
@@ -311,6 +315,8 @@ class StationManager():
 
             if user_id in self.__active_stations:
                 return SMResponse(501, 10, {"station" : station_id})
+
+            if station_id in self.__queued_stations:
 
         #Todo: Check if Station Exist
         with self._param_updater_mutex:

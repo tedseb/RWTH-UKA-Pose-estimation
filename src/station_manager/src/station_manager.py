@@ -22,12 +22,13 @@ from backend.msg import StationUsage, WeightColor, ChannelInfo, Bboxes
 from backend.srv import WeightDetection, WeightDetectionResponse, WeightDetectionRequest
 from twisted.internet import reactor
 import time
-from gymy_tools import ResetTimer, Queue
+from gymy_tools import ResetTimer, UniqueQueueDict, ResetTimerHandler
 
 DEBUG_STATION_ID = 999
 MAX_STATIONS = 8
 CAMERA_CHANNEL_INFO = "/image/channel_{0}"
 PERSON_TIME_S = 20
+QUEUE_SLOT_EXPIRATION = 40
 
 class ComputerWorkload:
     def __init__(self):
@@ -66,8 +67,10 @@ class StationManager():
             self._path_station_selection = station_selection_path
             self._station_selection_process = subprocess.Popen([self._path_station_selection])
 
+
+        self._queue_timer_handler = ResetTimerHandler(self.queue_timer_callback)
         # Thread Shared Data. Don't Use without Mutex lock!!!
-        self.__queued_stations = {}
+        self.__queued_stations = UniqueQueueDict()
         self.__active_stations = TwoWayDict({}) #Dict[station_id: user_id]
         self.__active_exercises: Dict[str, (int, int, int)] = {} #Dict[user_id: (exercise_id, set_id, repetition)]
         self.__camera_process = {}
@@ -296,13 +299,15 @@ class StationManager():
         logy.info(f"Login into Station {station_id}")
         return self.login_station(user_id, station_id)
 
-    def return_queued_list():
-        pass
+    def return_queued_list(self, station_id: int):
+        station_queues = self.__queued_stations.get_queued_numbers()
+        return SMResponse(501, 4, station_queues)
 
     def login_station(self, user_id: str, station_id: int):
         if self._showroom_mode:
             self.fullfill_station_login_condition(user_id, station_id)
 
+        use_queue = False
         with self._exercise_station_mutex:
             if not self.__param_updater.is_station_valid(station_id):
                 return SMResponse(501, 4, {"station" : station_id})
@@ -316,7 +321,11 @@ class StationManager():
             if user_id in self.__active_stations:
                 return SMResponse(501, 10, {"station" : station_id})
 
-            if station_id in self.__queued_stations:
+            if self.__queued_stations.is_queue_on_key(station_id):
+                if self.__queued_stations.preview_next_item(station_id) != user_id:
+                    return SMResponse(501, 4, {"station" : station_id})
+                else:
+                    use_queue = True
 
         #Todo: Check if Station Exist
         with self._param_updater_mutex:
@@ -337,6 +346,9 @@ class StationManager():
         with self._exercise_station_mutex:
             self.__active_stations[user_id] = station_id
 
+        if use_queue:
+            self._queue_timer_handler.remove_timing(station_id)
+            self.__queued_stations.pop()
         return SMResponse(501, 1, {"station": station_id})
 
     def logout_station_payload(self, user_id: str, payload: Dict):
@@ -374,6 +386,10 @@ class StationManager():
 
         if self._use_person_detection:
             self._last_person_detected.pop(station_id, None)
+
+        if not self.__queued_stations.is_queue_empty(station_id):
+            self._queue_timer_handler.add_timing(QUEUE_SLOT_EXPIRATION, station_id)
+            self.send_queue_notification(station_id)
 
         return SMResponse(502, 1, {"station": station_id})
 
@@ -457,6 +473,59 @@ class StationManager():
 
             result: WeightDetectionResponse = self._ai_weight_detection("image", 2.0, color_msg_list)
             return SMResponse(507, 1, {"weight": result.weight, "probability": 1})
+
+    def enqueue_payload(self, user_id: str, payload: Dict):
+        logy.debug(f"Enqueue user {user_id}, payload: {payload}")
+        if "station" not in payload:
+            return self.return_error("Payload must have a station", 8)
+
+        station_id = int(payload["station"])
+        answer = self.enqueue(user_id, station_id)
+        return answer
+
+    def enqueue(self, user_id: str, station_id : int):
+        if self.__queued_stations.get_item_queue(user_id) is not None:
+            return SMResponse(511, 14, {})
+
+        if self.__queued_stations.is_queue_full(station_id):
+            return SMResponse(511, 13, {})
+
+        self.__queued_stations.add(station_id, user_id)
+        if station_id in self.__active_stations and self.__queued_stations.is_queue_empty(station_id):
+            self.start_queue_timer(station_id)
+            return SMResponse(512, 1, {"expiration", QUEUE_SLOT_EXPIRATION})
+
+        queue_len = self.__queued_stations.get_queue_len(station_id)
+        return SMResponse(511, 1, {"queue_slot": queue_len})
+
+    def dequeue_payload(self, user_id: str, payload: Dict):
+        logy.debug(f"Dequeue user {user_id}, payload: {payload}")
+        answer = self.dequeue(user_id)
+        return answer
+
+    def dequeue(self, user_id: str):
+        self.__queued_stations.dequeue_item(user_id)
+        return SMResponse(507, 1, {"Queue"})
+
+    def get_queue_state_payload(self, user_id: str, payload: Dict):
+        logy.debug(f"Enqueue user {user_id}, payload: {payload}")
+        answer = self.get_queue_state(user_id)
+        return answer
+
+    def get_queue_state(self, user_id):
+        station, queue_slot = self.__queued_stations.get_queue_item_info(user_id)
+        if station == None:
+            return SMResponse(513, 15, {})
+        return SMResponse(513, 1, {"station" : station, "queue_slot" : queue_slot})
+
+    def start_queue_timer(self, station_id):
+        pass
+
+    def queue_timer_callback(self, station_id):
+        pass
+
+    def send_queue_notification(self, station_id):
+        pass
 
     @logy.catch_ros
     def user_state_callback(self, msg):

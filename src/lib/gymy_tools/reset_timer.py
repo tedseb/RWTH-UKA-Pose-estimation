@@ -88,9 +88,11 @@ class ResetTimerHandler():
 
         if self._timer is None:
             self._next_time_out_key = key
-            self._timer = ResetTimer(time, self.on_time_out)
+            self._timer = ResetTimer(time, self._on_time_out)
             self._timer.start()
             return
+        self._timings[key] += self._timer.get_elapsed_time()
+        self._set_new_timout()
 
     def remove_timing(self, key):
         self._timings.pop(key, None)

@@ -1,4 +1,5 @@
 # Test Modules Station Manager, Object Detection, Metrabs
+from calendar import c
 import time
 import sys
 import copy
@@ -184,6 +185,48 @@ class GymyEnviroment:
     def is_valid(self):
         return self._valid
 
+class StationManagerEnv:
+    def __init__(self) -> None:
+        self._valid = False
+        self._data_manager = None
+        self.logy = None
+        rospy.init_node('pytest', anonymous=True)
+
+    def __del__(self):
+        self._parent.shutdown()
+
+    def is_valid(self):
+        return self._valid
+
+    def warm_up(self):
+        launch_files = [
+            ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
+        ]
+        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        ros_launch_files = []
+        for args in launch_files:
+            roslaunch_file = roslaunch.rlutil.resolve_launch_arguments(args)[0]
+            if len(args) >= 2:
+                roslaunch_args = args[2:]
+                ros_launch_files.append((roslaunch_file, roslaunch_args))
+            else:
+                ros_launch_files.append(roslaunch_file)
+
+        self._parent = roslaunch.parent.ROSLaunchParent(uuid, ros_launch_files)
+        self._parent.start()
+        time.sleep(1)
+        print("metrabs ready")
+        #time.sleep(3)
+        camera_path = "/home/trainerai/trainerai-core/src/infrastructure/CameraNode.py"
+        transform_node_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
+        station_selection_path = "/home/trainerai/trainerai-core/src/station_manager/src/station_selection.py"
+
+        self._data_manager = LocalDataManager()
+        self.station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=self._data_manager, with_gui=False)
+
+        self.logy = logy.get_or_create_logger("system_test", logy.TEST, "TEST")
+        self._valid = True
+
 LAUNCH_FILES_ALL = [
     ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True'],
     #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
@@ -210,6 +253,13 @@ def ros_env():
 def ros_env_metrabs():
     env = GymyEnviroment()
     env.warm_up(LAUNCH_FILES_METRABS)
+    return env
+
+@pytest.fixture(scope="class")
+def ros_env_only_station_manager(request):
+    print(request)
+    env = StationManagerEnv()
+    env.warm_up()
     return env
 
 def _ros_env():
@@ -715,8 +765,98 @@ class TestCollection2:
         publisher_channel_info.publish(ChannelInfo('image/channel_0', 0, 1, False))
         skeleton_sub.unregister()
 
-if __name__ == '__main__':
+class TestCollection3:
+        def test_station_manager_queue(self, ros_env_only_station_manager : StationManagerEnv):
+            logger = ros_env_only_station_manager.logy
+            logger.test(f"\n####  Station Manager Test  ####", "test")
+            assert ros_env_only_station_manager.is_valid()
+            station_manager = ros_env_only_station_manager.station_manager
+            queue_expiration = 4
+            command_wait_time = 0.030
+            user_ready = {2 : False, 3 : False, 4 : False}
 
+
+            def user_calback(response_code, satus_code, payload, user_id):
+                if response_code == 512:
+                    nonlocal user_ready
+                    assert satus_code == 1
+                    assert "expiration" in payload
+                    assert payload["expiration"] == queue_expiration
+                    user_ready[user_id] = True
+
+            def user_2_callback(response_code, satus_code, payload):
+                user_calback(response_code, satus_code, payload, 2)
+
+            def user_3_callback(response_code, satus_code, payload):
+                user_calback(response_code, satus_code, payload, 3)
+
+            def user_4_callback(response_code, satus_code, payload):
+                user_calback(response_code, satus_code, payload, 4)
+
+            station_manager.set_client_callback("user_2", user_2_callback)
+            station_manager.set_client_callback("user_3", user_3_callback)
+            station_manager.set_client_callback("user_4", user_4_callback)
+            station_manager.set_queue_slot_expiration(4)
+
+            # Login user 1 into available Station
+            assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            # Login new user 2 into same Station
+            assert station_manager.login_station_payload("user_2", {"station" : 1}) == SMResponse(501, 4, {"station": 1})
+            time.sleep(command_wait_time)
+            # Enqueue User 1 although he is already loged in same station
+            assert station_manager.enqueue_payload("user_1", {"station" : 1}) == SMResponse(511, 14, {})
+            time.sleep(command_wait_time)
+            # Enqueue User 1 in other station although he is already loged in
+            assert station_manager.enqueue_payload("user_1", {"station" : 2}) == SMResponse(511, 14, {})
+            time.sleep(command_wait_time)
+            # Enqueue User 2
+            assert station_manager.enqueue_payload("user_2", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 1})
+            time.sleep(command_wait_time)
+            # Enqueue User 3
+            assert station_manager.enqueue_payload("user_3", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 2})
+            time.sleep(command_wait_time)
+            # Enqueue User 4
+            assert station_manager.enqueue_payload("user_4", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 3})
+            time.sleep(command_wait_time)
+            # Dequeue User 2
+            assert station_manager.dequeue_payload("user_2", {}) == SMResponse(511, 1, {})
+            time.sleep(command_wait_time)
+            # Queue State User 3
+            assert station_manager.get_queue_state_payload("user_3", {}) == SMResponse(513, 1, {"station" : 1, "queue_slot" : 1})
+            time.sleep(command_wait_time)
+            # Queue State User 4
+            assert station_manager.get_queue_state_payload("user_4", {}) == SMResponse(513, 1, {"station" : 1, "queue_slot" : 2})
+            time.sleep(command_wait_time)
+            # Enqueue User 2 again
+            assert station_manager.enqueue_payload("user_2", {"station" : 1})  == SMResponse(511, 1, {"queue_slot": 3})
+            time.sleep(command_wait_time)
+            # Logout User 1
+            assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            assert user_ready[2] == False
+            assert user_ready[3] == True
+            assert user_ready[4] == False
+            time.sleep(command_wait_time + queue_expiration)
+            assert user_ready[4] == True
+            # Login User 4
+            assert station_manager.login_station_payload("user_4", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            # Enqueue User 3
+            station_manager.enqueue_payload("user_3", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 2})
+            time.sleep(command_wait_time)
+            user_ready[3] = False
+            # Logout User 4
+            station_manager.logout_station_payload("user_4", {}) == SMResponse(502, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            assert user_ready[2] == True
+            # dequeue User 2
+            station_manager.dequeue_payload("user_2", {}) == SMResponse(511, 1, {})
+            time.sleep(command_wait_time)
+            assert user_ready[3] == True
+            logger.test(f"# OK", "test")
+
+if __name__ == '__main__':
     nvidia_smi.nvmlInit()
     gp_count = nvidia_smi.nvmlDeviceGetCount()
     print(f"# GPU count = {gp_count}")

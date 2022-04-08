@@ -28,6 +28,12 @@ class Queue:
         item = self._elements[key] #"Deques support thread-safe, memory efficient appends and pops". Lookups also thread safe?
         return item
 
+    def __len__(self):
+        return len(self._elements)
+
+    def __delitem__(self, key):
+        del self._elements[key]
+
 # A Dict of [Type, Queues]. Each queue entry os unique in the queues
 class UniqueQueueDict():
     def __init__(self, queue_len = 10):
@@ -115,7 +121,7 @@ class UniqueQueueDict():
     def dequeue_item(self, item):
         key = self._item_dict.get(item, None)
         if key is None:
-            return
+            return (None, None)
 
         index = -1
         for i, queue_item in enumerate(self._queue_dict[key]):
@@ -123,6 +129,8 @@ class UniqueQueueDict():
                 index = i
         assert index != -1
         del self._queue_dict[key][index]
+        del self._item_dict[item]
+        return (key, index)
 
     def get_queue_item_info(self, item) -> Tuple[type, int]:
         key = self._item_dict.get(item, None)

@@ -67,10 +67,10 @@ class StationManager():
             self._path_station_selection = station_selection_path
             self._station_selection_process = subprocess.Popen([self._path_station_selection])
 
-
+        self._queue_slot_expiration = QUEUE_SLOT_EXPIRATION
         self._queue_timer_handler = ResetTimerHandler(self.queue_timer_callback)
         # Thread Shared Data. Don't Use without Mutex lock!!!
-        self.__queued_stations = UniqueQueueDict()
+        self.__station_queues = UniqueQueueDict()
         self.__active_stations = TwoWayDict({}) #Dict[station_id: user_id]
         self.__active_exercises: Dict[str, (int, int, int)] = {} #Dict[user_id: (exercise_id, set_id, repetition)]
         self.__camera_process = {}
@@ -105,6 +105,8 @@ class StationManager():
         logy.debug("Start StationManager")
         rospy.spin()
 
+    def set_queue_slot_expiration(self, s : int):
+        self._queue_slot_expiration = s
 
     @logy.catch_thread
     def person_time_out(self):
@@ -300,7 +302,7 @@ class StationManager():
         return self.login_station(user_id, station_id)
 
     def return_queued_list(self, station_id: int):
-        station_queues = self.__queued_stations.get_queued_numbers()
+        station_queues = self.__station_queues.get_queued_numbers()
         return SMResponse(501, 4, station_queues)
 
     def login_station(self, user_id: str, station_id: int):
@@ -321,8 +323,8 @@ class StationManager():
             if user_id in self.__active_stations:
                 return SMResponse(501, 10, {"station" : station_id})
 
-            if self.__queued_stations.is_queue_on_key(station_id):
-                if self.__queued_stations.preview_next_item(station_id) != user_id:
+            if self.__station_queues.is_queue_on_key(station_id):
+                if self.__station_queues.preview_next_item(station_id) != user_id:
                     return SMResponse(501, 4, {"station" : station_id})
                 else:
                     use_queue = True
@@ -348,7 +350,7 @@ class StationManager():
 
         if use_queue:
             self._queue_timer_handler.remove_timing(station_id)
-            self.__queued_stations.pop()
+            self.__station_queues.pop(station_id)
         return SMResponse(501, 1, {"station": station_id})
 
     def logout_station_payload(self, user_id: str, payload: Dict):
@@ -387,8 +389,9 @@ class StationManager():
         if self._use_person_detection:
             self._last_person_detected.pop(station_id, None)
 
-        if not self.__queued_stations.is_queue_empty(station_id):
-            self._queue_timer_handler.add_timing(QUEUE_SLOT_EXPIRATION, station_id)
+        if not self.__station_queues.is_queue_empty(station_id):
+            #self.__station_queues.pop(station_id)
+            self._queue_timer_handler.add_timing(self._queue_slot_expiration, station_id)
             self.send_queue_notification(station_id)
 
         return SMResponse(502, 1, {"station": station_id})
@@ -484,18 +487,20 @@ class StationManager():
         return answer
 
     def enqueue(self, user_id: str, station_id : int):
-        if self.__queued_stations.get_item_queue(user_id) is not None:
+        if self.__station_queues.get_item_queue(user_id) is not None:
+            logy.warn("user already loged into queue")
             return SMResponse(511, 14, {})
 
-        if self.__queued_stations.is_queue_full(station_id):
+        if user_id in self.__active_stations:
+            logy.warn("user already loged into station")
+            return SMResponse(511, 14, {})
+
+        if self.__station_queues.is_queue_full(station_id):
             return SMResponse(511, 13, {})
 
-        self.__queued_stations.add(station_id, user_id)
-        if station_id in self.__active_stations and self.__queued_stations.is_queue_empty(station_id):
-            self.start_queue_timer(station_id)
-            return SMResponse(512, 1, {"expiration", QUEUE_SLOT_EXPIRATION})
+        self.__station_queues.add(station_id, user_id)
 
-        queue_len = self.__queued_stations.get_queue_len(station_id)
+        queue_len = self.__station_queues.get_queue_len(station_id)
         return SMResponse(511, 1, {"queue_slot": queue_len})
 
     def dequeue_payload(self, user_id: str, payload: Dict):
@@ -504,8 +509,21 @@ class StationManager():
         return answer
 
     def dequeue(self, user_id: str):
-        self.__queued_stations.dequeue_item(user_id)
-        return SMResponse(507, 1, {"Queue"})
+        station_id, slot = self.__station_queues.dequeue_item(user_id)
+        if station_id is None:
+            return SMResponse(511, 1, {})
+        # station, queue_slot = self.__station_queues.get_queue_item_info(user_id)
+        # if station is not None:
+        #     logy.warn(f"item from '{station}', and slot '{queue_slot}' not deleted")
+        if slot == 0 and station_id not in self.__active_stations:
+            if not self.__station_queues.is_queue_empty(station_id):
+                if self.__station_queues.is_queue_empty(station_id):
+                    self._queue_timer_handler.remove_timing(station_id)
+                else:
+                    #self.__station_queues.pop(station_id)
+                    self._queue_timer_handler.add_timing(self._queue_slot_expiration, station_id)
+                    self.send_queue_notification(station_id)
+        return SMResponse(511, 1, {})
 
     def get_queue_state_payload(self, user_id: str, payload: Dict):
         logy.debug(f"Enqueue user {user_id}, payload: {payload}")
@@ -513,19 +531,23 @@ class StationManager():
         return answer
 
     def get_queue_state(self, user_id):
-        station, queue_slot = self.__queued_stations.get_queue_item_info(user_id)
-        if station == None:
+        station, queue_slot = self.__station_queues.get_queue_item_info(user_id)
+        if station is None:
             return SMResponse(513, 15, {})
-        return SMResponse(513, 1, {"station" : station, "queue_slot" : queue_slot})
-
-    def start_queue_timer(self, station_id):
-        pass
+        return SMResponse(513, 1, {"station" : station, "queue_slot" : queue_slot + 1})
 
     def queue_timer_callback(self, station_id):
-        pass
+        user_id = self.__station_queues.pop(station_id)
+        if self.__station_queues.preview_next_item(station_id) is not None:
+            self.send_queue_notification(station_id)
+            self._queue_timer_handler.add_timing(self._queue_slot_expiration, station_id)
 
     def send_queue_notification(self, station_id):
-        pass
+        user_id = self.__station_queues.preview_next_item(station_id)
+        if user_id is None:
+            return
+        callback = self._client_callbacks[user_id]
+        callback(response_code=512, satus_code=1, payload={"expiration" : self._queue_slot_expiration})
 
     @logy.catch_ros
     def user_state_callback(self, msg):

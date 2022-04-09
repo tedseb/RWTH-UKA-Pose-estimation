@@ -143,3 +143,11 @@ class UniqueQueueDict():
                 index = i
         assert index != -1
         return key, index
+
+    def items(self):
+        return self._item_dict.items()
+
+    def clear(self):
+        with self._mutex:
+            self._queue_dict.clear()
+            self._item_dict.clear()

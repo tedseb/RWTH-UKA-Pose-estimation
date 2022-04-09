@@ -127,3 +127,10 @@ class ResetTimerHandler():
         else:
             del self._timer
             self._timer = None
+
+    def clear(self):
+        self._timings = {}
+        del self._timer
+        self._timer = None
+        self.running_timing = None
+        self._next_time_out_key = None

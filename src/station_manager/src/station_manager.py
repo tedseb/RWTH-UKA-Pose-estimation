@@ -71,7 +71,7 @@ class StationManager():
         self._queue_timer_handler = ResetTimerHandler(self.queue_timer_callback)
         # Thread Shared Data. Don't Use without Mutex lock!!!
         self.__station_queues = UniqueQueueDict()
-        self.__active_stations = TwoWayDict({}) #Dict[station_id: user_id]
+        self.__active_stations = TwoWayDict() #Dict[station_id: user_id]
         self.__active_exercises: Dict[str, (int, int, int)] = {} #Dict[user_id: (exercise_id, set_id, repetition)]
         self.__camera_process = {}
         self.__transform_process = {}
@@ -100,6 +100,20 @@ class StationManager():
         with self._camera_process_mutex:
             for cam_index in self.__camera_process.keys():
                 self.stop_camera(cam_index)
+
+    def reset(self):
+        # for user_id in
+        # self.send_logout_server(user_id)
+        logy.info("Reset DigiIsland")
+        for user_id in self.__active_stations.get_values():
+            self.logout_station(user_id)
+            self.send_logout_server(user_id, "reset")
+
+        for user_id, station_id in self.__station_queues.items():
+            self.send_logout_queue(user_id, station_id, "reset")
+        self.__station_queues.clear()
+        self.__station_queues.clear()
+        self.__active_exercises.clear()
 
     def start(self):
         logy.debug("Start StationManager")
@@ -346,7 +360,7 @@ class StationManager():
             self.start_camera(cam_index, station_id>=DEBUG_STATION_ID, cam_info=cam_info)
 
         with self._exercise_station_mutex:
-            self.__active_stations[user_id] = station_id
+            self.__active_stations[station_id] = user_id
 
         if use_queue:
             self._queue_timer_handler.remove_timing(station_id)
@@ -489,19 +503,19 @@ class StationManager():
     def enqueue(self, user_id: str, station_id : int):
         if self.__station_queues.get_item_queue(user_id) is not None:
             logy.warn("user already loged into queue")
-            return SMResponse(511, 14, {})
+            return SMResponse(510, 14, {})
 
         if user_id in self.__active_stations:
             logy.warn("user already loged into station")
-            return SMResponse(511, 14, {})
+            return SMResponse(510, 14, {})
 
         if self.__station_queues.is_queue_full(station_id):
-            return SMResponse(511, 13, {})
+            return SMResponse(510, 13, {})
 
         self.__station_queues.add(station_id, user_id)
 
         queue_len = self.__station_queues.get_queue_len(station_id)
-        return SMResponse(511, 1, {"queue_slot": queue_len})
+        return SMResponse(510, 1, {"queue_slot": queue_len})
 
     def dequeue_payload(self, user_id: str, payload: Dict):
         logy.debug(f"Dequeue user {user_id}, payload: {payload}")
@@ -548,6 +562,14 @@ class StationManager():
             return
         callback = self._client_callbacks[user_id]
         callback(response_code=512, satus_code=1, payload={"expiration" : self._queue_slot_expiration})
+
+    def send_logout_queue(self, user_id, station_id, reason = "server reset"):
+        callback = self._client_callbacks[user_id]
+        callback(response_code=514, satus_code=1, payload={"station" : station_id, "reason" : str(reason)})
+
+    def send_logout_server(self, user_id, reason = "server reset"):
+        callback = self._client_callbacks[user_id]
+        callback(response_code=515, satus_code=1, payload={"reason" : str(reason)})
 
     @logy.catch_ros
     def user_state_callback(self, msg):

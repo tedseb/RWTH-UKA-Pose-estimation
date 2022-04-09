@@ -140,6 +140,7 @@ class GymyEnviroment:
         rospy.Subscriber('/signals/metrabs_ready', Bool, self._metrabs_ready_callback)
 
     def __del__(self):
+        del self.station_manager
         self._parent.shutdown()
 
     def _metrabs_ready_callback(self, msg : Bool) -> None:
@@ -193,6 +194,7 @@ class StationManagerEnv:
         rospy.init_node('pytest', anonymous=True)
 
     def __del__(self):
+        del self.station_manager
         self._parent.shutdown()
 
     def is_valid(self):
@@ -267,13 +269,13 @@ def _ros_env():
     env.warm_up(LAUNCH_FILES_ALL)
     return env
 
-class TestCollection:
+class TestCollection1:
 
     def test_station_manager_api(self, ros_env):
         ros_env.logy.test(f"\n####  Station Manager Test  ####", "test")
         assert ros_env.is_valid()
         station_manager = ros_env.station_manager
-
+        station_manager.reset()
         command_wait_time_ms = 30
         # Login into no available Station
         assert station_manager.login_station_payload("user_1", {}) == SMResponse(508, 8, {})
@@ -328,6 +330,7 @@ class TestCollection:
         #boxes = [670, 170, 200, 510]
         #assert img is not None
         station_manager = ros_env.station_manager
+        station_manager.reset()
         received_channel_info_start = False
         received_channel_info_stop = False
         received_channel_info_s = 0
@@ -421,6 +424,7 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Object Detection Test  ####", "test")
         station_manager = ros_env.station_manager
+        station_manager.reset()
         received_bbox_s = 0
         received_bbox = False
         bbox_sub = None
@@ -460,7 +464,7 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Metrabs Test  ####", "test")
         station_manager = ros_env.station_manager
-        station_manager = ros_env.station_manager
+        station_manager.reset()
         received_skeleton_s = 0
         received_skeleton = False
         skeleton_sub = None
@@ -516,8 +520,7 @@ class TestCollection:
 
     def _detection_and_metrabs_speed(self, ros_env, station_data, sleep_time_s, step=1): #station_data = [[station, camera, max_avg_ms, max_avg_fps]]
         station_manager = ros_env.station_manager
-        station_manager = ros_env.station_manager
-
+        station_manager.reset()
         received_skeleton_avg_s = 0
         received_skeleton_num = 0
         initial_counts_skeleton = {} # start with test if each camera sends min. INITIAL_COUNT frames
@@ -771,6 +774,7 @@ class TestCollection3:
             logger.test(f"\n####  Station Manager Test  ####", "test")
             assert ros_env_only_station_manager.is_valid()
             station_manager = ros_env_only_station_manager.station_manager
+            station_manager.reset()
             queue_expiration = 4
             command_wait_time = 0.030
             user_ready = {2 : False, 3 : False, 4 : False}
@@ -805,19 +809,22 @@ class TestCollection3:
             assert station_manager.login_station_payload("user_2", {"station" : 1}) == SMResponse(501, 4, {"station": 1})
             time.sleep(command_wait_time)
             # Enqueue User 1 although he is already loged in same station
-            assert station_manager.enqueue_payload("user_1", {"station" : 1}) == SMResponse(511, 14, {})
+            assert station_manager.enqueue_payload("user_1", {"station" : 1}) == SMResponse(510, 14, {})
             time.sleep(command_wait_time)
             # Enqueue User 1 in other station although he is already loged in
-            assert station_manager.enqueue_payload("user_1", {"station" : 2}) == SMResponse(511, 14, {})
+            assert station_manager.enqueue_payload("user_1", {"station" : 2}) == SMResponse(510, 14, {})
+            time.sleep(command_wait_time)
+            # Queue State User 2
+            assert station_manager.get_queue_state_payload("user_3", {}) == SMResponse(513, 15, {})
             time.sleep(command_wait_time)
             # Enqueue User 2
-            assert station_manager.enqueue_payload("user_2", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 1})
+            assert station_manager.enqueue_payload("user_2", {"station" : 1}) == SMResponse(510, 1, {"queue_slot": 1})
             time.sleep(command_wait_time)
             # Enqueue User 3
-            assert station_manager.enqueue_payload("user_3", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 2})
+            assert station_manager.enqueue_payload("user_3", {"station" : 1}) == SMResponse(510, 1, {"queue_slot": 2})
             time.sleep(command_wait_time)
             # Enqueue User 4
-            assert station_manager.enqueue_payload("user_4", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 3})
+            assert station_manager.enqueue_payload("user_4", {"station" : 1}) == SMResponse(510, 1, {"queue_slot": 3})
             time.sleep(command_wait_time)
             # Dequeue User 2
             assert station_manager.dequeue_payload("user_2", {}) == SMResponse(511, 1, {})
@@ -829,7 +836,7 @@ class TestCollection3:
             assert station_manager.get_queue_state_payload("user_4", {}) == SMResponse(513, 1, {"station" : 1, "queue_slot" : 2})
             time.sleep(command_wait_time)
             # Enqueue User 2 again
-            assert station_manager.enqueue_payload("user_2", {"station" : 1})  == SMResponse(511, 1, {"queue_slot": 3})
+            assert station_manager.enqueue_payload("user_2", {"station" : 1})  == SMResponse(510, 1, {"queue_slot": 3})
             time.sleep(command_wait_time)
             # Logout User 1
             assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})

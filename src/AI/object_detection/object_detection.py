@@ -26,6 +26,7 @@ IMAGE_QUEUE_LEN = 2
 THREAD_WAIT_TIME_MS = 5
 AI_HEIGHT = 720
 AI_WIDTH = 1280
+USE_STATION_FRAMES = False
 
 @dataclass
 class YoloData:
@@ -141,20 +142,30 @@ class ObjectDetectionPipeline:
                     time.sleep(thread_wait_time)
                     continue
 
-                yolo_data_results = self.detect_objects(images, resize_factors)
-                if len(yolo_data_results) == 0:
-                    continue
-
-                for i, yolo_data in enumerate(yolo_data_results):
-                    if yolo_data is None:
+                station_boxes_list = []
+                if not USE_STATION_FRAMES:
+                    yolo_data_results = self.detect_objects(images, resize_factors)
+                    if len(yolo_data_results) == 0:
                         continue
-                    station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i], shape[1], shape[0]) #[x, y, w, h]
-                    #logy.warn(f"boxes = {station_boxes}")
+                    for i, yolo_data in enumerate(yolo_data_results):
+                        if yolo_data is None:
+                            continue
+                        station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i], shape[1], shape[0]) #[x, y, w, h]
+                        station_boxes_list.append(station_boxes)
+                        self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
+                        self._publish_labels(yolo_data.labels, image_data[i])
+                else:
+                    for camera_id in camera_ids:
+                        station_boxes = self._box_checker.get_camera_station_frames(camera_id)
+                        for box in station_boxes.values():
+                            box[2] -= box[0]
+                            box[3] -= box[1]
+                        station_boxes_list.append(station_boxes)
+
+                for i, station_boxes in enumerate(station_boxes_list):
                     logy.log_fps("publish_boxes")
                     self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
-                    self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
-                    self._publish_labels(yolo_data.labels, image_data[i])
-                #logy.log_fps("object_detection_fps")
+                    #logy.log_fps("object_detection_fps")
 
     #@logy.trace_time("detect_objects")
     def detect_objects(self, imgs : List, resize_factors : Tuple) -> List[YoloData]:
@@ -243,10 +254,10 @@ class ObjectDetectionPipeline:
 
     def _publish_boxes(self, station_boxes, old_img_data, camera_id : int):
         box_list_1d = []
-        station_boxes = collections.OrderedDict(sorted(station_boxes.items()))
         if not station_boxes:
             return
 
+        station_boxes = collections.OrderedDict(sorted(station_boxes.items()))
         for box in station_boxes.values():
             box_list_1d.extend(box)
         box_msg  = Bboxes()

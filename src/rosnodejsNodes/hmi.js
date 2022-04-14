@@ -9,7 +9,8 @@ const StringMsg = rosnodejs.require('std_msgs').msg.String;
 const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
-var MongoClient = require('mongodb').MongoClient;
+const mongodb = require('mongodb');
+var MongoClient = mongodb.MongoClient;
 const { stringify } = require('querystring');
 const { features } = require('process');
 
@@ -33,6 +34,8 @@ if (args['ai'] == 'spin') {
   hmiExercises_db_string = "hmiExercises"
 }
 
+console.log({ownpose_labels, ownpose_used, ownpose});
+
 // Web App Code:
 const app = express();
 const server = app.listen(PORT, () => { console.log("Listening on port " + PORT) });
@@ -51,7 +54,8 @@ rosnodejs.initNode('/hmi');
 const nh = rosnodejs.nh;
 const pubex = nh.advertise('/exercises', StringMsg);
 
-MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) => {
+
+MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, async (err, client) => {
   if (err) throw err;
 
   //get trainerai DB and exercises collection
@@ -76,16 +80,51 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
     }
   });
 
+  app.delete('/api/expert/exercise/:_id', (req, res) => {
+    const id = req.params._id;
+    exercises.deleteOne({_id: new mongodb.ObjectID(id)}).then(result => {
+      if(result.deletedCount === 1) {
+        res.status(200).send();
+      } else {
+        res.status(500).send('No exercise deleted!');
+      }
+    })
+  })
+
+  app.get('/api/expert/exercises', (req, res) => {
+    const options = {
+      projection: {
+        _id: 1,
+        recording: 0,
+        name: 1,
+        description: 1, 
+        features: 1,
+        is_reference_recording: 0,
+        video_file_name: 0
+      }
+    }
+    exercises.find().toArray().then(val => {
+      res.send(val);
+    }, err => res.status(500).send(err));
+  });
+
   app.post('/api/expert/exercises/stages/save', (req, res) => {
     console.log(req.body);
     hmiExercises.insertOne(req.body);
     res.status(200).send();
   });
 
+  app.post('/api/update/:_id', (req, res) => {
+    const id = req.params._id;
+    const query = {_id: new mongodb.ObjectID(id)}
+    const replacement = req.body;
+    exercises.replaceOne(query, replacement).then(val => {res.status(200).send();}, err => {res.status(500).send();})
+  })
+
   //req.body == recording raw
   app.post('/api/expert/recording/save', (req, res) => {
     console.log("recording requested new");
-    if(req.body['features']){
+/*     if(req.body['features']){
       console.log('hi');
       let arr = [];
       for (feature of req.body['features']){
@@ -98,7 +137,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
       req.body['features'] = arr;
     } else {
       console.log('helooo');
-    }
+    } */
     if (req) {
       exercises.insertOne(req.body);
       res.status(200).send();

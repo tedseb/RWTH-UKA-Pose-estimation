@@ -54,7 +54,10 @@ class DataManager(DataManagerInterface):
         for data in x:
             if "description" not in data or "name" not in data:
                 continue
-            self._exercises[int(data["name"])] = data["description"]
+            try:
+                self._exercises[int(data["name"])] = data["description"]
+            except:
+                pass
         return True
 
     def _load_station_exercises(self):

@@ -230,9 +230,9 @@ class ModelTester:
         # "metrabs_eff2m_y4" : [[1, 2, 3], "EffNet2M"],
         # "metrabs_eff2s_y4" : [[3, 4, 5], "EffNet2S"],
         # "metrabs_rn101_y4" : [[3, 4, 5], "ResNet101"]
-        "metrabs_eff2m_y4" : [[1, 2], "EffNet2M"],
-        "metrabs_eff2s_y4" : [[3, 4], "EffNet2S"],
-        "metrabs_rn101_y4" : [[3, 4], "ResNet101"]
+        "metrabs_eff2m_y4" : [[1, 2, 3], "EffNet2M"],
+        "metrabs_eff2s_y4" : [[4, 5], "EffNet2S"],
+        "metrabs_rn101_y4" : [[4, 5], "ResNet101"]
     }
 
     def __init__(self) -> None:
@@ -240,7 +240,7 @@ class ModelTester:
         #self._model_test_time = 10
         self._measure_interval_s = 2
         self._test_station_order = [10, 11, 12, 13]
-        self._measurements_per_stations = 5
+        self._measurements_per_stations = 10
         ######################
 
         self._env = GymyEnviroment()

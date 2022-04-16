@@ -360,7 +360,7 @@ class PoseEstimator():
             pub = self._publisher_crop.get(camera_id)
             if pub is not None:
                 pub.publish(image_message)
-                #logy.log_fps("publish skeletons")
+                #logy.log_fps("publish_skeletons")
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")

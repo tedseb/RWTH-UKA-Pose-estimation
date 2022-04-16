@@ -26,6 +26,7 @@ IMAGE_QUEUE_LEN = 2
 THREAD_WAIT_TIME_MS = 5
 AI_HEIGHT = 720
 AI_WIDTH = 1280
+FPS = 25
 USE_STATION_FRAMES = False
 
 @dataclass
@@ -108,6 +109,7 @@ class ObjectDetectionPipeline:
         The image is reshaped and sent to the yolo detection. The results are published as boxes.
 
         '''
+        wait_time = 1.0 / FPS
         logy.debug_throttle("Object Detection thread is active", 1000)
         thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
         while(self._is_active):
@@ -115,6 +117,7 @@ class ObjectDetectionPipeline:
             camera_ids = []
             image_data = []
             resize_factors = []
+            time_start = time.time()
             with self._image_queues_lock:
 
                 for camera_id, queue in self._image_queues.items():
@@ -166,6 +169,10 @@ class ObjectDetectionPipeline:
                     logy.log_fps("publish_boxes")
                     self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
                     #logy.log_fps("object_detection_fps")
+                duration = time.time() - time_start
+                if duration < wait_time:
+                    time.sleep(wait_time - duration)
+
 
     #@logy.trace_time("detect_objects")
     def detect_objects(self, imgs : List, resize_factors : Tuple) -> List[YoloData]:

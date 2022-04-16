@@ -90,7 +90,7 @@ docker run -it -d --rm \
         registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 > /dev/null
 
 if $mongo || $env || $backend; then
-	if [ ! "docker container list -a | grep mongo-on-docker" ]; then
+	if [ ! $(docker container list -a | grep mongo-on-docker) ]; then
         docker run -d --name mongo-on-docker -p 27888:27017  -v expert_mongo:/data/db -e MONGO_INITDB_ROOT_USERNAME=mongoadmin -e MONGO_INITDB_ROOT_PASSWORD=secret mongo
     else
         docker start mongo-on-docker

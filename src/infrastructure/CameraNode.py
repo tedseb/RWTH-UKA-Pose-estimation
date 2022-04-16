@@ -38,7 +38,7 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=1000, channel="image"):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=0, channel="image"):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
@@ -67,7 +67,7 @@ class CameraNode():
         elif not self._cap.isOpened() or self._cap is None:
             self.set_youtube_stream()
             self._youtube_mode = True
-    
+
     def __del__(self):
         if self._cap is not None:
             self._cap.release()

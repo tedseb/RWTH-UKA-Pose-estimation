@@ -27,6 +27,7 @@ class LogType:
     MEAN = 2
     VARIABLE = 3
     TRACING = 4
+    STR = 5
 
 if hasattr(sys, '_getframe'):
     currentframe = lambda depth: sys._getframe(depth)
@@ -83,6 +84,9 @@ def get_mean_type(name: str, value: float, tag: str, caller_hash: hash) :
 def get_var_type(name: str, value: float, tag: str, caller_hash: hash) :
     return get_value_type(name, value, caller_hash, tag, LogType.VARIABLE)
 
+def get_str_type(name: str, value: float, tag: str, caller_hash: hash) :
+    return get_value_type(name, value, caller_hash, tag, LogType.STR)
+
 def get_tracing_type(name: str, value: float, tag: str, caller_hash: hash) :
     return get_value_type(name, value, tag, caller_hash, LogType.TRACING)
 
@@ -129,16 +133,18 @@ class LogyHandler:
         if period == 0 and smoothing == 0.0:
             self._logger.send_var(name, value, trace_level)
 
-        var_list = self._variables.get(name)
-        if var_list is None:
-            self._variables[name] = [0, value]
-            return
+        if period > 1:
+            var_list = self._variables.get(name)
+            if var_list is None:
+                self._variables[name] = [0, value]
+                return
 
-        if smoothing != 0.0:
-            val = self._smooth_var(var_list, value, period, smoothing)
+            if smoothing != 0.0:
+                val = self._smooth_var(var_list, value, period, smoothing)
+            else:
+                val = self._compute_new_avg(var_list, value, period)
         else:
-            val = self._compute_new_avg(var_list, value, period)
-
+            val = value
         if val is not None:
             self._logger.send_var(name, val, trace_level)
 
@@ -256,6 +262,9 @@ class LogyHandler:
     def log_var(self, name: str, value: float, period=0, smoothing=0.0):
         self._log_var(name, value, period, smoothing)
 
+    def log_str(self, name: str, value: str):
+        self._logger.send_str(name, value)
+
     def log_fps(self, name: str, period=50):
         self._log_fps(name, period)
 
@@ -298,10 +307,12 @@ class Logy(metaclass=Singleton):
         except TimeoutError:
             print("Timeout")
             self._pipe = None
+            self._pipe.closed()
             return False
         except OSError:
             print("Pipe Error")
             self._pipe = None
+            self._pipe.closed()
             return False
         return not self._pipe.closed
 
@@ -344,6 +355,13 @@ class Logy(metaclass=Singleton):
         caller_hash = hash(file_name + str(line_no) + function_name)
         with self._lock:
             data = get_var_type(name, value, "var", caller_hash)
+            self._pipe_send(data)
+
+    def send_str(self, name: str, value: str, trace_level = 3):
+        file_name, line_no, function_name = findCaller(trace_level)
+        caller_hash = hash(file_name + str(line_no) + function_name)
+        with self._lock:
+            data = get_str_type(name, value, "str", caller_hash)
             self._pipe_send(data)
 
     def send_tracing(self, name: str, value: float, tag: str, trace_level = 3):
@@ -453,6 +471,10 @@ def log_var(name: str, value: float, period=0, smoothing=0.0):
     '''smoothing: value = (last_value * smoothing) + (value * (1.0-smoothing))'''
     logger = Logy()
     logger._root._log_var(name, value, period, smoothing)
+
+def log_str(name: str, value: str):
+    logger = Logy()
+    logger.send_str(name, value)
 
 def log_fps(name: str, period=50):
     logger = Logy()

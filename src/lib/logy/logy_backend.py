@@ -3,14 +3,18 @@ import os
 import errno
 import sys
 import time
+import signal
 import pathlib
 import pickle
+import threading
 import argparse
 from typing import Dict, List
 from datetime import datetime
 from dataclasses import dataclass
 import traceback
 import neptune.new as neptune
+import nvidia_smi
+import psutil
 
 NOTSET = 0
 TEST = 5
@@ -21,7 +25,8 @@ WARNING = 30
 ERROR = 40
 CRITICAL = 50
 
-USE_NEPTUNE = False
+MONITORING_UPDATE = 2
+NEPTUNE_PROJ = None
 LOG_TO_TERMINAL = True
 LOG_TO_TERMINAL_LEVEL = DEBUG
 LOG_TO_FILE = False
@@ -30,7 +35,7 @@ DEFAULT_FILE_PREFIX = "/home/trainerai/trainerai-core/data/logs/log"
 PIPE_WAIT_TIME = 0.5
 
 #Debug Levels
-MESSAGE_OUTPUT_LEVEL_TERMINAL = 50
+MESSAGE_OUTPUT_LEVEL_TERMINAL = 20
 MESSAGE_OUTPUT_LEVEL_FILE = 90
 #0   #
 #5   [ERROR]:
@@ -57,6 +62,7 @@ class LogType:
     MEAN = 2
     VARIABLE = 3
     TRACING = 4
+    STR = 5
 
 @dataclass
 class AverageData:
@@ -135,8 +141,9 @@ class LogyBackend:
             message_output_level_file=MESSAGE_OUTPUT_LEVEL_FILE,
             file_prefix=DEFAULT_FILE_PREFIX,
             pipe_wait_time=PIPE_WAIT_TIME,
-            use_neptune=USE_NEPTUNE,
+            neptune_proj=NEPTUNE_PROJ,
             test_case = False,
+            sub_name = None,
             print_tags=[]):
 
         self._log_to_terminal = log_to_terminal
@@ -146,7 +153,8 @@ class LogyBackend:
         self._log_to_file_level = log_to_file_level
         self._message_output_level_file = message_output_level_file
         self._pipe_wait_time = pipe_wait_time
-        self._use_neptune = use_neptune
+        self._use_neptune = neptune_proj != None
+        self._neptune_proj = neptune_proj
         self._log_file = None
         self._log_file_path = None
         self._pipe = None
@@ -158,6 +166,12 @@ class LogyBackend:
         self._var_data: Dict[VariableData] = {}
         self._tracing_data: Dict[VariableData] = {}
         self._test_case = test_case
+        self._shutdown = False
+        self._sub_name = sub_name
+
+        if self._use_neptune:
+            self._log_message(" Logy: Log online with Neptune. neptune.ai", INFO)
+            self._log_to_file = True
 
         if self._test_case:
             self._log_to_file = True
@@ -168,8 +182,6 @@ class LogyBackend:
             if self._log_to_file:
                 self._open_log_file(file_prefix)
 
-        if self._use_neptune:
-            self._log_message(" Logy: Log online with Neptune. neptune.ai", INFO)
 
         log_level = self._level_to_name[log_to_terminal_level]
         self._log_message(f" Logy: Log to terminal with log_level={log_level}", INFO)
@@ -252,6 +264,8 @@ class LogyBackend:
             self._log_var(data)
         elif message_type == LogType.TRACING:
             self._log_tracing(data)
+        elif message_type == LogType.STR:
+            self._log_str(data)
         else:
             self._log_message(f"Logy: Unknown message type {message_type}", WARNING)
 
@@ -286,7 +300,7 @@ class LogyBackend:
 
         values_before.values.append(value)
 
-        if values_before.caller_hash != caller_hash:
+        if values_before.caller_hash != caller_hash and not self._test_case:
             self._log_message(f" Logy: The Mean log with name '{name}' is called from another location", WARNING)
 
     def _log_var(self, data: Dict):
@@ -307,7 +321,28 @@ class LogyBackend:
 
         values_before.time_stamps.append(time.time())
         values_before.values.append(value)
-        if values_before.caller_hash != caller_hash:
+        if values_before.caller_hash != caller_hash and not self._test_case:
+            self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
+
+    def _log_str(self, data: Dict):
+        caller_hash = data["hash"]
+        name = data["name"]
+        value = data["value"]
+
+        if self._use_neptune:
+            self._neptune_run[f"logs/{name}"].log(value)
+
+        if "str" in self._print_tags:
+            self._log_msg_to_terminal(f"VARIABLE:{name}: {value}", DEBUG)
+
+        values_before: VariableData = self._var_data.get(name)
+        if values_before is None:
+            self._var_data[name] = VariableData(caller_hash, [value], [time.time()])
+            return
+
+        values_before.time_stamps.append(time.time())
+        values_before.values.append(value)
+        if values_before.caller_hash != caller_hash and not self._test_case:
             self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
 
     def _log_tracing(self, data: Dict):
@@ -329,7 +364,7 @@ class LogyBackend:
 
         values_before.time_stamps.append(time.time())
         values_before.values.append(value)
-        if values_before.caller_hash != caller_hash:
+        if values_before.caller_hash != caller_hash and not self._test_case:
             self._log_message(f" Logy: The Variable log with name '{name}' is called from another location", WARNING)
 
     def _log_data_message(self, data: Dict):
@@ -338,10 +373,10 @@ class LogyBackend:
 
         if self._use_neptune:
             if log_level == ERROR and self._error_occured <= ERROR:
-                self._neptune_run["Info"] = {"State": "ERROR"}
+                self._neptune_run["Info/State"] = "ERROR"
                 self._error_occured = ERROR
             if log_level == CRITICAL:
-                self._neptune_run["Info"] = {"State": "CRITICAL"}
+                self._neptune_run["Info/State"] = "CRITICAL"
                 self._error_occured = CRITICAL
 
         if log_level >= self._log_to_terminal_level:
@@ -426,15 +461,70 @@ class LogyBackend:
 
             data = None
 
+    def _monitoring_thread(self):
+        nvidia_smi.nvmlInit()
+        gpu_count = nvidia_smi.nvmlDeviceGetCount()
+        gpu_handles = []
+        for i in range(gpu_count):
+            gpu_handles.append(nvidia_smi.nvmlDeviceGetHandleByIndex(i))
+
+        last_time = time.time()
+        while not self._shutdown:
+            if time.time() - last_time <= MONITORING_UPDATE:
+                time.sleep(0.5)
+                continue
+            last_time = time.time()
+            cpu = psutil.cpu_percent()
+            ram = psutil.virtual_memory().used / 1000000000
+            cpu_temps = psutil.sensors_temperatures()
+            cpu_freq = psutil.cpu_freq().current / 1000
+            cpu_temp = float(0)
+            for temp in cpu_temps["k10temp"]:
+                if temp.label == "Tdie":
+                    cpu_temp = temp.current
+
+            self._neptune_run["monitoring/digiisland_cpu_util"].log(cpu)
+            self._neptune_run["monitoring/digiisland_mem"].log(ram)
+            self._neptune_run["monitoring/digiisland_cpu_temperature"].log(cpu_temp)
+            self._neptune_run["monitoring/digiisland_cpu_frequence"].log(cpu_freq)
+
+            # print(f"#############################")
+            # print(f"# cpu: {cpu}")
+            # print(f"# ram: {ram}")
+            # print(f"# temp: {cpu_temp}")
+            # print(f"# freq: {cpu_freq}")
+            for i, handle in enumerate(gpu_handles):
+                res_util = nvidia_smi.nvmlDeviceGetUtilizationRates(handle).gpu
+                res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle).used / 1000000000
+                power = nvidia_smi.nvmlDeviceGetPowerUsage(handle) / 1000
+                gpu_temp = nvidia_smi.nvmlDeviceGetTemperature(handle, 0)
+                self._neptune_run["monitoring/digiisland_gpu_util"].log(res_util)
+                self._neptune_run["monitoring/digiisland_gpu_mem"].log(res_mem)
+                self._neptune_run["monitoring/digiisland_gpu_power"].log(power)
+            #     print("# GPU mem:", res_mem)
+            #     print("# GPU util:", res_util)
+            #     print("# GPU temp:", gpu_temp)
+            #     print("# GPU Power:", power)
+            # print(f"#############################")
+
+    def monitoring_thread(self):
+        try:
+            self._monitoring_thread()
+        except Exception:
+            trace = traceback.format_exc()
+            self._log_message(f"Error in monitoring_thread. \n{trace}", ERROR)
+
     def start_reading(self):
 
         if self._use_neptune:
             self._neptune_run = neptune.init(
-                project="basti95/test-project",
+                project=f"basti95/{self._neptune_proj}",
                 api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJlNGJiNzAyMi0wNmIwLTQxNjctOTRlMi1jNGNlMTEyODc0MDcifQ==",
                 source_files=[]
             )
             self._neptune_run["Info"] = {"State": "RUNNING"}
+            self._monitoring = threading.Thread(target=self.monitoring_thread, daemon=False)
+            self._monitoring.start()
 
         try:
             self.pipe_loop()
@@ -445,23 +535,45 @@ class LogyBackend:
             if self._log_to_file:
                 self._log_file.flush()
                 self._neptune_run["log_file"].upload(self._log_file_path)
+                print("upload file")
             if self._error_occured < ERROR:
-                self._neptune_run["Info"] = {"State": "SUCCESS"}
+                self._neptune_run["Info/State"] = "SUCCESS"
+            if self._sub_name is not None:
+                self._neptune_run["Info/Subname"] = self._sub_name
 
-def main(start_neptune=False, tags=[], log_level_terminal="warning", test_case=False):
+def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
     try:
         os.mkfifo(FIFO)
     except OSError as oe:
         if oe.errno != errno.EEXIST:
             raise
 
+    sub_name = None
+    if neptune is not None:
+        if neptune.startswith('test'):
+            splitted = neptune.split("-")
+            neptune = "test"
+            if len(splitted) < 2:
+                sub_name = "Unknown"
+            else:
+                sub_name = splitted[1]
+
     level = _name_to_level[log_level_terminal]
-    logger_backend = LogyBackend(use_neptune=start_neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case)
+    logger_backend = LogyBackend(neptune_proj=neptune, print_tags=tags, log_to_terminal_level=level, test_case=test_case, sub_name=sub_name)
+    # def signal_handler(self, signal):
+    #     nonlocal logger_backend
+    #     logger_backend._shutdown = True
+    #     del logger_backend
+    #     sys.exit(0)
+
+    #signal.signal(signal.SIGINT, signal_handler)
     logger_backend.start_reading()
+    logger_backend._shutdown = True
+    print("EXIT")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--neptune", help="Start with Neptune logging", action="store_true")
+    parser.add_argument("-n", "--neptune", type=str, help="Start with Neptune logging", default=None)
     parser.add_argument("-t", "--tag", type=str, help="All tags which should be printed on the terminal. e.g: 'msg frame'")
     parser.add_argument("--test", help="Log to test files", action="store_true")
     parser.add_argument("--log-level", type=str, default='warning', help="Debug level", choices=['debug', 'info', 'warning', 'error', 'critical'])
@@ -478,6 +590,11 @@ if __name__ == '__main__':
     tags = []
     if args.tag is not None and args.tag != "msg":
         tags = str(args.tag).split()
+
+
+    if args.neptune is not None:
+        if args.neptune == 'prod':
+            args.neptune = 'test-project'
 
     test_case = args.test #is not None
     main(args.neptune, tags=tags, log_level_terminal=args.log_level, test_case=test_case)

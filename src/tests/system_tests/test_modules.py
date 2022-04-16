@@ -1,4 +1,5 @@
 # Test Modules Station Manager, Object Detection, Metrabs
+from calendar import c
 import time
 import sys
 import copy
@@ -139,6 +140,7 @@ class GymyEnviroment:
         rospy.Subscriber('/signals/metrabs_ready', Bool, self._metrabs_ready_callback)
 
     def __del__(self):
+        del self.station_manager
         self._parent.shutdown()
 
     def _metrabs_ready_callback(self, msg : Bool) -> None:
@@ -184,8 +186,51 @@ class GymyEnviroment:
     def is_valid(self):
         return self._valid
 
+class StationManagerEnv:
+    def __init__(self) -> None:
+        self._valid = False
+        self._data_manager = None
+        self.logy = None
+        rospy.init_node('pytest', anonymous=True)
+
+    def __del__(self):
+        del self.station_manager
+        self._parent.shutdown()
+
+    def is_valid(self):
+        return self._valid
+
+    def warm_up(self):
+        launch_files = [
+            ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
+        ]
+        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        ros_launch_files = []
+        for args in launch_files:
+            roslaunch_file = roslaunch.rlutil.resolve_launch_arguments(args)[0]
+            if len(args) >= 2:
+                roslaunch_args = args[2:]
+                ros_launch_files.append((roslaunch_file, roslaunch_args))
+            else:
+                ros_launch_files.append(roslaunch_file)
+
+        self._parent = roslaunch.parent.ROSLaunchParent(uuid, ros_launch_files)
+        self._parent.start()
+        time.sleep(1)
+        print("metrabs ready")
+        #time.sleep(3)
+        camera_path = "/home/trainerai/trainerai-core/src/infrastructure/CameraNode.py"
+        transform_node_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
+        station_selection_path = "/home/trainerai/trainerai-core/src/station_manager/src/station_selection.py"
+
+        self._data_manager = LocalDataManager()
+        self.station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=self._data_manager, with_gui=False)
+
+        self.logy = logy.get_or_create_logger("system_test", logy.TEST, "TEST")
+        self._valid = True
+
 LAUNCH_FILES_ALL = [
-    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True', 'log_tags:=tracing'],
+    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=True'],
     #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
     #['infrastructure', 'mobile_server.launch'],
     ['metrabs', 'metrabs.launch', 'log_level:=debug'],
@@ -212,18 +257,25 @@ def ros_env_metrabs():
     env.warm_up(LAUNCH_FILES_METRABS)
     return env
 
+@pytest.fixture(scope="class")
+def ros_env_only_station_manager(request):
+    print(request)
+    env = StationManagerEnv()
+    env.warm_up()
+    return env
+
 def _ros_env():
     env = GymyEnviroment()
     env.warm_up(LAUNCH_FILES_ALL)
     return env
 
-class TestCollection:
+class TestCollection1:
 
     def test_station_manager_api(self, ros_env):
         ros_env.logy.test(f"\n####  Station Manager Test  ####", "test")
         assert ros_env.is_valid()
         station_manager = ros_env.station_manager
-
+        station_manager.reset()
         command_wait_time_ms = 30
         # Login into no available Station
         assert station_manager.login_station_payload("user_1", {}) == SMResponse(508, 8, {})
@@ -278,6 +330,7 @@ class TestCollection:
         #boxes = [670, 170, 200, 510]
         #assert img is not None
         station_manager = ros_env.station_manager
+        station_manager.reset()
         received_channel_info_start = False
         received_channel_info_stop = False
         received_channel_info_s = 0
@@ -371,6 +424,7 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Object Detection Test  ####", "test")
         station_manager = ros_env.station_manager
+        station_manager.reset()
         received_bbox_s = 0
         received_bbox = False
         bbox_sub = None
@@ -410,7 +464,7 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Metrabs Test  ####", "test")
         station_manager = ros_env.station_manager
-        station_manager = ros_env.station_manager
+        station_manager.reset()
         received_skeleton_s = 0
         received_skeleton = False
         skeleton_sub = None
@@ -466,8 +520,7 @@ class TestCollection:
 
     def _detection_and_metrabs_speed(self, ros_env, station_data, sleep_time_s, step=1): #station_data = [[station, camera, max_avg_ms, max_avg_fps]]
         station_manager = ros_env.station_manager
-        station_manager = ros_env.station_manager
-
+        station_manager.reset()
         received_skeleton_avg_s = 0
         received_skeleton_num = 0
         initial_counts_skeleton = {} # start with test if each camera sends min. INITIAL_COUNT frames
@@ -583,10 +636,16 @@ class TestCollection:
             initial_counts_bbox[data[1]] = 0
             initial_counts_skeleton[data[1]] = 0
             assert station_manager.login_station_payload(f"user_{i}", {"station" : data[0]}) == SMResponse(501, 1, {"station": data[0]})
-            assert received_bbox_avg_s <= data[2]
-            assert received_skeleton_avg_s <= data[3]
             if i % step == (step - 1):
                 time.sleep(sleep_time_s)
+                print(f"###########################################")
+                print(f"############# {data[1]}:{received_bbox_avg_s}:{data[2]}")
+                print(f"############# {data[1]}:{received_skeleton_avg_s}:{data[3]}")
+                print(f"###########################################")
+                assert received_bbox_avg_s <= data[2]
+                assert received_skeleton_avg_s <= data[3]
+                assert received_bbox_num > 0
+                assert received_skeleton_num > 0
                 log_and_set_zero(f"{i + 1} Station", (i + 1))
 
         for i, data in enumerate(station_data):
@@ -599,10 +658,10 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Detection / Metrabs Speed test (one station / Camera) ####", "test")
         station_data = [
-            [1, 0, 0.06, 0.125],
-            [2, 1, 0.12, 0.19],
-            [3, 2, 0.15, 0.24],
-            [4, 3, 0.18, 0.28],
+            [1, 0, 0.03, 0.125],
+            [2, 1, 0.04, 0.25],
+            [3, 2, 0.05, 0.35],
+            [4, 3, 0.06, 0.37],
         ]
         self._detection_and_metrabs_speed(ros_env, station_data, 10)
         ros_env.logy.test(f"# OK", "test")
@@ -611,14 +670,14 @@ class TestCollection:
         time.sleep(0.3) #Wait that all ros queues are empty (no remaining messages from old tests)
         ros_env.logy.test(f"\n####  Detection / Metrabs Speed test (two stations / Camera) ####", "test")
         station_data = [
-            [10, 10, 0.5, 0.5],
-            [11, 10, 0.5, 0.5],
-            [12, 12, 0.5, 0.5],
-            [13, 12, 0.5, 0.5],
-            [14, 14, 0.5, 0.5],
-            [15, 14, 0.5, 0.5],
-            [16, 16, 0.5, 0.5],
-            [17, 16, 0.5, 0.5],
+            [10, 10, 0.04, 0.25],
+            [11, 10, 0.04, 0.25],
+            [12, 12, 0.06, 0.37],
+            [13, 12, 0.06, 0.37],
+            [14, 14, 0.125, 0.4],
+            [15, 14, 0.125, 0.4],
+            [16, 16, 0.2, 0.6],
+            [17, 16, 0.2, 0.6],
         ]
         self._detection_and_metrabs_speed(ros_env, station_data, 10, 2)
         ros_env.logy.test(f"# OK", "test")
@@ -709,8 +768,102 @@ class TestCollection2:
         publisher_channel_info.publish(ChannelInfo('image/channel_0', 0, 1, False))
         skeleton_sub.unregister()
 
-if __name__ == '__main__':
+class TestCollection3:
+        def test_station_manager_queue(self, ros_env_only_station_manager : StationManagerEnv):
+            logger = ros_env_only_station_manager.logy
+            logger.test(f"\n####  Station Manager Test  ####", "test")
+            assert ros_env_only_station_manager.is_valid()
+            station_manager = ros_env_only_station_manager.station_manager
+            station_manager.reset()
+            queue_expiration = 4
+            command_wait_time = 0.030
+            user_ready = {2 : False, 3 : False, 4 : False}
 
+
+            def user_calback(response_code, satus_code, payload, user_id):
+                if response_code == 512:
+                    nonlocal user_ready
+                    assert satus_code == 1
+                    assert "expiration" in payload
+                    assert payload["expiration"] == queue_expiration
+                    user_ready[user_id] = True
+
+            def user_2_callback(response_code, satus_code, payload):
+                user_calback(response_code, satus_code, payload, 2)
+
+            def user_3_callback(response_code, satus_code, payload):
+                user_calback(response_code, satus_code, payload, 3)
+
+            def user_4_callback(response_code, satus_code, payload):
+                user_calback(response_code, satus_code, payload, 4)
+
+            station_manager.set_client_callback("user_2", user_2_callback)
+            station_manager.set_client_callback("user_3", user_3_callback)
+            station_manager.set_client_callback("user_4", user_4_callback)
+            station_manager.set_queue_slot_expiration(4)
+
+            # Login user 1 into available Station
+            assert station_manager.login_station_payload("user_1", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            # Login new user 2 into same Station
+            assert station_manager.login_station_payload("user_2", {"station" : 1}) == SMResponse(501, 4, {"station": 1})
+            time.sleep(command_wait_time)
+            # Enqueue User 1 although he is already loged in same station
+            assert station_manager.enqueue_payload("user_1", {"station" : 1}) == SMResponse(510, 14, {})
+            time.sleep(command_wait_time)
+            # Enqueue User 1 in other station although he is already loged in
+            assert station_manager.enqueue_payload("user_1", {"station" : 2}) == SMResponse(510, 14, {})
+            time.sleep(command_wait_time)
+            # Queue State User 2
+            assert station_manager.get_queue_state_payload("user_3", {}) == SMResponse(513, 15, {})
+            time.sleep(command_wait_time)
+            # Enqueue User 2
+            assert station_manager.enqueue_payload("user_2", {"station" : 1}) == SMResponse(510, 1, {"queue_slot": 1})
+            time.sleep(command_wait_time)
+            # Enqueue User 3
+            assert station_manager.enqueue_payload("user_3", {"station" : 1}) == SMResponse(510, 1, {"queue_slot": 2})
+            time.sleep(command_wait_time)
+            # Enqueue User 4
+            assert station_manager.enqueue_payload("user_4", {"station" : 1}) == SMResponse(510, 1, {"queue_slot": 3})
+            time.sleep(command_wait_time)
+            # Dequeue User 2
+            assert station_manager.dequeue_payload("user_2", {}) == SMResponse(511, 1, {})
+            time.sleep(command_wait_time)
+            # Queue State User 3
+            assert station_manager.get_queue_state_payload("user_3", {}) == SMResponse(513, 1, {"station" : 1, "queue_slot" : 1})
+            time.sleep(command_wait_time)
+            # Queue State User 4
+            assert station_manager.get_queue_state_payload("user_4", {}) == SMResponse(513, 1, {"station" : 1, "queue_slot" : 2})
+            time.sleep(command_wait_time)
+            # Enqueue User 2 again
+            assert station_manager.enqueue_payload("user_2", {"station" : 1})  == SMResponse(510, 1, {"queue_slot": 3})
+            time.sleep(command_wait_time)
+            # Logout User 1
+            assert station_manager.logout_station_payload("user_1", {}) == SMResponse(502, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            assert user_ready[2] == False
+            assert user_ready[3] == True
+            assert user_ready[4] == False
+            time.sleep(command_wait_time + queue_expiration)
+            assert user_ready[4] == True
+            # Login User 4
+            assert station_manager.login_station_payload("user_4", {"station" : 1}) == SMResponse(501, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            # Enqueue User 3
+            station_manager.enqueue_payload("user_3", {"station" : 1}) == SMResponse(511, 1, {"queue_slot": 2})
+            time.sleep(command_wait_time)
+            user_ready[3] = False
+            # Logout User 4
+            station_manager.logout_station_payload("user_4", {}) == SMResponse(502, 1, {"station": 1})
+            time.sleep(command_wait_time)
+            assert user_ready[2] == True
+            # dequeue User 2
+            station_manager.dequeue_payload("user_2", {}) == SMResponse(511, 1, {})
+            time.sleep(command_wait_time)
+            assert user_ready[3] == True
+            logger.test(f"# OK", "test")
+
+if __name__ == '__main__':
     nvidia_smi.nvmlInit()
     gp_count = nvidia_smi.nvmlDeviceGetCount()
     print(f"# GPU count = {gp_count}")

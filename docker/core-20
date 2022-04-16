@@ -49,8 +49,13 @@ RUN pip3 install msgpack_numpy
 RUN apt-get update
 RUN apt-get -y install libpq-dev bluez python-dev libbluetooth-dev
 RUN npm install yaml minimist
+<<<<<<< HEAD
 RUN pip3 install psycopg2 websocket-client autobahn twisted pyqtgraph websockets PyQt5==5.15.4 pymongo pytube qt5reactor neptune-client Pillow>=8.4.0 requests>=2.23.0 filelock sklearn
 RUN pip3 install nvidia-ml-py3 pytest pybluez
+=======
+RUN pip3 install psycopg2 websocket-client autobahn twisted pyqtgraph websockets PyQt5==5.15.4 pymongo pytube qt5reactor neptune-client Pillow>=8.4.0 requests>=2.23.0 filelock sklearn scikit-learn
+RUN pip3 install nvidia-ml-py3 pytest
+>>>>>>> defb134df692debd9db484fb953c81c21cb7e3a3
 # RUN pip3 install websocket-client
 # RUN pip3 install autobahn
 # RUN pip3 install twisted

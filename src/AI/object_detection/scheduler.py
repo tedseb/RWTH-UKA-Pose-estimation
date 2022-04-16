@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 import rospy
+from typing import List
 from std_msgs.msg import String
 import logy
+import copy
 
 class BoxChecker:
     def __init__(self):
@@ -33,3 +35,10 @@ class BoxChecker:
                 return int(station_id)
 
         return -1
+
+    def get_camera_station_frames(self, camera_id : int):
+        station_list = self._camera_station_boxes.get(str(camera_id))
+
+        if station_list is None:
+            return {}
+        return {int(station_id): copy.deepcopy(station_box) for station_id, station_box in station_list.items()}

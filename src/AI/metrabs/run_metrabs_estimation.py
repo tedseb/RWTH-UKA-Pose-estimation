@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import os
 import signal
 import time
@@ -15,6 +16,7 @@ from backend.msg import ImageData, ChannelInfo
 from backend.msg import Person, Persons, Bodypart, Bboxes
 from std_msgs.msg import Bool
 from gymy_tools import Queue
+import argparse
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
@@ -25,21 +27,6 @@ AI_WIDTH = 1280
 AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
 
 plt.switch_backend('TkAgg')
-
-if AI_MODEL == 0:
-    from tensorflow.python.keras.backend import set_session
-    config = tf.compat.v1.ConfigProto()
-    config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
-    config.log_device_placement = True # to log device placement (on which device the operation ran)
-    sess = tf.compat.v1.Session(config=config)
-    set_session(sess)
-else:
-    physical_devices = tf.config.list_physical_devices('GPU')
-    if len(physical_devices) > 1:
-        physical_devices = physical_devices[1:]
-
-    tf.config.set_visible_devices(physical_devices,'GPU')
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 if AI_MODEL == 0:
     CONFIG = {
@@ -58,7 +45,7 @@ elif AI_MODEL == 2:
     }
 
 class PoseEstimator():
-    def __init__(self):
+    def __init__(self, model_name=None, num_aug=5):
         self.ready_signal = rospy.Publisher('/signals/metrabs_ready', Bool, queue_size=2)
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
@@ -77,7 +64,13 @@ class PoseEstimator():
 
         #img = cv2.imread('../data/ted_image.jpg')
         #box = [680.0, 180.0, 180.0, 490.0]
-        self.model = tf.saved_model.load(CONFIG["model_path"])
+        self._use_old_model = AI_MODEL == 0 and model_name is None
+        if model_name is None:
+            self.model = tf.saved_model.load(CONFIG["model_path"])
+        else:
+            self.model = tf.saved_model.load(f"/home/trainerai/trainerai-core/src/AI/metrabs/models/{model_name}")
+            logy.info(f"Start model={model_name} with num_aug={num_aug}")
+        self._num_aug = num_aug
         self._fake_image = np.empty([AI_HEIGHT, AI_WIDTH, 3], dtype=np.uint8)
         self._fake_person_boxes = [np.array([100, 100, 100, 100], np.float32)]
         #self._fake_image = cv2.imread('/home/trainerai/trainerai-core/src/AI/metrabs/image.jpg')
@@ -185,7 +178,7 @@ class PoseEstimator():
         camera_id = int(body_bbox_list_station.header.frame_id[3:])
         if camera_id in self._box_queues:
                 self._box_queues[camera_id].put(body_bbox_list_station)
-                logy.log_fps("new_box_received", 100)
+                #logy.log_fps("new_box_received", 100)
 
     @logy.catch_thread_and_restart
     def thread_handler(self):
@@ -259,6 +252,12 @@ class PoseEstimator():
                 time.sleep(thread_wait_time)
                 continue
 
+            # if len(images) < 4:
+            #     img_len = len(images)
+            #     for _ in (4 - img_len):
+            #         images.append(self._fake_image)
+            #         boxes.append(self._fake_person_boxes)
+
             images = np.stack(images)
             if images.shape[0] != len(self._box_queues):
                 logy.warn(f"only {images.shape[0]} boxes but {len(self._box_queues)}. Queue: {fake_images}")
@@ -267,11 +266,11 @@ class PoseEstimator():
     def start_ai(self, data, images, boxes, fake_images):
         ragged_boxes = tf.ragged.constant(boxes, ragged_rank=1)
 
-        with logy.TraceTime("matrabs_multi_image"):
-            if AI_MODEL == 0:
+        with logy.TraceTime("time_metrabs"):
+            if self._use_old_model:
                 pred_output_list = self.model.predict_multi_image(images, self._intrinsics, ragged_boxes)
             else:
-                pred_output_list = self.model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=self._intrinsics,  skeleton='smpl_24')["poses3d"]
+                pred_output_list = self.model.estimate_poses_batched(images, boxes=ragged_boxes, intrinsic_matrix=self._intrinsics,  skeleton='smpl_24', num_aug=self._num_aug)["poses3d"]
         pred_output_list = pred_output_list.numpy()
 
 
@@ -329,7 +328,8 @@ class PoseEstimator():
                 msg.persons.append(person_msg)
 
             self._publisher.publish(msg)
-
+            logy.log_fps("publish_skeletons")
+            #continue
             if len(cropped_images) == 0:
                 return
 
@@ -360,12 +360,40 @@ class PoseEstimator():
             pub = self._publisher_crop.get(camera_id)
             if pub is not None:
                 pub.publish(image_message)
-                logy.log_fps("Publish")
+                #logy.log_fps("publish_skeletons")
 
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-a", "--num-aug", type=int, help="Number of augmentation", default=5, choices=[1, 2, 3, 4, 5])
+    parser.add_argument("-m", "--metrabs-model", type=str, help="Metrabs model name", default=None)
+
+    arg_count = len(sys.argv)
+    #print(sys.argv)
+    last_arg = sys.argv[arg_count - 1]
+    if last_arg[:2] == "__":
+        valid_args = sys.argv[1:arg_count - 2]
+        args = parser.parse_args(valid_args)
+    else:
+        args = parser.parse_args()
+
+    if AI_MODEL == 0 and args.metrabs_model is None:
+        from tensorflow.python.keras.backend import set_session
+        config = tf.compat.v1.ConfigProto()
+        config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
+        config.log_device_placement = True # to log device placement (on which device the operation ran)
+        sess = tf.compat.v1.Session(config=config)
+        set_session(sess)
+    else:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if len(physical_devices) > 1:
+            physical_devices = physical_devices[1:]
+
+        tf.config.set_visible_devices(physical_devices,'GPU')
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
     rospy.init_node('metrabs', anonymous=True)
-    run_spin_obj = PoseEstimator()
+    run_spin_obj = PoseEstimator(args.metrabs_model, args.num_aug)
     signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
     signal.signal(signal.SIGINT, run_spin_obj.shutdown)
     logy.info("Pose Estimator is listening")

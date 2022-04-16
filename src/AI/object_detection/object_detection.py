@@ -26,6 +26,8 @@ IMAGE_QUEUE_LEN = 2
 THREAD_WAIT_TIME_MS = 5
 AI_HEIGHT = 720
 AI_WIDTH = 1280
+FPS = 25
+USE_STATION_FRAMES = False
 
 @dataclass
 class YoloData:
@@ -107,6 +109,7 @@ class ObjectDetectionPipeline:
         The image is reshaped and sent to the yolo detection. The results are published as boxes.
 
         '''
+        wait_time = 1.0 / FPS
         logy.debug_throttle("Object Detection thread is active", 1000)
         thread_wait_time = THREAD_WAIT_TIME_MS / 1000.0
         while(self._is_active):
@@ -114,6 +117,7 @@ class ObjectDetectionPipeline:
             camera_ids = []
             image_data = []
             resize_factors = []
+            time_start = time.time()
             with self._image_queues_lock:
 
                 for camera_id, queue in self._image_queues.items():
@@ -141,22 +145,36 @@ class ObjectDetectionPipeline:
                     time.sleep(thread_wait_time)
                     continue
 
-                yolo_data_results = self.detect_objects(images, resize_factors)
-                if len(yolo_data_results) == 0:
-                    continue
-
-                for i, yolo_data in enumerate(yolo_data_results):
-                    if yolo_data is None:
+                station_boxes_list = []
+                if not USE_STATION_FRAMES:
+                    yolo_data_results = self.detect_objects(images, resize_factors)
+                    if len(yolo_data_results) == 0:
                         continue
-                    station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i], shape[1], shape[0]) #[x, y, w, h]
-                    #logy.warn(f"boxes = {station_boxes}")
+                    for i, yolo_data in enumerate(yolo_data_results):
+                        if yolo_data is None:
+                            continue
+                        station_boxes = self._get_person_boxes_in_station(yolo_data, camera_ids[i], shape[1], shape[0]) #[x, y, w, h]
+                        station_boxes_list.append(station_boxes)
+                        self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
+                        self._publish_labels(yolo_data.labels, image_data[i])
+                else:
+                    for camera_id in camera_ids:
+                        station_boxes = self._box_checker.get_camera_station_frames(camera_id)
+                        for box in station_boxes.values():
+                            box[2] -= box[0]
+                            box[3] -= box[1]
+                        station_boxes_list.append(station_boxes)
+
+                for i, station_boxes in enumerate(station_boxes_list):
                     logy.log_fps("publish_boxes")
                     self._publish_boxes(station_boxes, image_data[i], camera_ids[i])
-                    self._publish_render_image(yolo_data.render_img, img_msg.header.frame_id, camera_ids[i])
-                    self._publish_labels(yolo_data.labels, image_data[i])
-                logy.log_fps("object_detection_fps")
+                    #logy.log_fps("object_detection_fps")
+                duration = time.time() - time_start
+                if duration < wait_time:
+                    time.sleep(wait_time - duration)
 
-    @logy.trace_time("detect_objects")
+
+    #@logy.trace_time("detect_objects")
     def detect_objects(self, imgs : List, resize_factors : Tuple) -> List[YoloData]:
         '''
         This function uses the Yolo object detector. It predicts BBOX with label and confidence values.
@@ -164,7 +182,7 @@ class ObjectDetectionPipeline:
             List[YoloData]: Yolo Predictions for each image. YoloData is None if there is no Prediction for this index.
         '''
 
-        with logy.TraceTime("yolo_model"):
+        with logy.TraceTime("time_yolo_model"):
             results = self._model(imgs, size=640)
 
         yolo_data_results = []
@@ -243,10 +261,10 @@ class ObjectDetectionPipeline:
 
     def _publish_boxes(self, station_boxes, old_img_data, camera_id : int):
         box_list_1d = []
-        station_boxes = collections.OrderedDict(sorted(station_boxes.items()))
         if not station_boxes:
             return
 
+        station_boxes = collections.OrderedDict(sorted(station_boxes.items()))
         for box in station_boxes.values():
             box_list_1d.extend(box)
         box_msg  = Bboxes()

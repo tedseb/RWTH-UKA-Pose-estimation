@@ -498,9 +498,10 @@ class LogyBackend:
                 res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle).used / 1000000000
                 power = nvidia_smi.nvmlDeviceGetPowerUsage(handle) / 1000
                 gpu_temp = nvidia_smi.nvmlDeviceGetTemperature(handle, 0)
-                self._neptune_run["monitoring/digiisland_gpu_util"].log(res_util)
-                self._neptune_run["monitoring/digiisland_gpu_mem"].log(res_mem)
-                self._neptune_run["monitoring/digiisland_gpu_power"].log(power)
+                self._neptune_run[f"monitoring/digiisland_gpu{i}_util"].log(res_util)
+                self._neptune_run[f"monitoring/digiisland_gpu{i}_mem"].log(res_mem)
+                self._neptune_run[f"monitoring/digiisland_gpu{i}_power"].log(power)
+                self._neptune_run[f"monitoring/digiisland_gpu{i}_temperature"].log(gpu_temp)
             #     print("# GPU mem:", res_mem)
             #     print("# GPU util:", res_util)
             #     print("# GPU temp:", gpu_temp)

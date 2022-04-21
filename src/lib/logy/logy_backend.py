@@ -483,10 +483,10 @@ class LogyBackend:
                 if temp.label == "Tdie":
                     cpu_temp = temp.current
 
-            self._neptune_run["monitoring/digiisland_cpu_util"].log(cpu)
-            self._neptune_run["monitoring/digiisland_mem"].log(ram)
-            self._neptune_run["monitoring/digiisland_cpu_temperature"].log(cpu_temp)
-            self._neptune_run["monitoring/digiisland_cpu_frequence"].log(cpu_freq)
+            self._neptune_run["hardware/cpu_util"].log(cpu)
+            self._neptune_run["hardware/mem"].log(ram)
+            self._neptune_run["hardware/cpu_temperature"].log(cpu_temp)
+            self._neptune_run["hardware/cpu_frequence"].log(cpu_freq)
 
             # print(f"#############################")
             # print(f"# cpu: {cpu}")
@@ -498,10 +498,10 @@ class LogyBackend:
                 res_mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle).used / 1000000000
                 power = nvidia_smi.nvmlDeviceGetPowerUsage(handle) / 1000
                 gpu_temp = nvidia_smi.nvmlDeviceGetTemperature(handle, 0)
-                self._neptune_run[f"monitoring/digiisland_gpu{i}_util"].log(res_util)
-                self._neptune_run[f"monitoring/digiisland_gpu{i}_mem"].log(res_mem)
-                self._neptune_run[f"monitoring/digiisland_gpu{i}_power"].log(power)
-                self._neptune_run[f"monitoring/digiisland_gpu{i}_temperature"].log(gpu_temp)
+                self._neptune_run[f"hardware/gpu{i}_util"].log(res_util)
+                self._neptune_run[f"hardware/gpu{i}_mem"].log(res_mem)
+                self._neptune_run[f"hardware/gpu{i}_power"].log(power)
+                self._neptune_run[f"hardware/gpu{i}_temperature"].log(gpu_temp)
             #     print("# GPU mem:", res_mem)
             #     print("# GPU util:", res_util)
             #     print("# GPU temp:", gpu_temp)

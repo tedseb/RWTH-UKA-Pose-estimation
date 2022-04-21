@@ -8,11 +8,14 @@ import pathlib
 from src.station_manager import StationManager
 from twisted.internet import reactor
 from src import DataManager
+from src.server import ServerController, ServerSocket, BleServerController, BleServerSocket
+
+USE_BLE = True
 
 def signal_handler(signal, frame):
     print("EXIT")
-
-    reactor.callFromThread(reactor.stop)
+    if not USE_BLE:
+        reactor.callFromThread(reactor.stop)
 
 if __name__ == '__main__':
     rospy.init_node('station_manager', anonymous=False)
@@ -42,11 +45,22 @@ if __name__ == '__main__':
 
     with_gui = not args.without_gui
     data_manager = DataManager()
+    sockets = []
+    if USE_BLE:
+        sockets.append(BleServerController())
+    else:
+        controller = ServerController("ws://127.0.0.1:3030")
+        controller.protocol = ServerSocket
+        sockets.append(controller)
+
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager,
-        verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui, showroom_mode=args.showroom_mode)
+        verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui, showroom_mode=args.showroom_mode, server_sockets=sockets)
     logy.info("Station Manager is Ready")
-    reactor.listenTCP(3030, station_manager._server_controller)
-    reactor.run()
+    if USE_BLE:
+        sockets[0].run()
+    else:
+        reactor.listenTCP(3030, sockets[0])
+        reactor.run()
 
     ## Use Station Manager Directly ##
     # def repetition_callback(response_code=508, satus_code=2, payload=dict({})):

@@ -80,14 +80,16 @@ docker run -it -d --rm \
         --name trainerAI \
         -e DISPLAY=$display \
 	    -p 3000:3000 \
-        --privileged \
+        --privileged=true \
         --net=host \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         -v $(pwd):/home/trainerai/trainerai-core \
         -v /home/trainerai/trainerai-core/node_modules \
+        -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+        -v /var/run/dbus/:/var/run/dbus/:z \
         $webcam_option \
         $gpu_option \
-        registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 > /dev/null
+        registry.git.rwth-aachen.de/trainerai/trainerai-core/trainerai-core-20 /sbin/init
 
 if $mongo || $env || $backend; then
 	if [ ! $(docker container list -a | grep mongo-on-docker) ]; then

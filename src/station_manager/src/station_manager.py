@@ -12,7 +12,7 @@ import psutil
 import logy
 
 from . import DataManager, CameraStationController, VideoSelection, TwoWayDict, SMResponse
-from .server import ServerController, ServerSocket
+
 import rospy
 import random
 
@@ -39,7 +39,7 @@ class ComputerWorkload:
 
 class StationManager():
 
-    def __init__(self, camera_path, transform_node_path, station_selection_path, data_manager, verbose=False, debug_frames_ms=0, with_gui=True, showroom_mode=False):
+    def __init__(self, camera_path, transform_node_path, station_selection_path, data_manager, verbose=False, debug_frames_ms=0, with_gui=True, showroom_mode=False, server_sockets=[]):
         self._publisher_station_usage = rospy.Publisher('/station_usage', StationUsage, queue_size=5)
         self._publisher_channel_info = rospy.Publisher('/channel_info', ChannelInfo, queue_size=5)
         rospy.Subscriber('user_state', String, self.user_state_callback)
@@ -88,13 +88,13 @@ class StationManager():
         self.start_person_detection()
 
         self._client_callbacks = {}
-        self._server_controller = ServerController("ws://127.0.0.1:3030", self.set_client_callback)
-        self._server_controller.register_callback(1, self.login_station_payload)
-        self._server_controller.register_callback(2, self.logout_station_payload)
-        self._server_controller.register_callback(3, self.start_exercise_payload)
-        self._server_controller.register_callback(4, self.stop_exercise_payload)
-        self._server_controller.register_callback(7, self.get_weight_detection)
-        self._server_controller.protocol = ServerSocket
+        for socket in server_sockets:
+            socket._register_client_callback = self.set_client_callback
+            socket.register_callback(1, self.login_station_payload)
+            socket.register_callback(2, self.logout_station_payload)
+            socket.register_callback(3, self.start_exercise_payload)
+            socket.register_callback(4, self.stop_exercise_payload)
+            socket.register_callback(7, self.get_weight_detection)
 
     def __del__(self):
         with self._camera_process_mutex:

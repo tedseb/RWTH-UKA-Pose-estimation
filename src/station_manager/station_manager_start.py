@@ -10,7 +10,7 @@ from twisted.internet import reactor
 from src import DataManager
 from src.server import ServerController, ServerSocket, BleServerController, BleServerSocket
 
-USE_BLE = True
+USE_BLE = False
 
 def signal_handler(signal, frame):
     print("EXIT")

@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 import rospy
 import yaml
+import os 
+#os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import torch
 import logy
 import signal
@@ -43,7 +45,9 @@ class ObjectDetectionPipeline:
     def __init__(self, threshold=0.5, device="cpu", renderer=False, check_station=False):
         self._box_checker = BoxChecker()
         self._check_station = check_station
-        self._model = torch.hub.load(YOLO_PATH, 'custom', path=MODEL_PATH, source='local') # .eval().to(device)
+        #cuda_device = torch.device('cuda:1')
+        #logy.warn(f"device {torch.cuda.set_device(5)}")
+        self._model = torch.hub.load(YOLO_PATH, 'custom', path=MODEL_PATH, source='local')#.eval().to(cuda_device)
         self._threshold = threshold
         self._renderer = renderer
         self._publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=10)

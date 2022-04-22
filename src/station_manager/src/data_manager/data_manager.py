@@ -52,7 +52,10 @@ class DataManager(DataManagerInterface):
         x = exercises.find()
         self._exercises = {}
         for data in x:
-            self._exercises[int(data["name"])] = data["description"]
+            try:
+                self._exercises[int(data["name"])] = data["description"]
+            except:
+                pass
         return True
 
     def _load_station_exercises(self):

@@ -259,8 +259,9 @@ class StationManager():
             "exercise": exercise,
             "set_id": int(set_id)
         }
-        callback = self._client_callbacks[user_id]
-        callback(response_code=509, satus_code=1, payload=payload)
+        callback = self._client_callbacks.get(user_id, None)
+        if callback is not None:
+            callback(response_code=509, satus_code=1, payload=payload)
 
     def get_new_channel(self):
         channel_list = sorted(list(self._occupied_camera_channels.values()))

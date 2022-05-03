@@ -15,7 +15,8 @@ RUN apt-get install -y redis
 
 #NodeJS
 WORKDIR /home/trainerai/trainerai-core
-RUN apt-get install -y nodejs npm
+RUN curl -sL https://deb.nodesource.com/setup_14.x | -E bash - && apt-get install -y nodejs
+RUN apt-get install -y npm
 RUN npm config set unsafe-perm true
 # RUN npm install @tensorflow/tfjs-node
 # RUN npm install @tensorflow-models/posenet
@@ -31,12 +32,13 @@ RUN npm install opencv4nodejs rosnodejs express ws nodemon socket.io mongodb@3
 
 #Python PIP
 #RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==1.14.0 pycocotools
-RUN pip3 install argparse dill fire numba psutil requests numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.7.0 pycocotools
-RUN pip3 install msgpack torchvision torchgeometry smplx chumpy
+RUN pip3 install argparse dill fire numba psutil numpy==1.18.1 scipy slidingwindow tqdm tensorflow-gpu==2.7.0 pycocotools
 RUN pip3 install pydrive pandas matplotlib
 # RUN pip3 install pandas
 # RUN pip3 install matplotlib
-RUN pip3 install torch==1.8.0+cu111 torchvision==0.9.0+cu111 torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
+# RUN pip3 install torch==1.8.0+cu111 torchvision==0.9.0+cu111 torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+RUN pip3 install msgpack smplx chumpy
 RUN pip3 install redis rospy_message_converter mps-youtube youtube-dl
 # RUN pip3 install rospy_message_converter
 # RUN pip3 install mps-youtube
@@ -44,8 +46,10 @@ RUN pip3 install pafy -U
 # RUN pip3 install youtube-dl
 RUN pip3 install scikit-image seaborn matplotlib==3.4.1 numpy==1.20.2 opencv-python==4.5.1.48 PyYAML==5.4.1
 
-RUN pip3 install msgpack_numpy
+RUN pip3 install --upgrade msgpack_numpy Pillow requests charset-normalizer
 
+RUN apt-key del 7fa2af80
+RUN apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/3bf863cc.pub
 RUN apt-get update
 RUN apt-get -y install libpq-dev bluez python-dev libbluetooth-dev
 RUN npm install yaml minimist

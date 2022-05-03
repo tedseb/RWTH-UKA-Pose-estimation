@@ -301,19 +301,25 @@ class Logy(metaclass=Singleton):
         self._last_pipe_try = time_now + timeout_ms
         #print("Try OPEN PIPE")
 
-        try:
-            with ThreadingTimeout(timeout_ms / 1000):
-                self._pipe = open(FIFO, 'wb')
-        except TimeoutError:
-            print("Timeout")
-            self._pipe = None
-            self._pipe.closed()
-            return False
-        except OSError:
-            print("Pipe Error")
-            self._pipe = None
-            self._pipe.closed()
-            return False
+        loop_count = 0
+        while loop_count < 20:
+            try:
+                with ThreadingTimeout(timeout_ms / 1000):
+                    self._pipe = open(FIFO, 'wb')
+            except TimeoutError:
+                print("Timeout")
+                self._pipe = None
+                self._pipe.closed()
+                return False
+            except OSError:
+                print("Pipe Error")
+                self._pipe = None
+                self._pipe.closed()
+                return False
+            if self._pipe is not None:
+                break
+            loop_count += 1
+            time.sleep(0.1)
         return not self._pipe.closed
 
     def _pipe_send(self, data: Dict):

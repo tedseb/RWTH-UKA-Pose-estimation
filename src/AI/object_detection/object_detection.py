@@ -21,7 +21,7 @@ from sensor_msgs.msg import Image
 from scheduler import BoxChecker
 
 YOLO_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5'
-MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5s.pt'
+MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5m.pt'
 IMAGE_QUEUE_LEN = 2
 THREAD_WAIT_TIME_MS = 5
 AI_HEIGHT = 720

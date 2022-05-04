@@ -137,8 +137,8 @@ class GymyEnviroment:
     #['infrastructure', 'mobile_server.launch'],
     #['metrabs', 'metrabs.launch', 'log_level:=debug'],
     ['object_detection', 'object_detection.launch', 'render:=False'],
-    #['motion_analysis', 'motion_analysis_dev.launch', 'log_level:=debug'],
-    #['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
+    ['motion_analysis', 'motion_analysis.launch', 'log_level:=debug'],
+    ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
 ]
 
     LAUNCH_FILES_METRABS = [
@@ -241,6 +241,7 @@ class ModelTester:
         self._measure_interval_s = 2
         self._test_station_order = [10, 11, 12, 13]
         self._measurements_per_stations = 10
+        self._use_ma = True
         ######################
 
         self._env = GymyEnviroment()
@@ -302,6 +303,8 @@ class ModelTester:
                     logy.log_str("start_log", f"# Start Station {i}")
                     logy.test(f"# Start Station {i}")
                     station_manager.login_station_payload(f"user_{i}", {"station" : self._test_station_order[i]}) #== SMResponse(501, 1, {"station": i})
+                    if self.self._use_ma:
+                        station_manager.start_exercise(f"user_{i}", self._test_station_order[i], 111, 1)
                     loop_count = 0
                     while loop_count < self._measurements_per_stations:
                         logy.info(f".... Wait [{loop_count}/{self._measurements_per_stations}] ....")
@@ -333,6 +336,8 @@ class ModelTester:
                 logy.log_str("start_log", f"########################################################### \n")
                 logy.test(f"########################################################### \n")
                 for i in range(len(self._test_station_order)):
+                    if self._use_ma:
+                        station_manager.stop_exercise_payload(f"user_{i}", {})
                     station_manager.logout_station_payload(f"user_{i}", {}) # == SMResponse(502, 1, {"station": i})
 
 if __name__ == '__main__':

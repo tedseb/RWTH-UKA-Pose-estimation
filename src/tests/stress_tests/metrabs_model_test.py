@@ -303,7 +303,7 @@ class ModelTester:
                     logy.log_str("start_log", f"# Start Station {i}")
                     logy.test(f"# Start Station {i}")
                     station_manager.login_station_payload(f"user_{i}", {"station" : self._test_station_order[i]}) #== SMResponse(501, 1, {"station": i})
-                    if self.self._use_ma:
+                    if self._use_ma:
                         station_manager.start_exercise(f"user_{i}", self._test_station_order[i], 111, 1)
                     loop_count = 0
                     while loop_count < self._measurements_per_stations:

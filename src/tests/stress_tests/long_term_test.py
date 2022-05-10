@@ -120,7 +120,7 @@ class LocalDataManager(DataManagerInterface):
 class GymyEnviroment:
 
     LAUNCH_FILES_ALL = [
-    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=False', 'neptune:=test-model_workload'],
+    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=False', 'neptune:=test_long-term'],
     #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
     #['infrastructure', 'mobile_server.launch'],
     #['metrabs', 'metrabs.launch', 'log_level:=debug'],

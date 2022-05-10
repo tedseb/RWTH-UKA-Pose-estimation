@@ -14,7 +14,6 @@ import rospy
 import yaml
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
-os.environ["VERBOSE"]="False"
 import torch
 import logy
 import signal

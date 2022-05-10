@@ -134,7 +134,9 @@ class StationSelection(StationSelectionUi, QObject):
             self.station_combobox.addItem(station_name, station_id)
 
         avis = glob.glob("/home/trainerai/trainerai-core/data/*.avi")
+        avis.sort()
         mp4s = glob.glob("/home/trainerai/trainerai-core/data/*.mp4")
+        mp4s.sort()
         _videos = avis + mp4s
         highest_station_id = DEBUG_STATION_ID - 1
         for _video in _videos:

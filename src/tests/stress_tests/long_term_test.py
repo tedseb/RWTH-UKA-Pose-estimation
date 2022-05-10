@@ -42,8 +42,8 @@ class LocalDataManager(DataManagerInterface):
         self._stations = {
             0 : ["Ted", [CameraFrame(0, [249, 68, 650, 708])]],
             1 : ["Orhan", [CameraFrame(0, [1091, 65, 1672, 1058])]],
-            2 : ["deadlift", [CameraFrame(2, [645, 160, 1018, 701])]],
-            3 : ["military", [CameraFrame(3, [674, 135, 990, 670])]],
+            2 : ["deadlift", [CameraFrame(1, [645, 160, 1018, 701])]],
+            3 : ["military", [CameraFrame(2, [674, 135, 990, 670])]],
         }
 
         self._exercises = {
@@ -214,24 +214,43 @@ class GymyEnviroment:
         return self._valid
 
 class ModelTester:
-    TEST_MODELS = {
-        # "metrabs_eff2m_y4" : [[1, 2, 3], "EffNet2M"],
-        # "metrabs_eff2s_y4" : [[3, 4, 5], "EffNet2S"],
-        # "metrabs_rn101_y4" : [[3, 4, 5], "ResNet101"]
-        "metrabs_eff2m_y4" : [[1, 2, 3], "EffNet2M"],
-        #"metrabs_eff2s_y4" : [[4, 5], "EffNet2S"],
-        #"metrabs_rn101_y4" : [[4, 5], "ResNet101"]
-    }
+    #1: Login
+    #2: logout
+    #3: start exercise
+    #4: stop exercise
+    #5: wait time
+    TASKS = [
+        (1, "user_1", {"station" : 0}),
+        (3, "user_1", {"station": 0, "exercise": 111, "set_id": 0}),
+        (5, 5),
+        (1, "user_2", {"station" : 1}),
+        (3, "user_2", {"station": 1, "exercise": 111, "set_id": 0}),
+        (5, 10),
+        (2, "user_2", {}),
+        (4, "user_2", {}),
+        (1, "user_2", {"station" : 2}),
+        (3, "user_2", {"station": 2, "exercise": 105, "set_id": 0}),
+        (5, 10),
+        (1, "user_3", {"station" : 3}),
+        (3, "user_3", {"station": 3, "exercise": 229, "set_id": 0}),
+        (5, 30),
+        (2, "user_1", {}),
+        (4, "user_1", {}),
+        (5, 15),
+        (2, "user_2", {}),
+        (4, "user_2", {}),
+        (5, 10),
+        (2, "user_3", {}),
+        (4, "user_3", {}),
+    ]
 
     def __init__(self) -> None:
         ###### Settings ######
         #self._model_test_time = 10
         self._measure_interval_s = 2
-        self._test_station_order = [10, 11, 12, 13]
-        self._measurements_per_stations = 10
-        self._use_ma = False
+        self._use_ma = True
+        self._max_time = 60 * 60
         ######################
-
         self._env = GymyEnviroment()
         self._env.warm_up(GymyEnviroment.LAUNCH_FILES_ALL)
         self._received_bbox_num = 0
@@ -244,6 +263,30 @@ class ModelTester:
     def shutdown(self):
         self._shutdown = True
         self._env.shudown()
+
+    def _user_1_callback(self, response_code=509, satus_code=1, payload={}):
+        if response_code == 509:
+            if satus_code != 1:
+                logy.warn(f"User_1 callback: status code is {satus_code}, '{payload}'")
+                return
+        #logy.debug(f"User Callback 1")
+        logy.log_var("repetitions_user_1", payload["repetitions"])
+
+    def _user_2_callback(self, response_code=509, satus_code=1, payload={}):
+        if response_code == 509:
+            if satus_code != 1:
+                logy.warn(f"User_2 callback: status code is {satus_code}, '{payload}'")
+                return
+        #logy.debug(f"User Callback 2")
+        logy.log_var("repetitions_user_2", payload["repetitions"])
+
+    def _user_3_callback(self, response_code=509, satus_code=1, payload={}):
+        if response_code == 509:
+            if satus_code != 1:
+                logy.warn(f"User_3 callback: status code is {satus_code}, '{payload}'")
+                return
+        #logy.debug(f"User Callback 3")
+        logy.log_var("repetitions_user_3", payload["repetitions"])
 
     def _compute_avg(self, old_avg, old_samples, new_value):
         n = old_samples
@@ -273,61 +316,69 @@ class ModelTester:
         bbox_sub = rospy.Subscriber('bboxes', Bboxes, self.callback_new_bbox, queue_size=50)
         skeleton_sub = rospy.Subscriber('personsJS', Persons, self.callback_new_skelton, queue_size=50)
         station_manager = self._env.station_manager
-        for model_name, model_data in ModelTester.TEST_MODELS.items():
-            logy.info(f"Start Model {model_name}")
-            #self._env.start_new_metrabs_session(model_name, num_aug)
+        station_manager.set_client_callback("user_1", self._user_1_callback)
+        station_manager.set_client_callback("user_2", self._user_2_callback)
+        station_manager.set_client_callback("user_3", self._user_3_callback)
 
-            for num_aug in model_data[0]:
-                logy.info(f"Start num_aug '{num_aug}' with model '{model_name}'")
-                logy.log_str("start_log", f"### Start model '{model_name}' with num_aug '{num_aug}' ###")
-                logy.test(f"### Start model '{model_name}' with num_aug '{num_aug}' ###")
-                self._env.start_new_metrabs_session(model_name, num_aug)
+        self._env.start_new_metrabs_session("metrabs_eff2m_y4", 3)
+        start_time = time.time()
+        active_stations = 0
+        while time.time() - start_time <= self._max_time:
+            for tasks in ModelTester.TASKS:
+                time.sleep(0.03)
+                if tasks[0] == 1:
+                    logy.log_str("start_log", f"# Login Station {tasks[2]}")
+                    logy.info(f"# Login Station {tasks[2]}")
+                    station_manager.login_station_payload(tasks[1], tasks[2])
+                    active_stations += 1
+                    continue
+                if tasks[0] == 2:
+                    logy.log_str("start_log", f"# Logout Station {tasks[2]}")
+                    logy.info(f"# Logout Station {tasks[2]}")
+                    station_manager.logout_station_payload(tasks[1], tasks[2])
+                    active_stations -= 1
+                    continue
+                if tasks[0] == 3:
+                    logy.log_str("start_log", f"# Start Exercise {tasks[2]}")
+                    logy.info(f"# Start Exercise {tasks[2]}")
+                    station_manager.start_exercise_payload(tasks[1], tasks[2])
+                    continue
+                if tasks[0] == 4:
+                    logy.log_str("start_log", f"# Stop Exercise {tasks[2]}")
+                    logy.info(f"# Stop Exercise {tasks[2]}")
+                    station_manager.stop_exercise_payload(tasks[1], tasks[2])
+                    continue
+                assert tasks[0] == 5
                 with self._data_lock:
                     self._received_bbox_num = 0
                     self._received_bbox_avg_s = 0
                     self._received_skeleton_num = 0
                     self._received_skeleton_avg_s = 0
                 last_time_stamp = time.time()
-                for i in range(len(self._test_station_order)):
-                    logy.log_str("start_log", f"# Start Station {i}")
-                    logy.test(f"# Start Station {i}")
-                    station_manager.login_station_payload(f"user_{i}", {"station" : self._test_station_order[i]}) #== SMResponse(501, 1, {"station": i})
-                    if self._use_ma:
-                        station_manager.start_exercise(f"user_{i}", self._test_station_order[i], 111, 1)
-                    loop_count = 0
-                    while loop_count < self._measurements_per_stations:
-                        logy.info(f".... Wait [{loop_count}/{self._measurements_per_stations}] ....")
-                        time.sleep(self._measure_interval_s)
-                        if self._shutdown:
-                            return
-
-                        with self._data_lock:
-                            received_bbox_num = self._received_bbox_num
-                            received_bbox_avg_s = self._received_bbox_avg_s
-                            received_skeleton_num = self._received_skeleton_num
-                            received_skeleton_avg_s = self._received_skeleton_avg_s
-                            self._received_bbox_num = 0
-                            self._received_bbox_avg_s = 0
-                            self._received_skeleton_num = 0
-                            self._received_skeleton_avg_s = 0
-                        duration = time.time() - last_time_stamp
-                        last_time_stamp = time.time()
-                        received_bbox_fps = (received_bbox_num / duration) / (i + 1)
-                        received_skeleton_fps = (received_skeleton_num / duration) / (i + 1)
-                        logy.log_var("fps_boxes", received_bbox_fps)
-                        logy.log_var("fps_skeleton", received_skeleton_fps)
-                        logy.log_var("delay_boxes_ms", received_bbox_avg_s * 1000)
-                        logy.log_var("delay_skeleton_ms", received_skeleton_avg_s * 1000)
-                        loop_count += 1
-
-                        # Neptune Projekt setzen
-                        # Stationen Richtig Starten und Beenden. Für den Anfang, 10 Skunden, dann Station starten. Bis 4 erreicht werden. Dann neues Model laden
-                logy.log_str("start_log", f"########################################################### \n")
-                logy.test(f"########################################################### \n")
-                for i in range(len(self._test_station_order)):
-                    if self._use_ma:
-                        station_manager.stop_exercise_payload(f"user_{i}", {})
-                    station_manager.logout_station_payload(f"user_{i}", {}) # == SMResponse(502, 1, {"station": i})
+                remaining_time = tasks[1]
+                while remaining_time > self._measure_interval_s:
+                    if self._shutdown:
+                        return
+                    time.sleep(self._measure_interval_s)
+                    remaining_time -= self._measure_interval_s
+                    with self._data_lock:
+                        received_bbox_num = self._received_bbox_num
+                        received_bbox_avg_s = self._received_bbox_avg_s
+                        received_skeleton_num = self._received_skeleton_num
+                        received_skeleton_avg_s = self._received_skeleton_avg_s
+                        self._received_bbox_num = 0
+                        self._received_bbox_avg_s = 0
+                        self._received_skeleton_num = 0
+                        self._received_skeleton_avg_s = 0
+                    duration = time.time() - last_time_stamp
+                    last_time_stamp = time.time()
+                    received_bbox_fps = (received_bbox_num / duration) / active_stations
+                    received_skeleton_fps = (received_skeleton_num / duration) / active_stations
+                    logy.log_var("fps_boxes", received_bbox_fps)
+                    logy.log_var("fps_skeleton", received_skeleton_fps)
+                    logy.log_var("delay_boxes_ms", received_bbox_avg_s * 1000)
+                    logy.log_var("delay_skeleton_ms", received_skeleton_avg_s * 1000)
+                time.sleep(remaining_time)
 
 if __name__ == '__main__':
     print("start")

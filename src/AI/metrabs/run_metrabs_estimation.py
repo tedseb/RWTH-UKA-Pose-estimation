@@ -24,7 +24,7 @@ import tensorflow as tf
 THREAD_WAIT_TIME_MS = 3 #40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
 AI_WIDTH = 1280
-AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
+AI_MODEL = 1 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
 
 plt.switch_backend('TkAgg')
 
@@ -397,10 +397,11 @@ if __name__ == '__main__':
     else:
         physical_devices = tf.config.list_physical_devices('GPU')
         if len(physical_devices) > 1:
-            physical_devices = physical_devices[1:]
+            physical_devices = physical_devices[:1]
 
         tf.config.set_visible_devices(physical_devices,'GPU')
-        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        for physical_device in physical_devices:
+            tf.config.experimental.set_memory_growth(physical_device, True)
 
     rospy.init_node('metrabs', anonymous=True)
     run_spin_obj = PoseEstimator(args.metrabs_model, args.num_aug)

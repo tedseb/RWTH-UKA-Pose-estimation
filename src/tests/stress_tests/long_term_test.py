@@ -249,7 +249,7 @@ class ModelTester:
         #self._model_test_time = 10
         self._measure_interval_s = 2
         self._use_ma = True
-        self._max_time = 120
+        self._max_time = 60 * 60
         ######################
         self._env = GymyEnviroment()
         self._env.warm_up(GymyEnviroment.LAUNCH_FILES_ALL)

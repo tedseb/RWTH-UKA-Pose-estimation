@@ -94,7 +94,12 @@ class StationManager():
             socket.register_callback(2, self.logout_station_payload)
             socket.register_callback(3, self.start_exercise_payload)
             socket.register_callback(4, self.stop_exercise_payload)
+            socket.register_callback(5, self.get_available_stations)
             socket.register_callback(7, self.get_weight_detection)
+            socket.register_callback(10, self.enqueue_payload)
+            socket.register_callback(11, self.dequeue_payload)
+            socket.register_callback(13, self.get_queue_state_payload)
+            socket.register_callback(16, self.get_queue_list_payload)
 
     def __del__(self):
         with self._camera_process_mutex:
@@ -318,9 +323,12 @@ class StationManager():
         logy.info(f"Login into Station {station_id}")
         return self.login_station(user_id, station_id)
 
-    def return_queued_list(self, station_id: int):
-        station_queues = self.__station_queues.get_queued_numbers()
-        return SMResponse(501, 4, station_queues)
+    def get_queue_list_payload(self, user_id: str, payload: Dict):
+        return self.return_queued_list()
+
+    def return_queued_list(self):
+        #station_queues = self.__station_queues.get_queued_numbers()
+        return SMResponse(516, 1, {"2":0, "3":0})
 
     def login_station(self, user_id: str, station_id: int):
         if self._showroom_mode:
@@ -573,6 +581,9 @@ class StationManager():
     def send_logout_server(self, user_id, reason = "server reset"):
         callback = self._client_callbacks[user_id]
         callback(response_code=515, satus_code=1, payload={"reason" : str(reason)})
+
+    def get_available_stations(self, user_id: str, payload: Dict):
+        return SMResponse(505, 1, {2: [105, 229, 111]})
 
     @logy.catch_ros
     def user_state_callback(self, msg):

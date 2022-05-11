@@ -235,7 +235,7 @@ class BleServerController(ServerController):
         self._connections : Dict[str, str] = TwoWayDict()
         self._advertised_uuid : str = ""
         #list_files = subprocess.run(["echo",  "1",  ">", "/home/trainerai/trainerai-core/bt_restart"])
-        os.system("echo 1 > /home/trainerai/trainerai-core/bt_restart")
+        #os.system("echo 1 > /home/trainerai/trainerai-core/bt_restart")
         time.sleep(2)
         logger.debug("Bluetooth restarted")
 

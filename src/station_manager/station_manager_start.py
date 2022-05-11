@@ -12,7 +12,7 @@ from src.server import WebServerController, WebServerSocket, BleServerController
 from typing import List
 import threading
 
-USE_BLE = False
+USE_BLE = True
 
 
 def signal_handler(signal, frame):

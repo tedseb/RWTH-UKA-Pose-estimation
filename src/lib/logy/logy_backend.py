@@ -552,8 +552,8 @@ def main(neptune=None, tags=[], log_level_terminal="warning", test_case=False):
     sub_name = None
     if neptune is not None:
         if neptune.startswith('test'):
-            splitted = neptune.split("-")
-            neptune = "test"
+            splitted = neptune.split("_")
+            neptune = splitted[1]
             if len(splitted) < 2:
                 sub_name = "Unknown"
             else:
@@ -591,11 +591,6 @@ if __name__ == '__main__':
     tags = []
     if args.tag is not None and args.tag != "msg":
         tags = str(args.tag).split()
-
-
-    if args.neptune is not None:
-        if args.neptune == 'prod':
-            args.neptune = 'test-project'
 
     test_case = args.test #is not None
     main(args.neptune, tags=tags, log_level_terminal=args.log_level, test_case=test_case)

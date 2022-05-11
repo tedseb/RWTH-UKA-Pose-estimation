@@ -14,17 +14,17 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from backend.msg import ImageData, ChannelInfo
 from backend.msg import Person, Persons, Bodypart, Bboxes
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool as RosBool, UInt16 as RosUInt16
 from gymy_tools import Queue
 import argparse
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
-THREAD_WAIT_TIME_MS = 5 #40 ms are the time beween two images at 25fps
+THREAD_WAIT_TIME_MS = 3 #40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
 AI_WIDTH = 1280
-AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
+AI_MODEL = 1 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
 
 plt.switch_backend('TkAgg')
 
@@ -46,9 +46,10 @@ elif AI_MODEL == 2:
 
 class PoseEstimator():
     def __init__(self, model_name=None, num_aug=5):
-        self.ready_signal = rospy.Publisher('/signals/metrabs_ready', Bool, queue_size=2)
+        self.ready_signal = rospy.Publisher('/signals/metrabs_ready', RosBool, queue_size=2)
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
+        rospy.Subscriber('/signals/num_aug', RosUInt16, self.new_num_aug)
 
         self._intrinsics = tf.constant([CONFIG.get("intrinsics")], dtype=tf.float32)
         self._publisher = rospy.Publisher('personsJS', Persons, queue_size=10)
@@ -179,6 +180,15 @@ class PoseEstimator():
         if camera_id in self._box_queues:
                 self._box_queues[camera_id].put(body_bbox_list_station)
                 #logy.log_fps("new_box_received", 100)
+
+    @logy.catch_ros
+    def new_num_aug(self, num_aug):
+        max_num_aug = 10
+        if num_aug > max_num_aug:
+            logy.warn(f"num_aug is {num_aug} but should be not higher than {max_num_aug}")
+            return
+        logy.info(f"num_aug was changed to {num_aug}")
+        self._num_aug = num_aug
 
     @logy.catch_thread_and_restart
     def thread_handler(self):
@@ -387,10 +397,11 @@ if __name__ == '__main__':
     else:
         physical_devices = tf.config.list_physical_devices('GPU')
         if len(physical_devices) > 1:
-            physical_devices = physical_devices[1:]
+            physical_devices = physical_devices[:1]
 
         tf.config.set_visible_devices(physical_devices,'GPU')
-        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        for physical_device in physical_devices:
+            tf.config.experimental.set_memory_growth(physical_device, True)
 
     rospy.init_node('metrabs', anonymous=True)
     run_spin_obj = PoseEstimator(args.metrabs_model, args.num_aug)

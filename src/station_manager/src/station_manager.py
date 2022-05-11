@@ -365,7 +365,9 @@ class StationManager():
         logy.debug(f"Turn on: {turn_on}")
         for cam_index in turn_on:
             avis = glob.glob("/home/trainerai/trainerai-core/data/*.avi")
+            avis.sort()
             mp4s = glob.glob("/home/trainerai/trainerai-core/data/*.mp4")
+            mp4s.sort()
             _videos = avis + mp4s
             cam_info = None if station_id<DEBUG_STATION_ID else _videos[station_id-DEBUG_STATION_ID]
             self.start_camera(cam_index, station_id>=DEBUG_STATION_ID, cam_info=cam_info)

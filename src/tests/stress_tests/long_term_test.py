@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import nvidia_smi
 import psutil
+import subprocess
 import signal
 from threading import Lock
 
@@ -25,6 +26,8 @@ from src.station_manager.src.station_manager import StationManager
 from src.station_manager.src.server import SMResponse
 from src.station_manager.src.data_manager.data_manager_interface import DataManagerInterface
 
+COMPLETE_MEMORY_MONITORING = True
+MONITORING_APPS = ["motion_analysis"]
 
 @dataclass
 class CameraFrame:
@@ -294,6 +297,25 @@ class ModelTester:
         avg = y + (new_value / (n + 1))
         return avg, n+1
 
+    def get_pid(self, name):
+        pids = subprocess.check_output(["pgrep", "-f", name])
+        pids = pids.decode("utf-8")
+        pids = pids.split("\n")[:-1]
+        pids = [int(pid) for pid in pids]
+        return pids
+
+    def log_mem(self):
+        if not COMPLETE_MEMORY_MONITORING:
+            return
+        for pname in MONITORING_APPS:
+            pids = self.get_pid(pname)
+            for pid in pids:
+                process = psutil.Process(pid)
+                name = process.name().split(".")[0]
+                name = f"memory_{name}_{pid}"
+                mem_usage = process.memory_info().vms / 1000000000
+                logy.log_var(name, mem_usage)
+
     @logy.catch_ros
     def callback_new_bbox(self, msg: Bboxes):
         boxes = np.array(msg.data).reshape(-1, 4)
@@ -361,6 +383,7 @@ class ModelTester:
                         return
                     time.sleep(self._measure_interval_s)
                     remaining_time -= self._measure_interval_s
+                    self.log_mem()
                     with self._data_lock:
                         received_bbox_num = self._received_bbox_num
                         received_bbox_avg_s = self._received_bbox_avg_s

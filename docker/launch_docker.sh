@@ -75,6 +75,8 @@ echo "Trying to stop the docker container. Killing after 10s..."
 docker stop trainerAI > /dev/null || true
 echo "done"
 echo "Running new docker con tainer..."
+sudo kill $(pgrep -f bluetooth_restart_loop) > /dev/null || true
+sudo sh ./bluetooth_restart_loop.sh &
 # Run the image as a container with the specified option strings
 docker run -it -d --rm \
         --name trainerAI \
@@ -111,5 +113,6 @@ if $osx; then
 	docker exec -it trainerAI sh -c "export DISPLAY=host.docker.internal:0 && xhost + $(ifconfig en0 | grep 'inet[ ]' | awk '{print$2}')"
 fi
 
+sudo kill $(pgrep -f bluetooth_restart_loop)
 echo "done"
 

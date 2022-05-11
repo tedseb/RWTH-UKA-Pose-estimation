@@ -11,8 +11,8 @@ import psutil
 #from data_manager import data_manager
 import logy
 
-from . import DataManager, CameraStationController, VideoSelection, TwoWayDict, SMResponse
-
+from . import DataManager, CameraStationController, VideoSelection, SMResponse
+from gymy_tools import TwoWayDict
 import rospy
 import random
 
@@ -129,7 +129,9 @@ class StationManager():
         data["person_active"] = False
         response_json = json.dumps(data)
         self._publisher_persons.publish(response_json)
-        self._last_person_detected.pop(self._next_person_time_out_station, None)
+        debug_time = self._last_person_detected.pop(self._next_person_time_out_station, None)
+        if debug_time is None:
+            logy.warn("debug_time should not be None")
 
         if self._last_person_detected:
             self._next_person_time_out_station = min(self._last_person_detected, key=self._last_person_detected.get)

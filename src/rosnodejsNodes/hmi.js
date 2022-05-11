@@ -6,10 +6,13 @@ const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const args = require('minimist')(process.argv.slice(2))
 const StringMsg = rosnodejs.require('std_msgs').msg.String;
+const pose_estimation_messages = rosnodejs.require("backend");
 const url = require('url');
 const config = require('./config');
 const YAML = require('yaml');
-var MongoClient = require('mongodb').MongoClient;
+const mongodb = require('mongodb');
+var MongoClient = mongodb.MongoClient;
+
 const { stringify } = require('querystring');
 const { features } = require('process');
 
@@ -31,6 +34,7 @@ if (args['ai'] == 'spin') {
   exercises_db_string = "exercises"
   recordings_db_string = "recordings"
   hmiExercises_db_string = "hmiExercises"
+  samples_db_string = "samples"
 }
 
 // Web App Code:
@@ -46,9 +50,11 @@ const wss = new WebSocket.Server({ server });
 let SmartphoneAppClients = [];
 let coordinateClients = [];
 
-rosnodejs.initNode('/hmi');
+rosnodejs.initNode('/hmi')
+
 // TODO: Shutdown gracefully to app: rosnodejs.on('shutdown', function() {  });
 const nh = rosnodejs.nh;
+
 const pubex = nh.advertise('/exercises', StringMsg);
 
 MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) => {
@@ -59,10 +65,60 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   const exercises = db.collection(exercises_db_string);
   const recordings = db.collection(recordings_db_string);
   const hmiExercises = db.collection(hmiExercises_db_string);
+  const samples = db.collection(samples_db_string);
 
-    app.post('/expert/exercise/recordings', (req, res) => {
+  app.post('/expert/exercise/recordings', (req, res) => {
     console.log(req.body);
     res.status(200).send();
+  });
+
+
+  app.get('/api/expert/exercises', (req, res) => {
+    const options = {
+      projection: {
+        _id: 1,
+        recording: 0,
+        name: 1,
+        description: 1, 
+        features: 1,
+        is_reference_recording: 0,
+        video_file_name: 0
+      }
+    }
+    exercises.find().toArray().then(val => {
+      res.send(val);
+    }, err => res.status(500).send(err));
+  });
+
+  app.delete('/api/expert/exercise/:_id', (req, res) => {
+    const id = req.params._id;
+    exercises.deleteOne({_id: new mongodb.ObjectID(id)}).then(result => {
+      if(result.deletedCount === 1) {
+        res.status(200).send();
+      } else {
+        res.status(500).send('No exercise deleted!');
+      }
+    })
+  });
+
+  app.post('/api/update/:_id', (req, res) => {
+    const id = req.params._id;
+    const query = {_id: new mongodb.ObjectID(id)}
+    const replacement = req.body;
+    exercises.replaceOne(query, replacement).then(val => {res.status(200).send();}, err => {res.status(500).send();})
+  })
+
+
+
+  app.post('/api/samples/save', (req, res) => {
+    if (req && req.body['exercise']) {
+      const exercise = req.body['exercise'];
+      console.log(exercise.name);
+      samples.insertOne(exercise);
+      res.status(200).send();
+    } else {
+      res.status(500).send('Malformed Exercise');
+    }
   });
 
   app.post('/api/expert/exercise/save', (req, res) => {
@@ -76,6 +132,8 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
     }
   });
 
+  
+
   app.post('/api/expert/exercises/stages/save', (req, res) => {
     console.log(req.body);
     hmiExercises.insertOne(req.body);
@@ -85,20 +143,6 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
   //req.body == recording raw
   app.post('/api/expert/recording/save', (req, res) => {
     console.log("recording requested new");
-    if(req.body['features']){
-      console.log('hi');
-      let arr = [];
-      for (feature of req.body['features']){
-        const obj = {
-          'type': feature[0],
-          'value': feature[1]
-        }
-        arr.push(obj);
-      }
-      req.body['features'] = arr;
-    } else {
-      console.log('helooo');
-    }
     if (req) {
       exercises.insertOne(req.body);
       res.status(200).send();
@@ -106,6 +150,7 @@ MongoClient.connect(config.db_uri, { useUnifiedTopology: true }, (err, client) =
       res.status(500).send('Malformed Recording');
     }
   });
+
 
   app.get('/api/exercise/all/names', (req, res) => {});
 

@@ -8,16 +8,18 @@ import pathlib
 from src.station_manager import StationManager
 from twisted.internet import reactor
 from src import DataManager
-from src.server import ServerController, ServerSocket, BleServerController, BleServerSocket
+from src.server import WebServerController, WebServerSocket, BleServerController
+from typing import List
+import threading
 
 USE_BLE = False
 
-def signal_handler(signal, frame):
-    print("EXIT")
-    if not USE_BLE:
-        reactor.callFromThread(reactor.stop)
 
-if __name__ == '__main__':
+def signal_handler(signal, frame):
+    for socket in sockets:
+        socket.kill()
+
+def main():
     rospy.init_node('station_manager', anonymous=False)
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser()
@@ -35,7 +37,6 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-
     logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
     logy.basic_config(debug_level=logy.DEBUG, module_name="SM")
 
@@ -45,22 +46,26 @@ if __name__ == '__main__':
 
     with_gui = not args.without_gui
     data_manager = DataManager()
-    sockets = []
+
     if USE_BLE:
         sockets.append(BleServerController())
-    else:
-        controller = ServerController("ws://127.0.0.1:3030")
-        controller.protocol = ServerSocket
-        sockets.append(controller)
+    controller = WebServerController("ws://127.0.0.1:3030")
+    controller.protocol = WebServerSocket
+    sockets.append(controller)
 
     station_manager = StationManager(camera_path, transform_node_path, station_selection_path, data_manager=data_manager,
         verbose=True, debug_frames_ms=args.debug_frames, with_gui=with_gui, showroom_mode=args.showroom_mode, server_sockets=sockets)
     logy.info("Station Manager is Ready")
+
     if USE_BLE:
-        sockets[0].run()
+        logy.warn("Start  Ble Loop")
+        thread = threading.Thread(target=sockets[0].run, daemon=True)
+        thread.start()
+        logy.warn("Start  Web Loop")
+
+        sockets[1].run()
     else:
-        reactor.listenTCP(3030, sockets[0])
-        reactor.run()
+        sockets[0].run()
 
     ## Use Station Manager Directly ##
     # def repetition_callback(response_code=508, satus_code=2, payload=dict({})):
@@ -77,3 +82,6 @@ if __name__ == '__main__':
     # time.sleep(5)
     # station_manager.stop_exercise(my_id)
     # station_manager.logout_station(my_id)
+if __name__ == '__main__':
+    sockets = []
+    main()

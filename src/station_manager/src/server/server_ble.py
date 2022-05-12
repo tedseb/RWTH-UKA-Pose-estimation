@@ -134,7 +134,6 @@ class BleServerCharacteristic(bluetooth_gatt.Characteristic):
                 uuid,
                 ['write', 'read', 'notify'],
                 service)
-        self.notifying = False
         self._on_msg = None
         self._on_connect = None
         self.logger = logy.get_or_create_logger("BleServer", logy.DEBUG, "BLE")
@@ -161,12 +160,7 @@ class BleServerCharacteristic(bluetooth_gatt.Characteristic):
         self.logger.info(f"send_msg in characteristics: {text}")
         if is_byte:
             self.logger.error(f"is_byte is not supported")
-            #return False
-
-        if not self.notifying:
-            self.logger.error(f"not self.notifying")
-
-            #return False
+            return False
 
         self.logger.info(f"try notifying {text} / {type(text)}")
         values = text #.encode("utf-8")
@@ -180,13 +174,11 @@ class BleServerCharacteristic(bluetooth_gatt.Characteristic):
 
     def StartNotify(self):
         self.logger.info("starting notifications")
-        self.notifying = True
         if self._on_msg is not None:
             self._on_connect()
 
     def StopNotify(self):
         self.logger.info("stopping notifications")
-        self.notifying = False
 
 
 class Application(dbus.service.Object):

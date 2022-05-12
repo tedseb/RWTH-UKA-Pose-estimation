@@ -26,7 +26,7 @@ from src.station_manager.src.station_manager import StationManager
 from src.station_manager.src.server import SMResponse
 from src.station_manager.src.data_manager.data_manager_interface import DataManagerInterface
 
-COMPLETE_MEMORY_MONITORING = True
+COMPLETE_MONITORING = True
 MONITORING_APPS = ["motion_analysis"]
 
 @dataclass
@@ -305,7 +305,7 @@ class ModelTester:
         return pids
 
     def log_mem(self):
-        if not COMPLETE_MEMORY_MONITORING:
+        if not COMPLETE_MONITORING:
             return
         for pname in MONITORING_APPS:
             pids = self.get_pid(pname)

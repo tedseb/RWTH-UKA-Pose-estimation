@@ -90,7 +90,11 @@ class ServerSocket(ABC):
         try :
             result : SMResponse = function(self._id, pyaload)
             if result.status_code != 1:
-                logy.warn(f"Client Connection Status {result.status_code}: {self._err_to_str[result.status_code]}")
+                if result.status_code in self._err_to_str:
+                    err_msg = self._err_to_str[result.status_code]
+                else:
+                    err_msg = "UKNOWN ERROR CODE"
+                logy.warn(f"Client Connection Status {result.status_code}: {err_msg}")
         except Exception as exception:
             self.send_error_ts(str(exception))
             trace = traceback.format_exc()
@@ -129,7 +133,11 @@ class ServerSocket(ABC):
         if request is None:
             self._send_error("There is no 'request' field in the request", 8)
             return
+
         if request < 1 or request > 499:
+            if request == 0:
+                self._on_connection()
+                return
             self._send_error("reqeuest code range must be in the range from 1 to 499", 8)
             return
 

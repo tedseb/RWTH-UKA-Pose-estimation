@@ -18,11 +18,4 @@ then
     rm script.sh
 fi
 
-if [[ ! -d './src/AI/spin/extra_data/body_module' ]]
-then
-    python3 docker/scripts/spin/SecureGoogleDrive.py
-    sh script.sh
-    rm script.sh
-fi
-
 source devel/setup.bash

@@ -87,6 +87,10 @@ class StationManager():
         self._use_person_detection = False
         self.start_person_detection()
 
+
+        # !!! CAUTION !!! ultimative dirty code
+        self._remove_repetition_dataset = {} # {user: [start_time, last_repetition, repetition]}
+
         self._client_callbacks = {}
         for socket in server_sockets:
             socket._register_client_callback = self.set_client_callback
@@ -260,7 +264,29 @@ class StationManager():
     def return_error(self, error_string, code):
         return SMResponse(508, code, {"error": error_string})
 
-    def send_repitition(self, user_id: str, repetition: int, exercise: str, set_id: int):
+    def send_repitition(self, user_id: str, repetition_: int, exercise: str, set_id: int):
+        repetition_data = self._remove_repetition_dataset.get(user_id)
+        if repetition_data is None: 
+            logy.warn(f"No user '{user_id}'")
+            return
+        
+        cur_time = time.time()
+        #time_since_start = cur_time - repetition_data[0]
+        #logy.debug(f"time_since_start: {time_since_start:2f}")
+        if not repetition_data[0]:
+            #logy.warn(f"First repetition in {time_since_start:2f}s. This will not be counted.")
+            repetition_data[0] = True
+            return
+
+        time_since_last_rep = cur_time - repetition_data[1]
+        repetition_data[1] = cur_time
+        logy.debug(f"time_since_last_rep: {time_since_last_rep:2f}")
+        if time_since_last_rep < 0.75:
+            logy.warn(f"Repetition in {time_since_last_rep:2f}s. This will not be counted.")
+            return
+
+        repetition_data[2] += 1
+        repetition = repetition_data[2]
         payload = {
             "repetitions": repetition,
             "exercise": exercise,
@@ -455,6 +481,7 @@ class StationManager():
 
         with self._exercise_station_mutex:
             self.__active_exercises[user_id] = (exercise_id, set_id, 0)
+            self._remove_repetition_dataset[user_id] = [False, time.time(), 0]
 
         return SMResponse(503, 1, {"station": station_id, "exercise": exercise_id, "set_id" : set_id}), station_usage_hash
 
@@ -474,6 +501,7 @@ class StationManager():
             exercise_data = self.__active_exercises.pop(user_id, None)
             exercise_id = exercise_data[0]
             set_id = exercise_data[1]
+            del self._remove_repetition_dataset[user_id]
 
         station_usage_hash = str(random.getrandbits(128))
         self._publisher_station_usage.publish(StationUsage(station_id, False , str(exercise_id), station_usage_hash))

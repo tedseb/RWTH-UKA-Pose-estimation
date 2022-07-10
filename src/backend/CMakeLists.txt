@@ -63,6 +63,7 @@ add_message_files(
   WeightColor.msg
   ImageData.msg
   ChannelInfo.msg
+  PlayControl.msg
 )
 
 ## Generate services in the 'srv' folder

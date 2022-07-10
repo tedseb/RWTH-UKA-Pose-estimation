@@ -2,18 +2,24 @@
 from pathlib import Path
 import time
 import glob
+import json
+from threading import Lock
 import rospy
 import cv2
 import logy
 from sensor_msgs.msg import Image
-from backend.msg import ImageData
+from backend.msg import ImageData, PlayControl
 import numpy as np
 import argparse
 import sys
 from pytube import YouTube
 from enum import Enum
+from datetime import datetime
+
 # from utils.imutils import crop_bboxInfo, process_image_bbox, process_image_keypoints, bbox_from_keypoints ToDo: Do cropping here.
 VIDEO_DIR_PATH = "/home/trainerai/trainerai-core/data/videos/"
+IMAGE_DIR_PATH = "/home/trainerai/trainerai-core/data/images"
+PLAY_CONTROL_CHANNEL = "/image/play_control"
 
 from std_msgs.msg import Int32
 
@@ -46,10 +52,14 @@ class CameraNode():
         self._youtube_mode = False
         self._disk_mode = False
         self._debug_repetition_ms = debug_repetition_ms
+        self._paused = False
+        self._cur_frame = None
+        self._cap_mutex = Lock()
 
         rospy.init_node('camera', anonymous=True)
         logy.debug(f"New Channel: {channel}")
         self._pub = rospy.Publisher(channel, ImageData, queue_size=1)
+        self._play_control_sub = rospy.Subscriber(PLAY_CONTROL_CHANNEL, PlayControl, self.callback_play_control)
 
         if self._camera_mode is VideoMode.INVALID:
             raise RuntimeError("Invalid video mode")
@@ -82,7 +92,9 @@ class CameraNode():
             debug_id = 0
 
         while not rospy.is_shutdown():
-            ret, frame = self._cap.read()
+            if not self._paused or self._cur_frame is None:
+                with self._cap_mutex:
+                    ret, self._cur_frame = self._cap.read()
             if not ret:
                 if self._youtube_mode:
                     self._cap.open(self._disk_path)
@@ -99,9 +111,9 @@ class CameraNode():
             img.header.stamp = rospy.Time.now()
             img.header.frame_id = self._dev_id
             img.encoding = "bgr8"
-            img.data = np.array(frame, dtype=np.uint8).tobytes()
-            img.height, img.width = frame.shape[:-1]
-            img.step = frame.shape[-1]*frame.shape[0]
+            img.data = np.array(self._cur_frame, dtype=np.uint8).tobytes()
+            img.height, img.width = self._cur_frame.shape[:-1]
+            img.step = self._cur_frame.shape[-1]*self._cur_frame.shape[0]
             msg = ImageData()
             msg.image = img
             msg.is_debug = False
@@ -117,6 +129,27 @@ class CameraNode():
             self._pub.publish(msg)
             frame_num += 1
             rate.sleep()
+
+    @logy.catch_ros
+    def callback_play_control(self, play_control: PlayControl):
+        action_type = int(play_control.action_type)
+        action_payload = json.loads(str(play_control.action_payload))
+        if action_type == 1:
+            self._paused = True
+        elif action_type == 2:
+            with self._cap_mutex:
+                offset = int(action_payload[offset])
+                current_frame = self._cap.set(cv2.CV_CAP_PROP_POS_FRAMES)
+                self._cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame + offset)
+        elif action_type == 3:
+            if self._cur_frame is None:
+                return
+            screen_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            screen_str = f"screenshot_{screen_str}"
+            Path(IMAGE_DIR_PATH).mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(f"{IMAGE_DIR_PATH}/{screen_str}.jpg", self._cur_frame)
+
+
 
     def start_dataset_recording_publisher(self, calculate_timestamps=True):
         """ Same as a camera publisher, only that it takes a video as input and publishes the time of the video in parallel. Stops after playback"""

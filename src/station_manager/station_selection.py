@@ -12,6 +12,8 @@ from typing import Callable, Dict
 from websocket import create_connection
 import autobahn.exception as aex
 import psutil
+import rospy
+from backend.msg import PlayControl
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QListWidgetItem, QDialog
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QObject
@@ -31,6 +33,7 @@ from src.data_manager import DataManager
 import logy
 
 MOBILE_SERVER = "ws://localhost:3030/"
+PLAY_CONTROL_CHANNEL = "/image/play_control"
 
 REQUEST_DICT = {
     "id" : "",
@@ -78,6 +81,7 @@ class StationSelection(StationSelectionUi, QObject):
         self._clients = []
         self._data_manager : DataManager = data_manager
         self.activate_exercise_button.setEnabled(False)
+        self._play_control_pub = rospy.Publisher(PLAY_CONTROL_CHANNEL, PlayControl, queue_size=10)
         time.sleep(1)
 
         self.shutdown_button.clicked.connect(self.shutdown)
@@ -87,6 +91,10 @@ class StationSelection(StationSelectionUi, QObject):
         self.new_client_button.clicked.connect(self.create_new_client)
         self.advance_mode_check.stateChanged.connect(self.activate_advanced_mode)
         self.station_combobox.currentIndexChanged.connect(self.station_selected)
+        self.forward_button.clicked.connect(self.forward_button_clicked)
+        self.backward_button.clicked.connect(self.backward_button_clicked)
+        self.screenshot_button.clicked.connect(self.screenshot_button_clicked)
+        self.pause_button.clicked.connect(self.pause_button_clicked)
 
 
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -146,6 +154,24 @@ class StationSelection(StationSelectionUi, QObject):
         #self.video_combobox.addItems(names)
         self._main_window.show()
         #self._app.exec_()
+
+    def forward_button_clicked(self):
+        self._send_play_action(2, {"offset": 10})
+
+    def backward_button_clicked(self):
+        self._send_play_action(2, {"offset": -10})
+
+    def screenshot_button_clicked(self):
+        self._send_play_action(3, {})
+
+    def pause_button_clicked(self):
+        self._send_play_action()
+
+    def _send_play_action(self, action: int, payload: dict):
+        play_control = PlayControl()
+        play_control.action_type = action
+        play_control.action_payload = json.dumps(payload)
+        self._play_control_pub.publish(play_control)
 
     def load_exercises(self):
         exercises = self._data_manager.get_exercises()

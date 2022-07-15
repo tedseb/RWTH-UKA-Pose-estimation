@@ -67,6 +67,7 @@ def insert_dict_into_widget(qt_widget, label_dict):
 class StationSelection(StationSelectionUi, QObject):
     def __init__(self, data_manager = None):
         super().__init__()
+        rospy.init_node('station_selection', anonymous=True)
         if data_manager is None:
             raise RuntimeError('This Gui Needs a data manager')
         #self._app = QApplication(sys.argv)
@@ -95,6 +96,10 @@ class StationSelection(StationSelectionUi, QObject):
         self.backward_button.clicked.connect(self.backward_button_clicked)
         self.screenshot_button.clicked.connect(self.screenshot_button_clicked)
         self.pause_button.clicked.connect(self.pause_button_clicked)
+        self.set_0_button.clicked.connect(lambda: self.set_video_clicked(0.0))
+        self.set_25_button.clicked.connect(lambda: self.set_video_clicked(0.25))
+        self.set_50_button.clicked.connect(lambda: self.set_video_clicked(0.50))
+        self.set_75_button.clicked.connect(lambda: self.set_video_clicked(0.75))
 
 
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -156,16 +161,24 @@ class StationSelection(StationSelectionUi, QObject):
         #self._app.exec_()
 
     def forward_button_clicked(self):
-        self._send_play_action(2, {"offset": 10})
+        self._send_play_action(2, {"offset": 100})
 
     def backward_button_clicked(self):
-        self._send_play_action(2, {"offset": -10})
+        self._send_play_action(2, {"offset": -100})
 
     def screenshot_button_clicked(self):
         self._send_play_action(3, {})
 
     def pause_button_clicked(self):
-        self._send_play_action()
+        if self.pause_button.text() == "Pause":
+            self.pause_button.setText("Play")
+            self._send_play_action(1, {"pause": True})
+        else:
+            self.pause_button.setText("Pause")
+            self._send_play_action(1, {"pause": False})
+
+    def set_video_clicked(self, value: float):
+        self._send_play_action(4, {"percent": value})
 
     def _send_play_action(self, action: int, payload: dict):
         play_control = PlayControl()

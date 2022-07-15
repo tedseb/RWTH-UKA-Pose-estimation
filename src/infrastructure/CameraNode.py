@@ -135,12 +135,12 @@ class CameraNode():
         action_type = int(play_control.action_type)
         action_payload = json.loads(str(play_control.action_payload))
         if action_type == 1:
-            self._paused = True
+            self._paused = action_payload["pause"]
         elif action_type == 2:
             with self._cap_mutex:
-                offset = int(action_payload[offset])
-                current_frame = self._cap.set(cv2.CV_CAP_PROP_POS_FRAMES)
-                self._cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame + offset)
+                offset = int(action_payload["offset"])
+                current_frame = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
+                self._cap.set(cv2.CAP_PROP_POS_FRAMES, max(current_frame + offset, 0))
         elif action_type == 3:
             if self._cur_frame is None:
                 return
@@ -148,6 +148,14 @@ class CameraNode():
             screen_str = f"screenshot_{screen_str}"
             Path(IMAGE_DIR_PATH).mkdir(parents=True, exist_ok=True)
             cv2.imwrite(f"{IMAGE_DIR_PATH}/{screen_str}.jpg", self._cur_frame)
+        elif action_type == 4:
+            if self._cur_frame is None:
+                return
+            percent = float(action_payload["percent"])
+            with self._cap_mutex:
+                total_frames = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                logy.info(f"{total_frames} {percent} {int(total_frames * percent)}")
+                self._cap.set(cv2.CAP_PROP_POS_FRAMES, int(total_frames * percent))
 
 
 

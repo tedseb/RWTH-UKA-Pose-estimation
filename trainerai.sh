@@ -11,10 +11,10 @@ source $SCRIPTPATH/devel/setup.sh
 # TODO: @Shawan What does this line do? Is there a link you copied this from?
 find ./devel -type f -name "*.js" -exec sed -i 's/`resolution`//g' {} \;
 
-if [[ ! -d './src/AI/metrabs/models/' ]]
+if [[ ! -d './src/AI/metrabs/models/metrabs_eff2m_y4' ]]
 then
     python3 docker/scripts/largeFiles/SecureGoogleDrive.py
-    sh script.sh
+    bash script.sh
     rm script.sh
 fi
 

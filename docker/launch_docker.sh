@@ -113,6 +113,6 @@ if $osx; then
 	docker exec -it trainerAI sh -c "export DISPLAY=host.docker.internal:0 && xhost + $(ifconfig en0 | grep 'inet[ ]' | awk '{print$2}')"
 fi
 
-sudo kill $(pgrep -f bluetooth_restart_loop)
+# sudo kill $(pgrep -f bluetooth_restart_loop)
 echo "done"
 

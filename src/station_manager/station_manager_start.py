@@ -40,7 +40,7 @@ def main():
     logy.Logy().basic_config(debug_level=logy.DEBUG, module_name="SM")
     logy.basic_config(debug_level=logy.DEBUG, module_name="SM")
 
-    camera_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/infrastructure/CameraNode.py"
+    camera_path = str(pathlib.Path(__file__).absolute().parent.parent) + "/infrastructure/camera_node.py"
     transform_node_path = str(pathlib.Path(__file__).absolute().parent) + "/launch/static_transform.launch"
     station_selection_path = str(pathlib.Path(__file__).absolute().parent) + "/station_selection.py"
 

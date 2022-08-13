@@ -70,12 +70,12 @@ class ServerSocket(ABC):
         self._logger = logger
         self._id = self._factory.get_id()
         self._send_message = send_message
-        self._logger.info(f"Init Socket")
+        self._logger.debug(f"Init Socket")
 
     def _on_connection(self, request = None):
         if self._factory._register_client_callback is not None:
             self._factory._register_client_callback(self._id, self._send_msg)
-        self._logger.info(f"New client connection {self._id}")
+        self._logger.info("New client connection. Id:", self._id)
         response = copy.deepcopy(RESPONSE_DICT)
         response["id"] = self._id
         response["response"] = 500
@@ -86,7 +86,6 @@ class ServerSocket(ABC):
 
     def _callback_wrapper(self, function : Callable, pyaload : Dict):
         #pylint: disable=broad-except
-        self._logger.info("Thread Started")
         try :
             result : SMResponse = function(self._id, pyaload)
             if result.status_code != 1:
@@ -111,7 +110,7 @@ class ServerSocket(ABC):
         if isBinary:
             self._send_error("Binary Messages currently not supported", 2)
             return
-        self._logger.info(f"New Message={payload}")
+        #self._logger.debug(f"New Message={payload}")
 
         data_str = str(payload.decode('utf8'))
         #logy.warn(data_str)
@@ -151,7 +150,6 @@ class ServerSocket(ABC):
             self._send_error("Request currently not implemented", 2)
             return
 
-        self._logger.info("New Message, start Thread")
         self.start_new_thread(self._callback_wrapper, request_func, payload)
         #threading.Thread(target=self._callback_wrapper, args=(request_func, payload,), daemon=True)
         return

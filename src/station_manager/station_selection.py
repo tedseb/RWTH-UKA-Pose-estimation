@@ -384,7 +384,7 @@ class MyClientProtocol(WebSocketClientProtocol):
     def onConnect(self, response):
         if self.factory._register_client_callback is not None:
             self.factory._register_client_callback(self.send_msg_ts)
-        logy.info("Client connected to {0}".format(response.peer))
+        logy.debug("Client connected to {0}".format(response.peer))
 
     def send_msg_ts(self, request_code=0, payload=dict({})):
         reactor.callFromThread(self.send_msg, request_code, payload)

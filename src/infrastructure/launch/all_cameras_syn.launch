@@ -1,8 +1,8 @@
 <launch>
   <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="1 0 0 0 0 0 1 map dev0 1000" />
   <node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="1 0 0 0 0 0 1 map dev1 1000" />
-  <node name="camera0" pkg="infrastructure" type="CameraNode.py" />
-  <node name="camera1" pkg="infrastructure" type="CameraNode_dev1.py" />
-  <node name="syn_cam" pkg="infrastructure" type="cam_synchronizer.py" /> 
-</launch> 
- 
+  <node name="camera0" pkg="infrastructure" type="camera_node.py" />
+  <node name="camera1" pkg="infrastructure" type="camera_node.py" />
+  <node name="syn_cam" pkg="infrastructure" type="cam_synchronizer.py" />
+</launch>
+

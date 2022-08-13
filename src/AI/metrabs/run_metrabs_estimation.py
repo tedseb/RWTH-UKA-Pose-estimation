@@ -24,28 +24,30 @@ import tensorflow as tf
 THREAD_WAIT_TIME_MS = 3 #40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
 AI_WIDTH = 1280
-AI_MODEL = 2 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
+AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
 
 plt.switch_backend('TkAgg')
 
-if AI_MODEL == 0:
-    CONFIG = {
+AI_MODELS = [
+    {
         'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
-        'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl'
-    }
-elif AI_MODEL == 1:
-    CONFIG = {
+        'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl',
+        "ai_model": 0
+    },
+    {
         'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]],
-        'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4'
-    }
-elif AI_MODEL == 2:
-    CONFIG = {
+        'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4',
+        "ai_model": 1
+    },
+    {
         'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]],
-        'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4'
+        'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4',
+        "ai_model": 2
     }
+]
 
 class PoseEstimator():
-    def __init__(self, model_name=None, num_aug=5):
+    def __init__(self, model_name=None, num_aug=5, old_metrabs=False):
         self.ready_signal = rospy.Publisher('/signals/metrabs_ready', RosBool, queue_size=2)
         rospy.Subscriber('bboxes', Bboxes, self.callback_regress, queue_size=10)
         rospy.Subscriber('/channel_info', ChannelInfo, self.handle_new_channel)
@@ -65,7 +67,7 @@ class PoseEstimator():
 
         #img = cv2.imread('../data/ted_image.jpg')
         #box = [680.0, 180.0, 180.0, 490.0]
-        self._use_old_model = AI_MODEL == 0 and model_name is None
+        self._use_old_model = old_metrabs
         if model_name is None:
             self.model = tf.saved_model.load(CONFIG["model_path"])
         else:
@@ -372,6 +374,7 @@ class PoseEstimator():
                 pub.publish(image_message)
                 #logy.log_fps("publish_skeletons")
 
+
 if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
     parser = argparse.ArgumentParser()
@@ -387,7 +390,11 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-    if AI_MODEL == 0 and args.metrabs_model is None:
+    selected_model = int(args.metrabs_model or AI_MODEL)
+    CONFIG = AI_MODELS[selected_model]
+    logy.info("Selected Metrabs Model:", selected_model)
+
+    if selected_model == 0:
         from tensorflow.python.keras.backend import set_session
         config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
@@ -404,9 +411,9 @@ if __name__ == '__main__':
             tf.config.experimental.set_memory_growth(physical_device, True)
 
     rospy.init_node('metrabs', anonymous=True)
-    run_spin_obj = PoseEstimator(args.metrabs_model, args.num_aug)
+    run_spin_obj = PoseEstimator(None, args.num_aug, selected_model==0)
     signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
     signal.signal(signal.SIGINT, run_spin_obj.shutdown)
-    logy.info("Pose Estimator is listening")
+    logy.highlighting("Pose Estimator is listening")
     run_spin_obj.ready_signal.publish(True)
     rospy.spin()

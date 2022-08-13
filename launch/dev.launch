@@ -16,9 +16,11 @@
     <arg name="smo" value="$(arg smo)"/>
     <arg name="debug_frames" value="$(arg debug_frames)"/>
   </include>
-  <include file="$(find infrastructure)/launch/mobile_server.launch"/>
 
-  <include file="$(find metrabs)/launch/metrabs.launch" if="$(eval arg('ai') == 'metrabs')"/>
+  <include file="$(find metrabs)/launch/metrabs.launch" if="$(eval arg('ai') == 'metrabs')">
+    <arg name="model" value="2"/>
+  </include>
+
   <include file="$(find spin)/launch/spin.launch" if="$(eval arg('ai') == 'spin')"/>
 
   <include file="$(find object_detection)/launch/object_detection.launch" />

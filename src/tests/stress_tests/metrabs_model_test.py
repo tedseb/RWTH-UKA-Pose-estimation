@@ -200,7 +200,7 @@ class GymyEnviroment:
         self._data_manger = None
         #time.sleep(3)
 
-        camera_path = "/home/trainerai/trainerai-core/src/infrastructure/CameraNode.py"
+        camera_path = "/home/trainerai/trainerai-core/src/infrastructure/camera_node.py"
         transform_node_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
         station_selection_path = "/home/trainerai/trainerai-core/src/station_manager/src/station_selection.py"
 

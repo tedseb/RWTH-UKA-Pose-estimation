@@ -28,7 +28,6 @@ class WebServerSocket(WebSocketServerProtocol, ServerSocket):
         reactor.callFromThread(self.sendMessage, msg, False)
 
     def start_new_thread(self, function, *argparams):
-        self._logger.info("reactor")
         reactor.callInThread(function, *argparams)
 
 class WebServerController(WebSocketServerFactory, ServerController):

@@ -21,6 +21,7 @@ TEST = 5
 DEBUG = 10
 TRACING = 15
 INFO = 20
+HIGLIGHTING = 25
 WARNING = 30
 ERROR = 40
 CRITICAL = 50
@@ -86,6 +87,7 @@ _name_to_level = {
     'error': ERROR,
     'warning': WARNING,
     'info': INFO,
+    'highlighting': HIGLIGHTING,
     'tracing': TRACING,
     'debug': DEBUG,
     'notset': NOTSET,
@@ -97,6 +99,7 @@ class LogyBackend:
         ERROR: 'ERROR',
         WARNING: 'WARNING',
         INFO: 'INFO',
+        HIGLIGHTING: 'HIGLIGHTING',
         TRACING: 'TRACING',
         DEBUG: 'DEBUG',
         NOTSET: 'NOTSET',
@@ -126,6 +129,7 @@ class LogyBackend:
         DEBUG: '\033[94m',
         TRACING: '\033[95m', #'\033[35m'
         INFO: '\033[97m',
+        HIGLIGHTING: '\033[46m',
         WARNING: '\033[93m',
         ERROR: '\033[91m',
         CRITICAL: '\033[31m',

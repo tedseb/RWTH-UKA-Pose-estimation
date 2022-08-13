@@ -17,6 +17,7 @@ NOTSET = 0
 TEST = 5
 DEBUG = 10
 INFO = 20
+HIGLIGHTING = 25
 WARNING = 30
 ERROR = 40
 CRITICAL = 50
@@ -111,9 +112,10 @@ class LogyHandler:
         self._tracings = {}
         self._fps_timings = {}
 
-    def _send_msg(self, msg, tag, debug_level, trace_level):
+    def _send_msg(self, messages: tuple, tag, debug_level, trace_level):
         if debug_level < self._debug_level:
             return
+        msg = ' '.join(map(lambda x : str(x), messages))
         file_name, line_no, function_name = findCaller(trace_level)
         self._logger.send_msg(debug_level, msg, tag, self._module, file_name, line_no, function_name)
 
@@ -208,26 +210,29 @@ class LogyHandler:
         fps_last_time[1] = 1
         self._logger.send_tracing(name, fps, "fps", 4)
 
-    def test(self, msg: str, tag="test"):
-        self._send_msg(msg, tag, TEST, 3)
+    def test(self, *msgs, tag="test"):
+        self._send_msg(msgs, tag, TEST, 3)
 
-    def debug(self, msg: str, tag="msg"):
-        self._send_msg(msg, tag, DEBUG, 3)
+    def debug(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, DEBUG, 3)
 
-    def info(self, msg: str, tag="msg"):
-        self._send_msg(msg, tag, INFO, 3)
+    def info(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, INFO, 3)
 
-    def warn(self, msg: str, tag="msg"):
-        self._send_msg(msg, tag, WARNING, 3)
+    def highlighting(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, HIGLIGHTING, 3)
 
-    def error(self, msg: str, tag="msg"):
-        self._send_msg(msg, tag, ERROR, 3)
+    def warn(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, WARNING, 3)
 
-    def critical(self, msg: str, tag="msg"):
-        self._send_msg(msg, tag, CRITICAL, 3)
+    def error(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, ERROR, 3)
 
-    def fatal(self, msg: str, tag="msg"):
-        self._send_msg(msg, tag, CRITICAL, 3)
+    def critical(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, CRITICAL, 3)
+
+    def fatal(self, *msgs, tag="msg"):
+        self._send_msg(msgs, tag, CRITICAL, 3)
 
     def set_debug_level(self, debug_level: int):
         self._debug_level = debug_level
@@ -413,33 +418,37 @@ def exception_hook(exctype, value, trace):
     critical("Logy Traceback Hook: \n" + traceback_string)
     sys.__excepthook__(exctype, value, trace)
 
-def test(msg: str, tag="test"):
+def test(*msgs, tag="test"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, TEST, 3)
+    logger._root._send_msg(msgs, tag, TEST, 3)
 
-def debug(msg: str, tag="msg"):
+def debug(*msgs, tag="msg"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, DEBUG, 3)
+    logger._root._send_msg(msgs, tag, DEBUG, 3)
 
-def info(msg: str, tag="msg"):
+def info(*msgs, tag="msg"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, INFO, 3)
+    logger._root._send_msg(msgs, tag, INFO, 3)
 
-def warn(msg: str, tag="msg"):
+def highlighting(*msgs, tag="msg"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, WARNING, 3)
+    logger._root._send_msg(msgs, tag, HIGLIGHTING, 3)
 
-def error(msg: str, tag="msg"):
+def warn(*msgs, tag="msg"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, ERROR, 3)
+    logger._root._send_msg(msgs, tag, WARNING, 3)
 
-def critical(msg: str, tag="msg"):
+def error(*msgs, tag="msg"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, CRITICAL, 3)
+    logger._root._send_msg(msgs, tag, ERROR, 3)
 
-def fatal(msg: str, tag="msg"):
+def critical(*msgs, tag="msg"):
     logger = Logy()
-    logger._root._send_msg(msg, tag, CRITICAL, 3)
+    logger._root._send_msg(msgs, tag, CRITICAL, 3)
+
+def fatal(*msgs, tag="msg"):
+    logger = Logy()
+    logger._root._send_msg(msgs, tag, CRITICAL, 3)
 
 def debug_throttle(msg: str, throttel_time_ms, tag="msg"):
     logger = Logy()

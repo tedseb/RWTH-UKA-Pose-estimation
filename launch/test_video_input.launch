@@ -1,6 +1,0 @@
-<launch>
-  <include file="$(find infrastructure)/launch/all_cameras.launch" />
-  <include file="$(find object_detection)/launch/object_detection.launch" />
-  <node name="ImageCropper" pkg="infrastructure" type="ImageCropper.py" />
-</launch> 
- 

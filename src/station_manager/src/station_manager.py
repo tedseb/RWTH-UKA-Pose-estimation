@@ -227,7 +227,7 @@ class StationManager():
         args +=  f" --debug-frames {self._debug_frames_ms}"
 
         with self._camera_process_mutex:
-            self.__camera_process[camera_id] = subprocess.Popen([self._path_camera_node] + args.split())
+            self.__camera_process[camera_id] = subprocess.Popen(self._path_camera_node.split() + args.split())
             self.__transform_process[camera_id] = subprocess.Popen(["roslaunch", self._path_transform_node, f"dev:={camera_id}"])
 
     def stop_camera(self, camera_id: int):
@@ -266,10 +266,10 @@ class StationManager():
 
     def send_repitition(self, user_id: str, repetition_: int, exercise: str, set_id: int):
         repetition_data = self._remove_repetition_dataset.get(user_id)
-        if repetition_data is None: 
+        if repetition_data is None:
             logy.warn(f"No user '{user_id}'")
             return
-        
+
         cur_time = time.time()
         #time_since_start = cur_time - repetition_data[0]
         #logy.debug(f"time_since_start: {time_since_start:2f}")

@@ -283,6 +283,7 @@ class Logy(metaclass=Singleton):
         self._last_pipe_try = 0
         self._pipe_wait_time_s = 0.5
         self._open_pipe()
+        print("Done")
 
     def __del__(self):
         print("Destructor: Close Logy Writer")

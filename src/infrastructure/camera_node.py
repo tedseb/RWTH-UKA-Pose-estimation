@@ -44,7 +44,7 @@ def returnCameraIndices():
     return arr
 
 class CameraNode():
-    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=0, channel="image"):
+    def __init__(self, verbose=False, dev_id=0, check_cameras=False, camera_mode=VideoMode.INVALID, video_info=None, debug_repetition_ms=0, channel="image", repetition=True):
         self._cap = None
         self._verbose = verbose
         self._camera_mode = camera_mode
@@ -53,6 +53,7 @@ class CameraNode():
         self._disk_mode = False
         self._debug_repetition_ms = debug_repetition_ms
         self._paused = False
+        self._repetition = repetition
         self._cur_frame = None
         self._cap_mutex = Lock()
 
@@ -96,6 +97,8 @@ class CameraNode():
                 with self._cap_mutex:
                     ret, self._cur_frame = self._cap.read()
             if not ret:
+                if not self._repetition:
+                    break
                 if self._youtube_mode:
                     self._cap.open(self._disk_path)
                     continue
@@ -310,6 +313,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--check-cameras", help="Check all camera input id's from 0 to 10. Takes the first working match.", action="store_true")
     parser.add_argument("-i", "--camera-index", type=int, help="Open camera on opencv camera index")
     parser.add_argument("-p", "--ip", type=str, help="Start IP cam on ip")
+    parser.add_argument("-r", "--repeat", default=True, type=bool, help="Repeat video")
     parser.add_argument("-k", "--disk", type=str, help="Start video from disk path. Relative to root")
     parser.add_argument("-d", "--dev-id", default=0, type=str, help="Ros msgs header transform dev{dev-id}")
     parser.add_argument("--channel", default="image", type=str, help="Image channel Name")
@@ -355,9 +359,10 @@ if __name__ == '__main__':
 
     logy.basic_config(debug_level=logy.DEBUG, module_name="CAMERA")
 
+    repetition = args.repeat
     try:
         print("INFO:", info)
-        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames, channel=args.channel)
+        node = CameraNode(args.verbose, args.dev_id, args.check_cameras, mode, info, debug_repetition_ms=args.debug_frames, channel=args.channel, repetition=repetition)
         if args.dataset_recording:
             node.start_dataset_recording_publisher()
         else:

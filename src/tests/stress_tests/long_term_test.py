@@ -23,7 +23,6 @@ from gymy_tools import ThreadingTimeout
 #Station Manager
 #sys.path.append('/home/trainerai/trainerai-core/src/station_manager')
 from src.station_manager.src.station_manager import StationManager
-from src.station_manager.src.server import SMResponse
 from src.station_manager.src.data_manager.data_manager_interface import DataManagerInterface
 
 COMPLETE_MONITORING = True
@@ -76,7 +75,7 @@ class LocalDataManager(DataManagerInterface):
     def get_station_frame_lists(self) -> List[List]: #Dict[camera][station] = [x1, y1, x2, y2]
         return copy.deepcopy(self._station_frame_list)
 
-    def get_camera_name(self, id : int) -> str:
+    def get_camera_name(self, id: int) -> str:
         return self._cameras[id][0]
 
     def get_camera_names(self) -> List[str]:
@@ -120,17 +119,18 @@ class LocalDataManager(DataManagerInterface):
     def is_mongo_on(self):
         return False
 
+
 class GymyEnviroment:
 
     LAUNCH_FILES_ALL = [
-    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=False', 'neptune:=test_long-term'],
-    #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
-    #['infrastructure', 'mobile_server.launch'],
-    #['metrabs', 'metrabs.launch', 'log_level:=debug'],
-    ['object_detection', 'object_detection.launch', 'render:=False'],
-    ['motion_analysis', 'motion_analysis.launch', 'log_level:=debug'],
-    ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
-]
+        ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=False', 'neptune:=test_long-term'],
+        # ['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
+        # ['infrastructure', 'mobile_server.launch'],
+        # ['metrabs', 'metrabs.launch', 'log_level:=debug'],
+        ['object_detection', 'object_detection.launch', 'render:=False'],
+        ['motion_analysis', 'motion_analysis.launch', 'log_level:=debug'],
+        ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
+    ]
 
     LAUNCH_FILES_METRABS = [
         ['metrabs', 'metrabs.launch'],

@@ -58,7 +58,9 @@ class CameraNode():
         self._cap_mutex = Lock()
 
         rospy.init_node('camera', anonymous=True)
-        logy.debug(f"New Channel: {channel}")
+        logy.debug("New Channel:", channel)
+        logy.debug("Camera Mode:", camera_mode.name)
+        logy.debug("Video Info:", video_info)
         self._pub = rospy.Publisher(channel, ImageData, queue_size=1)
         self._play_control_sub = rospy.Subscriber(PLAY_CONTROL_CHANNEL, PlayControl, self.callback_play_control)
 
@@ -306,7 +308,6 @@ class CameraNode():
         self._cap = cv2.VideoCapture(path)
 
 if __name__ == '__main__':
-    print(sys.argv)
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     parser.add_argument("-y", "--youtube-id", type=str, help="start on youtube ID")

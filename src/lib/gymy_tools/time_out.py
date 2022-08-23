@@ -81,3 +81,9 @@ class SignalTimeout(BaseTimeout):
     def suppress_interrupt(self):
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+
+def get_timout_class() -> BaseTimeout:
+    if threading.current_thread().__class__.__name__ == '_MainThread':
+        return SignalTimeout
+    return ThreadingTimeout

@@ -8,7 +8,7 @@ import time
 import traceback
 import signal
 from filelock import FileLock
-from gymy_tools import ThreadingTimeout
+from gymy_tools import get_timout_class
 
 FIFO = '/home/trainerai/logy_pipe'
 FIFO_LOCK = '/home/trainerai/logy_pipe.lock'
@@ -303,29 +303,30 @@ class Logy(metaclass=Singleton):
             if oe.errno != errno.EEXIST:
                 raise
 
-        timeout_ms = 2000
+        timeout_ms = 200
         self._last_pipe_try = time_now + timeout_ms
         #print("Try OPEN PIPE")
 
         loop_count = 0
-        while loop_count < 20:
+        while loop_count < 5:
             try:
-                with ThreadingTimeout(timeout_ms / 1000):
+                TimeoutClass = get_timout_class()
+                with TimeoutClass(timeout_ms / 1000.0):
                     self._pipe = open(FIFO, 'wb')
             except TimeoutError:
                 print("Timeout")
                 self._pipe = None
-                self._pipe.closed()
                 return False
             except OSError:
                 print("Pipe Error")
                 self._pipe = None
-                self._pipe.closed()
                 return False
             if self._pipe is not None:
                 break
             loop_count += 1
             time.sleep(0.1)
+        if self._pipe is None:
+            return False
         return not self._pipe.closed
 
     def _pipe_send(self, data: Dict):

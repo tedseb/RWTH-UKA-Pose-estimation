@@ -379,10 +379,10 @@ if __name__ == '__main__':
     logy.basic_config(debug_level=logy.DEBUG, module_name="PE")
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--num-aug", type=int, help="Number of augmentation", default=5, choices=[1, 2, 3, 4, 5])
-    parser.add_argument("-m", "--metrabs-model", type=str, help="Metrabs model name", default=None)
+    parser.add_argument("-m", "--metrabs-name", type=str, help="Metrabs model name", default=None)
+    parser.add_argument("-n", "--metrabs-number", type=str, help="Metrabs model name", default=None)
 
     arg_count = len(sys.argv)
-    #print(sys.argv)
     last_arg = sys.argv[arg_count - 1]
     if last_arg[:2] == "__":
         valid_args = sys.argv[1:arg_count - 2]
@@ -390,15 +390,22 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-    selected_model = int(args.metrabs_model or AI_MODEL)
+    if args.metrabs_name == "False":
+        args.metrabs_name = None
+    if args.metrabs_number == "False":
+        args.metrabs_number = None
+
+    # Todo: Cleaner choice between name > number > config. Exact this prioritization.
+    selected_model = int(args.metrabs_number or AI_MODEL)
+    selected_model = 1 if args.metrabs_name else selected_model
     CONFIG = AI_MODELS[selected_model]
     logy.info("Selected Metrabs Model:", selected_model)
 
     if selected_model == 0:
         from tensorflow.python.keras.backend import set_session
         config = tf.compat.v1.ConfigProto()
-        config.gpu_options.allow_growth = True # dynamically grow the memory used on the GPU
-        config.log_device_placement = True # to log device placement (on which device the operation ran)
+        config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+        config.log_device_placement = True  # to log device placement (on which device the operation ran)
         sess = tf.compat.v1.Session(config=config)
         set_session(sess)
     else:
@@ -406,12 +413,12 @@ if __name__ == '__main__':
         if len(physical_devices) > 1:
             physical_devices = physical_devices[:1]
 
-        tf.config.set_visible_devices(physical_devices,'GPU')
+        tf.config.set_visible_devices(physical_devices, 'GPU')
         for physical_device in physical_devices:
             tf.config.experimental.set_memory_growth(physical_device, True)
 
     rospy.init_node('metrabs', anonymous=True)
-    run_spin_obj = PoseEstimator(None, args.num_aug, selected_model==0)
+    run_spin_obj = PoseEstimator(args.metrabs_name, args.num_aug, selected_model == 0)
     signal.signal(signal.SIGTERM, run_spin_obj.shutdown)
     signal.signal(signal.SIGINT, run_spin_obj.shutdown)
     logy.highlighting("Pose Estimator is listening")

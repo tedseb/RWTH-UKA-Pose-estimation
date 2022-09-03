@@ -19,6 +19,7 @@ qt-station-calibration
 Ultralytics
 *.pt
 data
+/yolov5
 src/AI/spin/extra_data
 src/AI/weight_detection/models
 src/AI/weight_detection/data

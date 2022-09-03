@@ -23,7 +23,8 @@ from sensor_msgs.msg import Image
 from scheduler import BoxChecker
 
 YOLO_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5'
-MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5m.pt'
+#MODEL_PATH = '/home/trainerai/trainerai-core/src/AI/object_detection/yolov5m.engine'
+MODEL_PATH = '/home/trainerai/trainerai-core/yolov5/yolov5m.engine'
 IMAGE_QUEUE_LEN = 2
 THREAD_WAIT_TIME_MS = 5
 AI_HEIGHT = 720
@@ -47,7 +48,7 @@ class ObjectDetectionPipeline:
         self._check_station = check_station
         import logging
         logging.getLogger("utils.general").setLevel(logging.WARNING)
-        self._model = torch.hub.load(YOLO_PATH, 'custom', path=MODEL_PATH, source='local') # .eval().to(device)
+        self._model = torch.hub.load(YOLO_PATH, 'custom', path=MODEL_PATH, source='local', force_reload=True) # .eval().to(device)
         self._threshold = threshold
         self._renderer = renderer
         self._publisher_boxes = rospy.Publisher('bboxes', Bboxes , queue_size=10)
@@ -186,15 +187,18 @@ class ObjectDetectionPipeline:
             List[YoloData]: Yolo Predictions for each image. YoloData is None if there is no Prediction for this index.
         '''
 
+        img_len = len(imgs)
         with logy.TraceTime("time_yolo_model"):
+            if img_len < 2:
+                imgs.append(imgs[0])
             results = self._model(imgs, size=640)
 
         yolo_data_results = []
-        for i in range(len(imgs)):
+        for i in range(img_len):
             yolo_data = YoloData()
             if self._renderer:
                 results.render()
-                yolo_data.render_img = results.imgs[i]
+                yolo_data.render_img = results.ims[i]
 
             result_np = results.xyxy[i].cpu().detach().numpy() #x1, y1, x2, y2
             if result_np.size == 0:

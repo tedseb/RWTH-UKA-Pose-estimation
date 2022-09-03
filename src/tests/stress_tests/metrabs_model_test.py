@@ -22,7 +22,7 @@ from gymy_tools import ThreadingTimeout
 #Station Manager
 #sys.path.append('/home/trainerai/trainerai-core/src/station_manager')
 from src.station_manager.src.station_manager import StationManager
-from src.station_manager.src.server import SMResponse
+# from src.station_manager.src.server import SMResponse
 from src.station_manager.src.data_manager.data_manager_interface import DataManagerInterface
 
 
@@ -35,22 +35,35 @@ class LocalDataManager(DataManagerInterface):
     def __init__(self):
         self._cameras = {
             0 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
-            1 : ["deadlift_ted", 0, "O9wJvxWMiBg"],
-            2 : ["military_ted", 0, "Uv9qwcALYKU"],
+            1 : ["langhantel_ted", 0, "gTux94rB92w"],
+            2 : ["deadlift_ted", 0, "O9wJvxWMiBg"],
+            3 : ["military_ted", 0, "O9wJvxWMiBg"],
+            10 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
+            12 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
+            14 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
+            16 : ["orhan_ted_buero", 0, "jX4aJ3_BfNE"],
         }
 
         self._stations = {
             0 : ["Ted", [CameraFrame(0, [249, 68, 650, 708])]],
             1 : ["Orhan", [CameraFrame(0, [1091, 65, 1672, 1058])]],
-            2 : ["deadlift", [CameraFrame(2, [645, 160, 1018, 701])]],
-            3 : ["military", [CameraFrame(3, [674, 135, 990, 670])]],
+            2 : ["langhantel", [CameraFrame(1, [562, 100, 871, 693])]],
+            3 : ["deadlift", [CameraFrame(2, [645, 160, 1018, 701])]],
+            4 : ["military", [CameraFrame(3, [645, 160, 1018, 701])]],
+            10 : ["Ted_1", [CameraFrame(10, [249, 68, 650, 708])]],
+            11 : ["Orhan_1", [CameraFrame(10, [1091, 65, 1672, 1058])]],
+            12 : ["Ted_2", [CameraFrame(12, [249, 68, 650, 708])]],
+            13 : ["Orhan_2", [CameraFrame(12, [1091, 65, 1672, 1058])]],
+            14 : ["Ted_3", [CameraFrame(14, [249, 68, 650, 708])]],
+            15 : ["Orhan_3", [CameraFrame(14, [1091, 65, 1672, 1058])]],
+            16 : ["Ted_4", [CameraFrame(16, [249, 68, 650, 708])]],
+            17 : ["Orhan_4", [CameraFrame(16, [1091, 65, 1672, 1058])]],
         }
 
         self._exercises = {
-            105 : "Deadlifts",
-            111 : "Squats",
-            229 : "Military Press"
+            105 : "Deadlifts"
         }
+
 
         self._station_frame_list = {}
         for station_id, station_info in self._stations.items():
@@ -120,14 +133,11 @@ class LocalDataManager(DataManagerInterface):
 class GymyEnviroment:
 
     LAUNCH_FILES_ALL = [
-    ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=False', 'neptune:=test_test'],
-    #['station_manager', 'station_manager.launch', 'args:="--without-gui"'],
-    #['infrastructure', 'mobile_server.launch'],
-    #['metrabs', 'metrabs.launch', 'log_level:=debug'],
-    ['object_detection', 'object_detection.launch', 'render:=False'],
-    ['motion_analysis', 'motion_analysis.launch', 'log_level:=debug'],
-    ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
-]
+        ['logy_backend', 'logy_backend.launch', 'log_level:=debug', 'test:=False', 'neptune:=test_test'],
+        ['object_detection', 'object_detection.launch', 'render:=False'],
+        ['motion_analysis', 'motion_analysis.launch', 'log_level:=debug'],
+        ['backend', 'SkeletonVisualizationHelper.launch', 'log_level:=debug'],
+    ]
 
     LAUNCH_FILES_METRABS = [
         ['metrabs', 'metrabs.launch'],
@@ -177,7 +187,7 @@ class GymyEnviroment:
 
         logy.info("Try Start")
         metrabs_launch = copy.deepcopy(GymyEnviroment.LAUNCH_FILES_METRABS)
-        metrabs_launch[0].append(f"model:={model_name}")
+        metrabs_launch[0].append(f"model_name:={model_name}")
         metrabs_launch[0].append(f"aug:={num_aug}")
 
         self._metrabs_parent = self.generate_parent_from_launchfiles(metrabs_launch)
@@ -218,7 +228,7 @@ class ModelTester:
         # "metrabs_eff2m_y4" : [[1, 2, 3], "EffNet2M"],
         # "metrabs_eff2s_y4" : [[3, 4, 5], "EffNet2S"],
         # "metrabs_rn101_y4" : [[3, 4, 5], "ResNet101"]
-        "metrabs_eff2m_y4" : [[1, 2, 3], "EffNet2M"],
+        "metrabs_eff2m_y4" : [[3, 4, 5], "EffNet2M"],
         #"metrabs_eff2s_y4" : [[4, 5], "EffNet2S"],
         #"metrabs_rn101_y4" : [[4, 5], "ResNet101"]
     }

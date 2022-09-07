@@ -217,20 +217,17 @@ def print_args(args: Optional[dict] = None, show_file=True, show_func=False):
 
 def init_seeds(seed=0, deterministic=False):
     # Initialize random number generator (RNG) seeds https://pytorch.org/docs/stable/notes/randomness.html
-    # cudnn seed 0 settings are slower and more reproducible, else faster and less reproducible
-    import torch.backends.cudnn as cudnn
-
-    if deterministic and check_version(torch.__version__, '1.12.0'):  # https://github.com/ultralytics/yolov5/pull/8213
-        torch.use_deterministic_algorithms(True)
-        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-        os.environ['PYTHONHASHSEED'] = str(seed)
-
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    cudnn.benchmark, cudnn.deterministic = (False, True) if seed == 0 else (True, False)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # for Multi-GPU, exception safe
+    torch.backends.cudnn.benchmark = True  # for faster training
+    if deterministic and check_version(torch.__version__, '1.12.0'):  # https://github.com/ultralytics/yolov5/pull/8213
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.deterministic = True
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+        os.environ['PYTHONHASHSEED'] = str(seed)
 
 
 def intersect_dicts(da, db, exclude=()):
@@ -300,7 +297,7 @@ def git_describe(path=ROOT):  # path must be a directory
 
 @TryExcept()
 @WorkingDirectory(ROOT)
-def check_git_status(repo='ultralytics/yolov5'):
+def check_git_status(repo='ultralytics/yolov5', branch='master'):
     # YOLOv5 status check, recommend 'git pull' if code is out of date
     url = f'https://github.com/{repo}'
     msg = f', for updates see {url}'
@@ -316,10 +313,10 @@ def check_git_status(repo='ultralytics/yolov5'):
         remote = 'ultralytics'
         check_output(f'git remote add {remote} {url}', shell=True)
     check_output(f'git fetch {remote}', shell=True, timeout=5)  # git fetch
-    branch = check_output('git rev-parse --abbrev-ref HEAD', shell=True).decode().strip()  # checked out
-    n = int(check_output(f'git rev-list {branch}..{remote}/master --count', shell=True))  # commits behind
+    local_branch = check_output('git rev-parse --abbrev-ref HEAD', shell=True).decode().strip()  # checked out
+    n = int(check_output(f'git rev-list {local_branch}..{remote}/{branch} --count', shell=True))  # commits behind
     if n > 0:
-        pull = 'git pull' if remote == 'origin' else f'git pull {remote} master'
+        pull = 'git pull' if remote == 'origin' else f'git pull {remote} {branch}'
         s += f"⚠️ YOLOv5 is out of date by {n} commit{'s' * (n > 1)}. Use `{pull}` or `git clone {url}` to update."
     else:
         s += f'up to date with {url} ✅'
@@ -335,9 +332,9 @@ def check_version(current='0.0.0', minimum='0.0.0', name='version ', pinned=Fals
     # Check version vs. required version
     current, minimum = (pkg.parse_version(x) for x in (current, minimum))
     result = (current == minimum) if pinned else (current >= minimum)  # bool
-    s = f'{name}{minimum} required by YOLOv5, but {name}{current} is currently installed'  # string
+    s = f'WARNING: ⚠️ {name}{minimum} is required by YOLOv5, but {name}{current} is currently installed'  # string
     if hard:
-        assert result, s  # assert min requirements met
+        assert result, emojis(s)  # assert min requirements met
     if verbose and not result:
         LOGGER.warning(s)
     return result
@@ -456,7 +453,7 @@ def check_font(font=FONT, progress=False):
     font = Path(font)
     file = CONFIG_DIR / font.name
     if not font.exists() and not file.exists():
-        url = "https://ultralytics.com/assets/" + font.name
+        url = f'https://ultralytics.com/assets/{font.name}'
         LOGGER.info(f'Downloading {url} to {file}...')
         torch.hub.download_url_to_file(url, str(file), progress=progress)
 
@@ -535,8 +532,8 @@ def check_amp(model):
 
     prefix = colorstr('AMP: ')
     device = next(model.parameters()).device  # get model device
-    if device.type == 'cpu':
-        return False  # AMP disabled on CPU
+    if device.type in ('cpu', 'mps'):
+        return False  # AMP only used on CUDA devices
     f = ROOT / 'data' / 'images' / 'bus.jpg'  # image to check
     im = f if f.exists() else 'https://ultralytics.com/images/bus.jpg' if check_online() else np.ones((640, 640, 3))
     try:
@@ -815,6 +812,9 @@ def non_max_suppression(prediction,
     Returns:
          list of detections, on (n,6) tensor per image [xyxy, conf, cls]
     """
+
+    if isinstance(prediction, (list, tuple)):  # YOLOv5 model in validation model, output = (inference_out, loss_out)
+        prediction = prediction[0]  # select only inference output
 
     bs = prediction.shape[0]  # batch size
     nc = prediction.shape[2] - 5  # number of classes

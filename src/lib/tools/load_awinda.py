@@ -1,62 +1,142 @@
+import sys
 import xml.etree.ElementTree as ET
 import time
+import signal
+import subprocess
+from std_msgs.msg import ColorRGBA
+from geometry_msgs.msg import Vector3, Point
+from visualization_msgs.msg import Marker, MarkerArray
+import rospy
+
+PATH = "data/awinda/Test-007#Hannah2.mvnx"
 
 
-def test():
-    test_str = "-0.893374 0.394140 0.893314 -0.898155 0.397323 0.989452 -0.893806 0.402549 1.094983 -0.900560 0.407550 1.191172 -0.908170 0.413084 1.287159 -0.905920 0.422061 1.421953 -0.882497 0.429315 1.508349 -0.905613 0.388779 1.364675 -0.901379 0.249933 1.362658 -0.869069 0.183459 1.074173 -0.853428 0.129253 0.837410 -0.908318 0.447643 1.360812 -0.908804 0.584541 1.337167 -0.917267 0.641265 1.044948 -0.887161 0.649352 0.803566 -0.891833 0.315254 0.896160 -0.849172 0.271858 0.491850 -0.954266 0.234724 0.109000 -0.797381 0.219523 0.017972 -0.894926 0.473033 0.890773 -0.904683 0.429400 0.484367 -0.944836 0.384044 0.090251 -0.776710 0.383148 0.015519"
-    print(len(test_str.split()))
+class AwindaDataToRos:
+    def __init__(self):
+        rospy.init_node('awinda_data', anonymous=False)
+        transform_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
+        self._transform = subprocess.Popen(["roslaunch", transform_path, "dev:=0"])
+        self._pub = rospy.Publisher("/visualization/skeleton_0", MarkerArray, queue_size=100)
+        self._skeleton_scale = Vector3(0.03, 0.03, 0.03)
+        self._connection_scale = Vector3(0.01, 0.01, 0.01)
 
+    def __del__(self):
+        self._transform.terminate()
+        try:
+            self._transform.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.kill(self._transform.pid)
+        del self._transform
 
-def read_awinda_mvnx(file_name: str):
-    start = time.time()
-    root = ET.parse(file_name).getroot()
-    end = time.time()
-    print("read in ", end - start)
-    return root
+    @staticmethod
+    def read_awinda_mvnx(file_name: str):
+        start = time.time()
+        root = ET.parse(file_name).getroot()
+        end = time.time()
+        print("read in ", end - start)
+        return root
 
+    @staticmethod
+    def get_points_and_connections(root):
+        points = []
+        segments = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}segments")
+        for segment in segments:
+            points.append(segment.attrib["label"])
+        joints = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}joints")
+        connections = []
+        for joint in joints:
+            connection = []
+            for connector in joint:
+                connection.append(connector.text.split("/")[0])
+            connections.append(connection)
+        return (points, connections)
 
-def get_points_and_connections(root):
-    points = []
-    segments = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}segments")
-    for segment in segments:
-        points.append(segment.attrib["label"])
-    joints = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}joints")
-    connections = []
-    for joint in joints:
-        connection = []
-        for connector in joint:
-            connection.append(connector.text.split("/")[0])
-        connections.append(connection)
-    return (points, connections)
+    def send_ros_markers(self, positions, connections):
+        idx = 0
+        marker_array = MarkerArray()
+
+        for position in positions.values():
+            m = Marker()
+            m.header.stamp = rospy.Time.now()
+            m.header.frame_id = "dev0"
+            m.id = idx
+            idx += 1
+            m.ns = ''
+            m.color = ColorRGBA(0.98, 0.30, 0.30, 1.00)
+            m.scale = self._skeleton_scale
+            m.pose.position.x, m.pose.position.y, m.pose.position.z = position
+            m.type = 2
+            m.action = 0
+            m.lifetime = rospy.Duration(0.2)
+            marker_array.markers.append(m)
+
+        for connection in connections:
+            m = Marker()
+            m.header.stamp = rospy.Time.now()
+            m.header.frame_id = "dev0"
+            m.id = idx
+            idx += 1
+            m.ns = ''
+            m.color = ColorRGBA(0.98, 0.30, 0.30, 1.00)
+            m.scale = self._connection_scale
+            m.points = [Point(*positions[(connection[0])]), Point(*positions[connection[1]])]
+            m.type = 4
+            m.action = 0
+            m.lifetime = rospy.Duration(0.2)
+            marker_array.markers.append(m)
+
+        self._pub.publish(marker_array)
+
+    def start(self, path):
+        root = self.read_awinda_mvnx(path)
+        points, connections = self.get_points_and_connections(root)
+
+        point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), points))
+        frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
+        start_time_ms = time.time() * 1000
+
+        for frame_counter, frame in enumerate(frames):
+            if frame.attrib["type"] != "normal":
+                continue
+
+            positions = frame.find("{http://www.xsens.com/mvn/mvnx}position")
+            positions = positions.text.split()
+            positions = list(map(lambda x: float(x), positions))
+
+            if len(positions) % 3 != 0:
+                print("[ERROR]: positions are not divisible by 3")
+                break
+
+            position_len = len(positions) // 3
+            for i in range(position_len):
+                point_posittions[points[i]] = positions[i * 3:(i + 1) * 3]
+
+            self.send_ros_markers(point_posittions, connections)
+
+            print(frame.attrib["time"])
+
+            frame_time_stamp_ms = float(frame.attrib["time"])
+            time_now_ms = time.time() * 1000
+            time_diff_ms = time_now_ms - start_time_ms
+            wait_time_s = max(frame_time_stamp_ms - time_diff_ms, 0) / 1000.
+            # print("frame:", frame_time_stamp_ms, "stamp:", time_diff_ms, "wait:", wait_time_s)
+            time.sleep(wait_time_s)
+
+            # if frame_counter > 500:
+            #     break
 
 
 def main():
-    root = read_awinda_mvnx("Test-007#Hannah2.mvnx")
-    for child in root:
-        print(child.tag)
-    points, connections = get_points_and_connections(root)
-    print(connections)
-    print(points)
-    point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), points))
-    print(point_posittions)
-    frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
-    count = 0
-    for frame in frames:
-        print("#############################")
-        if frame.attrib["type"] != "normal":
-            continue
-        positions = frame.find("{http://www.xsens.com/mvn/mvnx}position")
-        positions = positions.text.split()
-        if len(positions) % 3 != 0:
-            print("[ERROR]: positions are not divisible by 3")
-            break
-        position_len = len(positions) // 3
-        for i in range(position_len):
-            point_posittions[positions[i]] = positions[i * 3: (i+1) * 3]
-        print(point_posittions)
-        count += 1
-        if count > 5:
-            break
+    converter = AwindaDataToRos()
+
+    def signal_handler(self, signal):
+        print("############ SHUTDOWN ##################")
+        nonlocal converter
+        del converter
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    converter.start(PATH)
 
 
 if __name__ == "__main__":

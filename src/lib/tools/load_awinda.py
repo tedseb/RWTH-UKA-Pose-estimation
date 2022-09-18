@@ -3,12 +3,16 @@ import xml.etree.ElementTree as ET
 import time
 import signal
 import subprocess
+import cv2
+import numpy as np
 from std_msgs.msg import ColorRGBA
 from geometry_msgs.msg import Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray
+from sensor_msgs.msg import Image
 import rospy
 
-PATH = "data/awinda/Test-007#Hannah2.mvnx"
+PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
+PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
 
 
 class AwindaDataToRos:
@@ -16,9 +20,13 @@ class AwindaDataToRos:
         rospy.init_node('awinda_data', anonymous=False)
         transform_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
         self._transform = subprocess.Popen(["roslaunch", transform_path, "dev:=0"])
-        self._pub = rospy.Publisher("/visualization/skeleton_0", MarkerArray, queue_size=100)
-        self._skeleton_scale = Vector3(0.03, 0.03, 0.03)
-        self._connection_scale = Vector3(0.01, 0.01, 0.01)
+        self._skeleton_pub = rospy.Publisher("/visualization/skeleton_0", MarkerArray, queue_size=5)
+        self._image_pub = rospy.Publisher("/image/channel_0_yolo", Image, queue_size=5)
+        self._skeleton_scale = Vector3(0.09, 0.09, 0.09)
+        self._connection_scale = Vector3(0.03, 0.03, 0.03)
+        self._scale = 3
+        self._cap = None
+        self.open_video(PATH_VIDEO)
 
     def __del__(self):
         self._transform.terminate()
@@ -27,6 +35,7 @@ class AwindaDataToRos:
         except subprocess.TimeoutExpired:
             self.kill(self._transform.pid)
         del self._transform
+        rospy.signal_shutdown("End")
 
     @staticmethod
     def read_awinda_mvnx(file_name: str):
@@ -85,9 +94,9 @@ class AwindaDataToRos:
             m.lifetime = rospy.Duration(0.2)
             marker_array.markers.append(m)
 
-        self._pub.publish(marker_array)
+        self._skeleton_pub.publish(marker_array)
 
-    def start(self, path):
+    def start(self, path: str):
         root = self.read_awinda_mvnx(path)
         points, connections = self.get_points_and_connections(root)
 
@@ -101,7 +110,7 @@ class AwindaDataToRos:
 
             positions = frame.find("{http://www.xsens.com/mvn/mvnx}position")
             positions = positions.text.split()
-            positions = list(map(lambda x: float(x), positions))
+            positions = list(map(lambda x: float(x) * self._scale, positions))
 
             if len(positions) % 3 != 0:
                 print("[ERROR]: positions are not divisible by 3")
@@ -112,6 +121,7 @@ class AwindaDataToRos:
                 point_posittions[points[i]] = positions[i * 3:(i + 1) * 3]
 
             self.send_ros_markers(point_posittions, connections)
+            self.send_video()
 
             print(frame.attrib["time"])
 
@@ -126,6 +136,25 @@ class AwindaDataToRos:
             #     break
 
 
+    def open_video(self, path: str): 
+        self._cap = cv2.VideoCapture(path)
+
+    def send_video(self):
+        ret, self._cur_frame = self._cap.read()
+
+        if not ret: 
+            return
+
+        img = Image()
+        img.header.stamp = rospy.Time.now()
+        img.header.frame_id = "dev0"
+        img.encoding = "bgr8"
+        img.data = np.array(self._cur_frame, dtype=np.uint8).tobytes()
+        img.height, img.width = self._cur_frame.shape[:-1]
+        img.step = self._cur_frame.shape[-1]*self._cur_frame.shape[0]
+        self._image_pub.publish(img)
+
+
 def main():
     converter = AwindaDataToRos()
 
@@ -135,8 +164,9 @@ def main():
         del converter
         sys.exit(0)
 
+    time.sleep(2)
     signal.signal(signal.SIGINT, signal_handler)
-    converter.start(PATH)
+    converter.start(PATH_MVNX)
 
 
 if __name__ == "__main__":

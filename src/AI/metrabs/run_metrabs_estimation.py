@@ -21,16 +21,16 @@ import argparse
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
-THREAD_WAIT_TIME_MS = 3 #40 ms are the time beween two images at 25fps
+THREAD_WAIT_TIME_MS = 3  # 40 ms are the time beween two images at 25fps
 AI_HEIGHT = 720
 AI_WIDTH = 1280
-AI_MODEL = 0 #0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
+AI_MODEL = 0  # 0 = metrabs_multiperson_smpl, 1 = metrabs_rn34_y4, 2 = metrabs_eff2m_y4
 
 plt.switch_backend('TkAgg')
 
 AI_MODELS = [
     {
-        'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]], # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
+        'intrinsics': [[1962, 0, 540], [0, 1969, 960], [0, 0, 1]],  # [[3324, 0, 1311], [0, 1803, 707], [0, 0, 1]]
         'model_path': '/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_multiperson_smpl',
         "ai_model": 0
     },

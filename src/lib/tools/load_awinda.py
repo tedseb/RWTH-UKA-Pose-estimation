@@ -11,11 +11,13 @@ from visualization_msgs.msg import Marker, MarkerArray
 from sensor_msgs.msg import Image
 import tensorflow as tf
 import rospy
+import procrustes
 
 PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
 # PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
-PATH_VIDEO = "data/double_squats_02.mp4"
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+# PATH_VIDEO = "data/double_squats_02.mp4"
+PATH_VIDEO = "data/videos/Uv9qwcALYKU_720p.mp4"
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
 USE_METRABS = True
 COMPARE_ANGLES = [
     ["LeftUpperLeg", "LeftLowerLeg", "LeftFoot"],
@@ -25,6 +27,8 @@ SMPL_CONNECTIONS = [
     (1, 4), (1, 0), (2, 5), (2, 0), (3, 6), (3, 0), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (12, 13),
     (12, 14), (12, 15), (13, 16), (14, 17), (16, 18), (17, 19), (18, 20), (19, 21), (20, 22), (21, 23)
 ]
+MAPPINGS = [("Pelvis", 0), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
+
 
 def unit_vector(vector):
     return vector / np.linalg.norm(vector)
@@ -54,31 +58,42 @@ class AwindaDataToRos:
     def __init__(self):
         rospy.init_node('awinda_data', anonymous=False)
         transform_path = "/home/trainerai/trainerai-core/src/station_manager/launch/static_transform.launch"
-        self._transform = subprocess.Popen(["roslaunch", transform_path, "dev:=0"])
-        self._skeleton_pub = rospy.Publisher("/visualization/skeleton_0", MarkerArray, queue_size=5)
+        self._transform1 = subprocess.Popen(["roslaunch", transform_path, "dev:=0"])
+        self._transform2 = subprocess.Popen(["roslaunch", transform_path, "dev:=1"])
+
+        self._skeleton_pub0 = rospy.Publisher("/visualization/skeleton_0", MarkerArray, queue_size=5)
+        self._skeleton_pub1 = rospy.Publisher("/visualization/skeleton_1", MarkerArray, queue_size=5)
         self._image_pub = rospy.Publisher("/image/channel_0_yolo", Image, queue_size=5)
         self._skeleton_scale = Vector3(0.09, 0.09, 0.09)
         self._connection_scale = Vector3(0.03, 0.03, 0.03)
         self._scale = 3
         self._cap = None
         self._model = None
+        self._mappings = None
         if USE_METRABS:
             self.init_metrabs()
         self.open_video(PATH_VIDEO)
 
     def __del__(self):
-        self._transform.terminate()
+        self._transform1.terminate()
         try:
-            self._transform.wait(timeout=3)
+            self._transform1.wait(timeout=3)
         except subprocess.TimeoutExpired:
-            self.kill(self._transform.pid)
-        del self._transform
+            self.kill(self._transform1.pid)
+        del self._transform1
+
+        self._transform2.terminate()
+        try:
+            self._transform2.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.kill(self._transform2.pid)
+        del self._transform2
         rospy.signal_shutdown("End")
 
     def init_metrabs(self):
         self._model = tf.saved_model.load(METRABS_PATH)
 
-    def send_metrabs(self, image):
+    def send_metrabs(self, image, awinda_reference):
         if self._model is None:
             return
 
@@ -86,9 +101,30 @@ class AwindaDataToRos:
             pred = self._model.detect_poses(
                 image, skeleton='smpl_24', default_fov_degrees=55, detector_threshold=0.5)
 
-        positions = pred['poses3d'].numpy()[0]
-        print(positions)
-        self.send_ros_markers(positions, SMPL_CONNECTIONS, "dev1", ColorRGBA(0.98, 0.30, 0.30, 1.00))
+        positions = pred['poses3d'].numpy()
+        if len(positions) == 0:
+            return
+
+        scale = 0.01
+        positions = positions[0]
+        positions = np.array(list(map(lambda x: x * scale, positions)))
+
+        print(self._mappings)
+        awinda_refs = np.array([awinda_reference[x[0]] for x in self._mappings])
+        metrabs_refs = np.array([positions[x[1]] for x in self._mappings])
+        print(awinda_refs)
+        print(metrabs_refs)
+
+        with TraceTime("Mapping"):
+            d, Z, tform = procrustes.procrustes(awinda_refs, metrabs_refs, True, False)
+        T = tform['rotation']
+        b = tform['scale']
+        c = tform['translation']
+        print(T)
+        print(b)
+        print(c)
+        positions = b * positions @ T + c
+        self.send_ros_markers(positions, SMPL_CONNECTIONS, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
 
     @staticmethod
     def read_awinda_mvnx(file_name: str):
@@ -172,11 +208,16 @@ class AwindaDataToRos:
             m.lifetime = rospy.Duration(0.2)
             marker_array.markers.append(m)
 
-        self._skeleton_pub.publish(marker_array)
+        if frame_id == "dev0":
+            self._skeleton_pub0.publish(marker_array)
+        else:
+            self._skeleton_pub1.publish(marker_array)
+
 
     def start(self, path: str):
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
+        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS))
 
         point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), point_names))
         frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
@@ -202,7 +243,9 @@ class AwindaDataToRos:
             self.compute_angles(point_posittions)
             self.send_video()
             if USE_METRABS:
-                self.send_metrabs(self._cur_frame)
+                awinda_pos = np.array(list(point_posittions.values()))
+                self.send_metrabs(self._cur_frame, awinda_pos)
+
             self.send_ros_markers(list(point_posittions.values()), connections)
 
             frame_time_stamp_ms = float(frame.attrib["time"])
@@ -250,63 +293,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-import numpy as np
-import procrustes
-
-def main():
-    x = np.array([[0, 0, 1], [0, 1, 1]])
-    y = np.array([[2, 0, 0], [2, 2, 0]])
-
-    d, Z, tform = procrustes.procrustes(x, y, True, False)
-    T = tform['rotation']
-    b = tform['scale']
-    c = tform['translation']
-    print(T)
-    print(b)
-    print(c)
-    y_new = b * y @ T + c
-    print("###### should be #####")
-    print(x)
-    print("######   is now  #####")
-    print(y_new)
-
-
-def main2():
-    p1 = np.array([1, 1, 1])
-    p2 = np.array([0, 0, 0])
-    p3 = np.array([1, 0, 1])
-    a = p1 - p2
-    b = p3 - p2
-    print(a)
-    print(b)
-    xy = np.arctan2(a[0], a[1]) - np.arctan2(b[0], b[1])
-    xz = np.arctan2(a[0], a[2]) - np.arctan2(b[0], b[2])
-    yz = np.arctan2(a[1], a[2]) - np.arctan2(b[1], b[2])
-    xy = np.absolute(xy) * (180 / np.pi)
-    xz = np.absolute(xz) * (180 / np.pi)
-    yz = np.absolute(yz) * (180 / np.pi)
-
-    print(xy)
-    print(xz)
-    print(yz)
-
-
-def unit_vector(vector):
-    return vector / np.linalg.norm(vector)
-
-
-def angle_between(v1, v2):
-    v1_u = unit_vector(v1)
-    v2_u = unit_vector(v2)
-    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0)) * (180 / np.pi)
-
-
-def main3():
-    a = np.array([0.31, -1.64, 0.42])
-    b = np.array([-0.39, -0.04, -1.13])
-    print(angle_between(a, b))
-
-
-if __name__ == "__main__":
-    main3()

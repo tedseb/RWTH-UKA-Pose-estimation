@@ -15,19 +15,30 @@ import procrustes
 
 PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
 # PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
-# PATH_VIDEO = "data/double_squats_02.mp4"
-PATH_VIDEO = "data/videos/Uv9qwcALYKU_720p.mp4"
+PATH_VIDEO = "data/double_squats_02.mp4"
+# PATH_VIDEO = "data/videos/Uv9qwcALYKU_720p.mp4"
 METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
 USE_METRABS = True
+
+
 COMPARE_ANGLES = [
-    ["LeftUpperLeg", "LeftLowerLeg", "LeftFoot"],
-    ["RightUpperLeg", "RightLowerLeg", "RightFoot"]
+    [("LeftUpperLeg", 0), ("LeftLowerLeg", 4), ("LeftFoot", 7)],
+    [("RightUpperLeg", 2), ("RightLowerLeg", 5), ("RightFoot", 8)]
 ]
+
 SMPL_CONNECTIONS = [
     (1, 4), (1, 0), (2, 5), (2, 0), (3, 6), (3, 0), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (12, 13),
     (12, 14), (12, 15), (13, 16), (14, 17), (16, 18), (17, 19), (18, 20), (19, 21), (20, 22), (21, 23)
 ]
-MAPPINGS = [("Pelvis", 0), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
+
+# Hips, Knees
+MAPPINGS_0 = [("Pelvis", 0), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
+
+# Hips, Neck, Head
+MAPPINGS_1 = [("Pelvis", 0), ("Neck", 12), ("Head", 15)]
+
+# Hips, Shoulders
+MAPPINGS_2 = [("Pelvis", 0), ("LeftShoulder", 16), ("RightShoulder", 17)]
 
 
 def unit_vector(vector):
@@ -125,6 +136,7 @@ class AwindaDataToRos:
         print(c)
         positions = b * positions @ T + c
         self.send_ros_markers(positions, SMPL_CONNECTIONS, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
+        return positions
 
     @staticmethod
     def read_awinda_mvnx(file_name: str):
@@ -150,29 +162,47 @@ class AwindaDataToRos:
             connections.append(connection)
         return (points, connections)
 
-    def compute_angles(self, point_positions):
+    @staticmethod
+    def compute_angles(p1, p2, p3):
+        a = p1 - p2
+        b = p3 - p2
+        # print("p1:", p1)
+        # print("p2:", p2)
+        # print("p3:", p3)
+        # print("A:", a)
+        # print("B:", b)
+        xy = np.arctan2(a[0], a[1]) - np.arctan2(b[0], b[1])
+        xz = np.arctan2(a[0], a[2]) - np.arctan2(b[0], b[2])
+        yz = np.arctan2(a[1], a[2]) - np.arctan2(b[1], b[2])
+        xy = np.absolute(xy) * (180 / np.pi)
+        xz = np.absolute(xz) * (180 / np.pi)
+        yz = np.absolute(yz) * (180 / np.pi)
+        angle = angle_between(a, b)
+        # print("xy:", xy)
+        # print("xz:", xz)
+        # print("yz:", yz)
+        # print("angle", angle)
+        return (xy, xz, yz, angle)
+
+    def compute_angle_distance(self, point_positions1, point_positions2):
         for angle in COMPARE_ANGLES:
-            print(f" -- {angle} -- ")
-            p1 = np.array(point_positions[angle[0]])
-            p2 = np.array(point_positions[angle[1]])
-            p3 = np.array(point_positions[angle[2]])
-            a = p1 - p2
-            b = p3 - p2
-            print("p1:", p1)
-            print("p2:", p2)
-            print("p3:", p3)
-            print("A:", a)
-            print("B:", b)
-            xy = np.arctan2(a[0], a[1]) - np.arctan2(b[0], b[1])
-            xz = np.arctan2(a[0], a[2]) - np.arctan2(b[0], b[2])
-            yz = np.arctan2(a[1], a[2]) - np.arctan2(b[1], b[2])
-            xy = np.absolute(xy) * (180 / np.pi)
-            xz = np.absolute(xz) * (180 / np.pi)
-            yz = np.absolute(yz) * (180 / np.pi)
-            print("xy:", xy)
-            print("xz:", xz)
-            print("yz:", yz)
-            print("angle", angle_between(a, b))
+            # print(f" -- {angle} -- ")
+            p1_1 = np.array(point_positions1[angle[0][0]])
+            p1_2 = np.array(point_positions1[angle[1][0]])
+            p1_3 = np.array(point_positions1[angle[2][0]])
+            p2_1 = np.array(point_positions2[angle[0][1]])
+            p2_2 = np.array(point_positions2[angle[1][1]])
+            p2_3 = np.array(point_positions2[angle[2][1]])
+            xy1, xz1, yz1, angle1 = self.compute_angles(p1_1, p1_2, p1_3)
+            xy2, xz2, yz2, angle2 = self.compute_angles(p2_1, p2_2, p2_3)
+            xy_diff = abs(xy1 - xy2)
+            xz_diff = abs(xz1 - xz2)
+            yz_diff = abs(yz1 - yz2)
+            angle_diff = abs(angle1 - angle2)
+            print("###### result #######")
+            print(f"# {xy_diff:.1f}, {xz_diff:.1f}, {yz_diff:.1f} #")
+            print(f"# {angle_diff:.1f} #")
+            print("#####################")
 
     def send_ros_markers(self, positions, connections, frame_id="dev0", color=ColorRGBA(0.98, 0.30, 0.30, 1.00)):
         idx = 0
@@ -213,11 +243,10 @@ class AwindaDataToRos:
         else:
             self._skeleton_pub1.publish(marker_array)
 
-
     def start(self, path: str):
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
-        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS))
+        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_0))
 
         point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), point_names))
         frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
@@ -240,11 +269,11 @@ class AwindaDataToRos:
             for i in range(position_len):
                 point_posittions[point_names[i]] = positions[i * 3:(i + 1) * 3]
 
-            self.compute_angles(point_posittions)
             self.send_video()
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
-                self.send_metrabs(self._cur_frame, awinda_pos)
+                metrabs_pos = self.send_metrabs(self._cur_frame, awinda_pos)
+                self.compute_angle_distance(point_posittions, metrabs_pos)
 
             self.send_ros_markers(list(point_posittions.values()), connections)
 

@@ -13,16 +13,19 @@ import tensorflow as tf
 import rospy
 import procrustes
 
-PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
+PATH_MVNX = "data/awinda/hampelmann_vorne/Hampelmann_vorne.mvnx"
+# PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
 # PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
-PATH_VIDEO = "data/double_squats_02.mp4"
+PATH_VIDEO = "data/awinda/hampelmann_vorne/Julia-014.mp4"
+# PATH_VIDEO = "data/double_squats_02.mp4"
 # PATH_VIDEO = "data/videos/Uv9qwcALYKU_720p.mp4"
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
 USE_METRABS = True
 
 
 COMPARE_ANGLES = [
-    [("LeftUpperLeg", 0), ("LeftLowerLeg", 4), ("LeftFoot", 7)],
+    [("LeftUpperLeg", 1), ("LeftLowerLeg", 4), ("LeftFoot", 7)],
     [("RightUpperLeg", 2), ("RightLowerLeg", 5), ("RightFoot", 8)]
 ]
 
@@ -32,13 +35,13 @@ SMPL_CONNECTIONS = [
 ]
 
 # Hips, Knees
-MAPPINGS_0 = [("Pelvis", 0), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
+MAPPINGS_0 = [("Pelvis", 0), ("LeftLowerLeg", 4), ("RightLowerLeg", 5), ("LeftShoulder", 16), ("RightShoulder", 17)]
 
 # Hips, Neck, Head
 MAPPINGS_1 = [("Pelvis", 0), ("Neck", 12), ("Head", 15)]
 
 # Hips, Shoulders
-MAPPINGS_2 = [("Pelvis", 0), ("LeftShoulder", 16), ("RightShoulder", 17)]
+MAPPINGS_2 = [("LeftUpperLeg", 1), ("RightUpperLeg", 2), ("Neck", 12)]#, ("LeftShoulder", 16), ("RightShoulder", 17)]
 
 
 def unit_vector(vector):
@@ -106,7 +109,7 @@ class AwindaDataToRos:
 
     def send_metrabs(self, image, awinda_reference):
         if self._model is None:
-            return
+            return False
 
         with TraceTime("Metrabs"):
             pred = self._model.detect_poses(
@@ -114,7 +117,7 @@ class AwindaDataToRos:
 
         positions = pred['poses3d'].numpy()
         if len(positions) == 0:
-            return
+            return False
 
         scale = 0.01
         positions = positions[0]
@@ -246,14 +249,20 @@ class AwindaDataToRos:
     def start(self, path: str):
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
-        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_0))
+        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_2))
 
         point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), point_names))
         frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
         start_time_ms = time.time() * 1000
 
         for frame_counter, frame in enumerate(frames):
+            if frame_counter <= 38: 
+                continue
+
             if frame.attrib["type"] != "normal":
+                continue
+
+            if frame_counter % 2 == 0: 
                 continue
 
             print(f"### {frame_counter} ###")
@@ -273,7 +282,8 @@ class AwindaDataToRos:
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
                 metrabs_pos = self.send_metrabs(self._cur_frame, awinda_pos)
-                self.compute_angle_distance(point_posittions, metrabs_pos)
+                if np.any(metrabs_pos):
+                    self.compute_angle_distance(point_posittions, metrabs_pos)
 
             self.send_ros_markers(list(point_posittions.values()), connections)
 

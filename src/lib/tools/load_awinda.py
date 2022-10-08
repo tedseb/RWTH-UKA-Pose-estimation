@@ -13,17 +13,41 @@ import tensorflow as tf
 import rospy
 import procrustes
 
-PATH_MVNX = "data/awinda/hampelmann_vorne/Hampelmann_vorne.mvnx"
 # PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
 # PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
-PATH_VIDEO = "data/awinda/hampelmann_vorne/Julia-014.mp4"
 # PATH_VIDEO = "data/double_squats_02.mp4"
 # PATH_VIDEO = "data/videos/Uv9qwcALYKU_720p.mp4"
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
-# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+
+VIDEO_CONFIG_HAMPELMANN_VORN = {
+    "path_video": "data/awinda/hampelmann_vorne/Julia-014.mp4",
+    "path_mvnx": "data/awinda/hampelmann_vorne/Hampelmann_vorne.mvnx",
+    "frame_delay": 41,
+    "measure_start": 380,
+    "measure_end": 1000
+}
+
+VIDEO_CONFIG_KNIEBEUGEN_VORN = {
+    "path_video": "data/awinda/kniebeugen_vorne/Julia-008.mp4",
+    "path_mvnx": "data/awinda/kniebeugen_vorne/Kniebeuge_vorne.mvnx",
+    "frame_delay": 34,
+    "measure_start": 380,
+    "measure_end": 1700
+}
+
+VIDEO_CONFIG_STEHEN_VERSCHIEDEN = {
+    "path_video": "data/awinda/stehen_verschieden/Julia-006.mp4",
+    "path_mvnx": "data/awinda/stehen_verschieden/Stehen_verschieden.mvnx",
+    "frame_delay": 34,
+    "measure_start": 200,
+    "measure_end": 220
+}
+
+VIDEO_CONFIG = VIDEO_CONFIG_STEHEN_VERSCHIEDEN
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+
+
 USE_METRABS = True
-
-
 COMPARE_ANGLES = [
     [("LeftUpperLeg", 1), ("LeftLowerLeg", 4), ("LeftFoot", 7)],
     [("RightUpperLeg", 2), ("RightLowerLeg", 5), ("RightFoot", 8)]
@@ -35,13 +59,23 @@ SMPL_CONNECTIONS = [
 ]
 
 # Hips, Knees
-MAPPINGS_0 = [("Pelvis", 0), ("LeftLowerLeg", 4), ("RightLowerLeg", 5), ("LeftShoulder", 16), ("RightShoulder", 17)]
+MAPPINGS_0 = [
+    ("Neck", 12),
+    ("LeftUpperArm", 16),
+    ("RightUpperArm", 17),
+    ("LeftLowerLeg", 4),
+    ("RightLowerLeg", 5),
+    ("LeftFoot", 7),
+    ("RightFoot", 8),
+    ("LeftForeArm", 18),
+    ("RightForeArm", 19)
+]
 
 # Hips, Neck, Head
 MAPPINGS_1 = [("Pelvis", 0), ("Neck", 12), ("Head", 15)]
 
 # Hips, Shoulders
-MAPPINGS_2 = [("LeftUpperLeg", 1), ("RightUpperLeg", 2), ("Neck", 12)]#, ("LeftShoulder", 16), ("RightShoulder", 17)]
+MAPPINGS_2 = [("Neck", 12), ("LeftUpperArm", 16), ("RightUpperArm", 17), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
 
 
 def unit_vector(vector):
@@ -65,7 +99,7 @@ class TraceTime:
 
     def __exit__(self, type, value, traceback):
         time_elapsed = (time.time() - self._time_stamp) * 1000
-        print(f"Time {self._name}: {time_elapsed}ms")
+        # print(f"Time {self._name}: {time_elapsed}ms")
 
 
 class AwindaDataToRos:
@@ -84,9 +118,11 @@ class AwindaDataToRos:
         self._cap = None
         self._model = None
         self._mappings = None
+        self._angles = [0, 0, 0, 0]
+        self._angles_count = 0
         if USE_METRABS:
             self.init_metrabs()
-        self.open_video(PATH_VIDEO)
+        self.open_video(VIDEO_CONFIG["path_video"])
 
     def __del__(self):
         self._transform1.terminate()
@@ -123,20 +159,20 @@ class AwindaDataToRos:
         positions = positions[0]
         positions = np.array(list(map(lambda x: x * scale, positions)))
 
-        print(self._mappings)
+        # print(self._mappings)
         awinda_refs = np.array([awinda_reference[x[0]] for x in self._mappings])
         metrabs_refs = np.array([positions[x[1]] for x in self._mappings])
-        print(awinda_refs)
-        print(metrabs_refs)
+        # print(awinda_refs)
+        # print(metrabs_refs)
 
         with TraceTime("Mapping"):
             d, Z, tform = procrustes.procrustes(awinda_refs, metrabs_refs, True, False)
         T = tform['rotation']
         b = tform['scale']
         c = tform['translation']
-        print(T)
-        print(b)
-        print(c)
+        # print(T)
+        # print(b)
+        # print(c)
         positions = b * positions @ T + c
         self.send_ros_markers(positions, SMPL_CONNECTIONS, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
         return positions
@@ -180,6 +216,9 @@ class AwindaDataToRos:
         xy = np.absolute(xy) * (180 / np.pi)
         xz = np.absolute(xz) * (180 / np.pi)
         yz = np.absolute(yz) * (180 / np.pi)
+        xy = 180 - abs(xy - 180)
+        yz = 180 - abs(yz - 180)
+        yz = 180 - abs(yz - 180)
         angle = angle_between(a, b)
         # print("xy:", xy)
         # print("xz:", xz)
@@ -202,10 +241,31 @@ class AwindaDataToRos:
             xz_diff = abs(xz1 - xz2)
             yz_diff = abs(yz1 - yz2)
             angle_diff = abs(angle1 - angle2)
+            print()
             print("###### result #######")
-            print(f"# {xy_diff:.1f}, {xz_diff:.1f}, {yz_diff:.1f} #")
-            print(f"# {angle_diff:.1f} #")
+            print("# metrabs:", xy1, xz1, yz1, angle1)
+            print("# awinda:", xy2, xz2, yz2, angle2)
+            print(f"# {xy_diff:.1f}, {xz_diff:.1f}, {yz_diff:.1f}")
+            print(f"# {angle_diff:.1f}")
             print("#####################")
+            self._angles[0] += xy_diff
+            self._angles[1] += xz_diff
+            self._angles[2] += yz_diff
+            self._angles[3] += angle_diff
+            self._angles_count += 1
+
+    def print_angle_result(self):
+        self._angles_count += 1
+        xy_diff = self._angles[0] / self._angles_count
+        xz_diff = self._angles[1] / self._angles_count
+        yz_diff = self._angles[2] / self._angles_count
+        angle_diff = self._angles[3] / self._angles_count
+
+        print()
+        print("###### Final Result #######")
+        print(f"# xy={xy_diff:.1f}°, xz={xz_diff:.1f}°, yz={yz_diff:.1f}°")
+        print(f"# a={angle_diff:.1f}°")
+        print("#####################")
 
     def send_ros_markers(self, positions, connections, frame_id="dev0", color=ColorRGBA(0.98, 0.30, 0.30, 1.00)):
         idx = 0
@@ -249,23 +309,22 @@ class AwindaDataToRos:
     def start(self, path: str):
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
-        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_2))
+        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_0))
 
         point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), point_names))
         frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
         start_time_ms = time.time() * 1000
 
         for frame_counter, frame in enumerate(frames):
-            if frame_counter <= 38: 
+            if frame_counter <= VIDEO_CONFIG["frame_delay"]:
                 continue
 
             if frame.attrib["type"] != "normal":
                 continue
 
-            if frame_counter % 2 == 0: 
+            if frame_counter % 2 == 1:
                 continue
 
-            print(f"### {frame_counter} ###")
             positions = frame.find("{http://www.xsens.com/mvn/mvnx}position")
             positions = positions.text.split()
             positions = list(map(lambda x: float(x) * self._scale, positions))
@@ -277,13 +336,19 @@ class AwindaDataToRos:
             position_len = len(positions) // 3
             for i in range(position_len):
                 point_posittions[point_names[i]] = positions[i * 3:(i + 1) * 3]
+            # print(point_posittions)
 
             self.send_video()
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
                 metrabs_pos = self.send_metrabs(self._cur_frame, awinda_pos)
                 if np.any(metrabs_pos):
-                    self.compute_angle_distance(point_posittions, metrabs_pos)
+                    if VIDEO_CONFIG["measure_start"] <= frame_counter <= VIDEO_CONFIG["measure_end"]:
+                        print(f"### {frame_counter} ###")
+                        self.compute_angle_distance(point_posittions, metrabs_pos)
+
+                if frame_counter == VIDEO_CONFIG["measure_end"]:
+                    self.print_angle_result()
 
             self.send_ros_markers(list(point_posittions.values()), connections)
 
@@ -327,7 +392,7 @@ def main():
 
     time.sleep(2)
     signal.signal(signal.SIGINT, signal_handler)
-    converter.start(PATH_MVNX)
+    converter.start(VIDEO_CONFIG["path_mvnx"])
 
 
 if __name__ == "__main__":

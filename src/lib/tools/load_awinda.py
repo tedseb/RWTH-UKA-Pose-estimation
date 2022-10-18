@@ -1,7 +1,9 @@
+import pickle
 import sys
 import xml.etree.ElementTree as ET
 import time
 import signal
+import copy
 import subprocess
 import cv2
 import numpy as np
@@ -34,7 +36,7 @@ VIDEO_CONFIG_KNIEBEUGEN_VORN = {
     "measure_end": 1700
 }
 
-VIDEO_CONFIG_STEHEN_VERSCHIEDEN = {
+VIDEO_CONFIG_KNIEBEUGEN_VORN = {
     "path_video": "data/awinda/stehen_verschieden/Julia-006.mp4",
     "path_mvnx": "data/awinda/stehen_verschieden/Stehen_verschieden.mvnx",
     "frame_delay": 34,
@@ -42,7 +44,7 @@ VIDEO_CONFIG_STEHEN_VERSCHIEDEN = {
     "measure_end": 220
 }
 
-VIDEO_CONFIG = VIDEO_CONFIG_STEHEN_VERSCHIEDEN
+VIDEO_CONFIG = VIDEO_CONFIG_HAMPELMANN_VORN
 METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
 # METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 
@@ -76,6 +78,18 @@ MAPPINGS_1 = [("Pelvis", 0), ("Neck", 12), ("Head", 15)]
 
 # Hips, Shoulders
 MAPPINGS_2 = [("Neck", 12), ("LeftUpperArm", 16), ("RightUpperArm", 17), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
+
+MAPPING = [
+    [8, 16],
+    [12, 15],
+    [16, 100],
+    [20, 52]
+]
+
+SKELETON_INDICES = {
+    "coco_19": [68, 72, 74, 56, 37, 64, 48, 52, 30, 104, 85, 112, 96, 100, 78, 41, 35, 89, 83],
+    "smpl_24": [23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+}
 
 
 def unit_vector(vector):
@@ -112,8 +126,8 @@ class AwindaDataToRos:
         self._skeleton_pub0 = rospy.Publisher("/visualization/skeleton_0", MarkerArray, queue_size=5)
         self._skeleton_pub1 = rospy.Publisher("/visualization/skeleton_1", MarkerArray, queue_size=5)
         self._image_pub = rospy.Publisher("/image/channel_0_yolo", Image, queue_size=5)
-        self._skeleton_scale = Vector3(0.09, 0.09, 0.09)
-        self._connection_scale = Vector3(0.03, 0.03, 0.03)
+        self._skeleton_scale = Vector3(0.03, 0.03, 0.03)
+        self._connection_scale = Vector3(0.01, 0.01, 0.01)
         self._scale = 3
         self._cap = None
         self._model = None
@@ -149,11 +163,11 @@ class AwindaDataToRos:
 
         with TraceTime("Metrabs"):
             pred = self._model.detect_poses(
-                image, skeleton='smpl_24', default_fov_degrees=55, detector_threshold=0.5)
+                image, skeleton='', default_fov_degrees=55, detector_threshold=0.5)
 
         positions = pred['poses3d'].numpy()
         if len(positions) == 0:
-            return False
+            return False, ""
 
         scale = 0.01
         positions = positions[0]
@@ -174,8 +188,11 @@ class AwindaDataToRos:
         # print(b)
         # print(c)
         positions = b * positions @ T + c
-        self.send_ros_markers(positions, SMPL_CONNECTIONS, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
-        return positions
+        print("###", b)
+        indices = SKELETON_INDICES["smpl_24"]
+        connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), SMPL_CONNECTIONS))
+        self.send_ros_markers(positions, connections, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
+        return positions, tform
 
     @staticmethod
     def read_awinda_mvnx(file_name: str):
@@ -241,13 +258,13 @@ class AwindaDataToRos:
             xz_diff = abs(xz1 - xz2)
             yz_diff = abs(yz1 - yz2)
             angle_diff = abs(angle1 - angle2)
-            print()
-            print("###### result #######")
-            print("# metrabs:", xy1, xz1, yz1, angle1)
-            print("# awinda:", xy2, xz2, yz2, angle2)
-            print(f"# {xy_diff:.1f}, {xz_diff:.1f}, {yz_diff:.1f}")
-            print(f"# {angle_diff:.1f}")
-            print("#####################")
+            # print()
+            # print("###### result #######")
+            # print("# metrabs:", xy1, xz1, yz1, angle1)
+            # print("# awinda:", xy2, xz2, yz2, angle2)
+            # print(f"# {xy_diff:.1f}, {xz_diff:.1f}, {yz_diff:.1f}")
+            # print(f"# {angle_diff:.1f}")
+            # print("#####################")
             self._angles[0] += xy_diff
             self._angles[1] += xz_diff
             self._angles[2] += yz_diff
@@ -261,17 +278,17 @@ class AwindaDataToRos:
         yz_diff = self._angles[2] / self._angles_count
         angle_diff = self._angles[3] / self._angles_count
 
-        print()
-        print("###### Final Result #######")
-        print(f"# xy={xy_diff:.1f}°, xz={xz_diff:.1f}°, yz={yz_diff:.1f}°")
-        print(f"# a={angle_diff:.1f}°")
-        print("#####################")
+        # print()
+        # print("###### Final Result #######")
+        # print(f"# xy={xy_diff:.1f}°, xz={xz_diff:.1f}°, yz={yz_diff:.1f}°")
+        # print(f"# a={angle_diff:.1f}°")
+        # print("#####################")
 
     def send_ros_markers(self, positions, connections, frame_id="dev0", color=ColorRGBA(0.98, 0.30, 0.30, 1.00)):
         idx = 0
         marker_array = MarkerArray()
 
-        for position in positions:
+        for i, position in enumerate(positions):
             m = Marker()
             m.header.stamp = rospy.Time.now()
             m.header.frame_id = frame_id
@@ -284,6 +301,13 @@ class AwindaDataToRos:
             m.type = 2
             m.action = 0
             m.lifetime = rospy.Duration(0.2)
+            m_text = copy.deepcopy(m)
+            m_text.id = idx
+            idx += 1
+            m_text.type = 9
+            m_text.scale = Vector3(0.052, 0.052, 0.052)
+            m_text.text = f"   {i}"
+            marker_array.markers.append(m_text)
             marker_array.markers.append(m)
 
         for connection in connections:
@@ -309,7 +333,7 @@ class AwindaDataToRos:
     def start(self, path: str):
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
-        self._mappings = list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_0))
+        self._mappings = MAPPING  # list(map(lambda x: (point_names.index(x[0]), x[1]), MAPPINGS_0))
 
         point_posittions = dict(map(lambda x: (x, [0., 0., 0.]), point_names))
         frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
@@ -341,14 +365,27 @@ class AwindaDataToRos:
             self.send_video()
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
-                metrabs_pos = self.send_metrabs(self._cur_frame, awinda_pos)
+                metrabs_pos, tform = self.send_metrabs(self._cur_frame, awinda_pos)
                 if np.any(metrabs_pos):
                     if VIDEO_CONFIG["measure_start"] <= frame_counter <= VIDEO_CONFIG["measure_end"]:
-                        print(f"### {frame_counter} ###")
+                        # print(f"### {frame_counter} ###")
                         self.compute_angle_distance(point_posittions, metrabs_pos)
+                        time.sleep(0.2)
 
                 if frame_counter == VIDEO_CONFIG["measure_end"]:
                     self.print_angle_result()
+
+                if frame_counter == 378:
+                    print("# save #")
+                    with open('awinda_data.pickle', 'wb') as f:
+                        data = {
+                            "awinda_pos": list(point_posittions.values()),
+                            "connections": connections,
+                            "image": self._cur_frame,
+                            "transformation": tform
+                        }
+                        pickle.dump(data, f)
+
 
             self.send_ros_markers(list(point_posittions.values()), connections)
 

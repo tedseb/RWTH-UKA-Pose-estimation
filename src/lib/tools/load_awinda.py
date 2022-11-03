@@ -36,7 +36,7 @@ VIDEO_CONFIG_KNIEBEUGEN_VORN = {
     "measure_end": 1700
 }
 
-VIDEO_CONFIG_KNIEBEUGEN_VORN = {
+VIDEO_CONFIG_STEHEN_VORN = {
     "path_video": "data/awinda/stehen_verschieden/Julia-006.mp4",
     "path_mvnx": "data/awinda/stehen_verschieden/Stehen_verschieden.mvnx",
     "frame_delay": 34,
@@ -80,10 +80,35 @@ MAPPINGS_1 = [("Pelvis", 0), ("Neck", 12), ("Head", 15)]
 MAPPINGS_2 = [("Neck", 12), ("LeftUpperArm", 16), ("RightUpperArm", 17), ("LeftLowerLeg", 4), ("RightLowerLeg", 5)]
 
 MAPPING = [
-    [8, 16],
+    [5, 11],
     [12, 15],
-    [16, 100],
-    [20, 52]
+    [8, 16],
+    [19, 48],
+    [15, 96],
+    [18, 10],
+    [22, 9],
+    [13, 39],
+    [9, 87]
+]
+
+TEST_CONNECTIONS = [
+    [74, 48],
+    [74, 96],
+    [48, 52],
+    [96, 100],
+    [52, 31],
+    [100, 79],
+    [31, 9],
+    [79, 10],
+    [74, 2],
+    [2, 120],
+    [120, 121],
+    [121, 82],
+    [121, 34],
+    [82, 16],
+    [34, 15],
+    [16, 87],
+    [15, 39]
 ]
 
 SKELETON_INDICES = {
@@ -128,7 +153,7 @@ class AwindaDataToRos:
         self._image_pub = rospy.Publisher("/image/channel_0_yolo", Image, queue_size=5)
         self._skeleton_scale = Vector3(0.03, 0.03, 0.03)
         self._connection_scale = Vector3(0.01, 0.01, 0.01)
-        self._scale = 3
+        self._scale = 1
         self._cap = None
         self._model = None
         self._mappings = None
@@ -188,9 +213,11 @@ class AwindaDataToRos:
         # print(b)
         # print(c)
         positions = b * positions @ T + c
-        print("###", b)
+        # print("###", b)
         indices = SKELETON_INDICES["smpl_24"]
-        connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), SMPL_CONNECTIONS))
+        # connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), TEST_CONNECTIONS))
+        connections = list(map(lambda x: (x[0], x[1]), TEST_CONNECTIONS))
+
         self.send_ros_markers(positions, connections, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
         return positions, tform
 
@@ -271,18 +298,31 @@ class AwindaDataToRos:
             self._angles[3] += angle_diff
             self._angles_count += 1
 
+    def compute_euclidean_distance(self, point_positions1, point_positions2):
+        distances = 0
+        for mapping in MAPPING:
+            pos1 = np.array(point_positions1[mapping[0]])
+            pos2 = np.array(point_positions2[mapping[1]])
+            distances += np.linalg.norm(pos1 - pos2)
+        self._euclidean_distance = distances / len(MAPPING)
+        self._euclidean_count += 1
+        print("### Average Distance Mapping ###")
+        print(self._euclidean_distance)
+
+    def print_euclidean_result(self):
+        pass
+        # print()
+        # print("###### Final Result #######")
+        # print(f"# xy={xy_diff:.1f}°, xz={xz_diff:.1f}°, yz={yz_diff:.1f}°")
+        # print(f"# a={angle_diff:.1f}°")
+        # print("#####################")
+
     def print_angle_result(self):
         self._angles_count += 1
         xy_diff = self._angles[0] / self._angles_count
         xz_diff = self._angles[1] / self._angles_count
         yz_diff = self._angles[2] / self._angles_count
         angle_diff = self._angles[3] / self._angles_count
-
-        # print()
-        # print("###### Final Result #######")
-        # print(f"# xy={xy_diff:.1f}°, xz={xz_diff:.1f}°, yz={yz_diff:.1f}°")
-        # print(f"# a={angle_diff:.1f}°")
-        # print("#####################")
 
     def send_ros_markers(self, positions, connections, frame_id="dev0", color=ColorRGBA(0.98, 0.30, 0.30, 1.00)):
         idx = 0
@@ -352,6 +392,16 @@ class AwindaDataToRos:
             positions = frame.find("{http://www.xsens.com/mvn/mvnx}position")
             positions = positions.text.split()
             positions = list(map(lambda x: float(x) * self._scale, positions))
+            joint_angle = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngle").text.split()
+            joint_angle_xzy = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleXZY").text.split()
+            # joint_angle_ergo = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleErgo").text.split()
+            # joint_angle_ergo_xzy = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleErgoXZY").text.split()
+
+            angle_xsens = []
+            angle_xzy_xsens = []
+            for i in range(22):
+                angle_xsens.append(joint_angle[i * 3:(i + 1) * 3])
+                angle_xzy_xsens.append(joint_angle_xzy[i * 3:(i + 1) * 3])
 
             if len(positions) % 3 != 0:
                 print("[ERROR]: positions are not divisible by 3")
@@ -360,6 +410,7 @@ class AwindaDataToRos:
             position_len = len(positions) // 3
             for i in range(position_len):
                 point_posittions[point_names[i]] = positions[i * 3:(i + 1) * 3]
+            # print(point_posittions)
             # print(point_posittions)
 
             self.send_video()
@@ -370,10 +421,12 @@ class AwindaDataToRos:
                     if VIDEO_CONFIG["measure_start"] <= frame_counter <= VIDEO_CONFIG["measure_end"]:
                         # print(f"### {frame_counter} ###")
                         self.compute_angle_distance(point_posittions, metrabs_pos)
-                        time.sleep(0.2)
+                        # self.compute_euclidean_distance(awinda_pos, metrabs_pos)
+                        # time.sleep(0.2)
 
                 if frame_counter == VIDEO_CONFIG["measure_end"]:
                     self.print_angle_result()
+                    # self.print_euclidean_result()
 
                 if frame_counter == 378:
                     print("# save #")
@@ -382,10 +435,12 @@ class AwindaDataToRos:
                             "awinda_pos": list(point_posittions.values()),
                             "connections": connections,
                             "image": self._cur_frame,
-                            "transformation": tform
+                            "transformation": tform,
+                            "frame_id": frame_counter,
+                            "angles": joint_angle,
+                            "angles_xzy": joint_angle_xzy
                         }
                         pickle.dump(data, f)
-
 
             self.send_ros_markers(list(point_posittions.values()), connections)
 

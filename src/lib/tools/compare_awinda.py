@@ -105,7 +105,16 @@ class ShowSkeleton:
         self._awinda_skeleton = image_info["awinda_pos"]
         self._connections = image_info["connections"]
         self._transformation = image_info["transformation"]
-
+        self._frame_id = image_info["frame_id"]
+        self._angles = image_info["angles"]
+        self._angles_xzy = image_info["angles_xzy"]
+        angle_xsens = []
+        angle_xzy_xsens = []
+        for i in range(22):
+            angle_xsens.append(self._angles[i * 3:(i + 1) * 3])
+            angle_xzy_xsens.append(self._angles_xzy[i * 3:(i + 1) * 3])
+        print("angles", angle_xsens[19])
+        print("angles_xzy", angle_xzy_xsens[19])
         self.init_metrabs()
 
     def __del__(self):
@@ -143,7 +152,7 @@ class ShowSkeleton:
         data = json.load(f)
         mappings = data["mappings"]
         connections = data["connections"]
-        print(mappings, connections)
+        # print(mappings, connections)
 
         awinda_refs = np.array([awinda_reference[x[0]] for x in mappings])
         metrabs_refs = np.array([positions[x[1]] for x in mappings])
@@ -158,12 +167,15 @@ class ShowSkeleton:
         T = tform['rotation']
         b = tform['scale']
         c = tform['translation']
-        print("###", b)
+        # print("###", b)
         positions = b * positions @ T + c
 
         if COMPUTE_SKELETONS:
             indices = SKELETON_INDICES[SKELETON]
-            connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), connections))
+            connections = list(map(lambda x: (x[0], x[1]), connections))
+            # print(connections)
+            # connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), connections))
+
             self.send_ros_markers(positions, connections, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
         else:
             self.send_ros_markers(positions, [], "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
@@ -231,7 +243,6 @@ class ShowSkeleton:
             self.send_ros_markers(self._awinda_skeleton, self._connections)
             self.send_metrabs(self._awinda_skeleton)
             self.send_video()
-            print("#")
             time.sleep(1)
 
 

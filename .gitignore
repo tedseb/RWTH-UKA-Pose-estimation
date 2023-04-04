@@ -6,6 +6,7 @@ install
 log
 .idea
 .vscode
+.github
 devel
 build_isolated
 devel_isolated
@@ -19,6 +20,8 @@ qt-station-calibration
 Ultralytics
 *.pt
 data
+datasets
+metrabs
 src/AI/spin/extra_data
 src/AI/weight_detection/models
 src/AI/weight_detection/data
@@ -28,6 +31,10 @@ src/AI/metrabs/models/metrabs_multiperson_smpl
 src/AI/metrabs/models/metrabs_multiperson_smpl_combined
 src/AI/metrabs/models/metrabs_singleperson_smpl
 src/AI/metrabs/cdf37_1-dist/
+/_yolov5
+/yolov5
 /metrabs_
 /test_scripts
 /poseviz
+*.engine
+*.onnx

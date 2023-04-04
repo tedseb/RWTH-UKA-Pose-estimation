@@ -102,7 +102,7 @@ class AwindaParser:
     @staticmethod
     def inverse_rotation_zxy( M, thresh=0.9999999 ):
         check_rotation_matrix( M )
-        if np.abs(M[1,2]) > thresh:        
+        if np.abs(M[1,2]) > thresh:
             sx = np.sign(-M[1,2])
             x0 = sx*np.pi/2
 
@@ -129,7 +129,7 @@ class AwindaParser:
     @staticmethod
     def inverse_rotation_xzy( M, thresh=0.9999999 ):
         check_rotation_matrix( M )
-        if np.abs(M[1,0]) > thresh:        
+        if np.abs(M[1,0]) > thresh:
             sz = np.sign(M[1,0])
             z0 = sz*np.pi/2
 
@@ -157,7 +157,7 @@ class AwindaParser:
     def calculate_knee_rotation(hip, knee, foot, toe):
         y_d_knee = knee - foot
         z_d_knee = np.cross(toe - foot, y_d_knee)
-        x_d_knee = np.cross(y_d_knee, z_d_knee) 
+        x_d_knee = np.cross(y_d_knee, z_d_knee)
         y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
         x_d_knee = x_d_knee / np.linalg.norm(x_d_knee)
         z_d_knee = z_d_knee / np.linalg.norm(z_d_knee)
@@ -173,10 +173,10 @@ class AwindaParser:
 
         basis_knee = np.array([x_d_knee, y_d_knee, z_d_knee])
         basis_hip = np.array([x_d_hip, y_d_hip, z_d_hip])
-        
+
         check_rotation_matrix(basis_knee)
         check_rotation_matrix(basis_hip)
-        
+
         basis_rotation = basis_knee @ np.transpose(basis_hip)
         check_rotation_matrix(basis_rotation)
         return AwindaParser.inverse_rotation_zxy(basis_rotation)
@@ -230,9 +230,9 @@ class AwindaParser:
             time_diff_ms = time_now_ms - start_time_ms
             wait_time_s = max(frame_time_stamp_ms - time_diff_ms, 0) / 1000.
             xzy_rot = self.calculate_knee_rotation(
-                np.array(point_posittions["RightUpperLeg"]), 
-                np.array(point_posittions["RightLowerLeg"]), 
-                np.array(point_posittions["RightFoot"]), 
+                np.array(point_posittions["RightUpperLeg"]),
+                np.array(point_posittions["RightLowerLeg"]),
+                np.array(point_posittions["RightFoot"]),
                 np.array(point_posittions["RightToe"])
             )
             print("frame:", frame_counter, ", xsens:", angle_zxy_xsens[15], ", ours:", xzy_rot[0] * (180 / np.pi))

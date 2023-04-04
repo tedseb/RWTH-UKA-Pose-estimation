@@ -17,8 +17,8 @@ import procrustes
 import json
 
 PICKLE_PATH = "awinda_data.pickle"
-# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 CONNECTIONS = {
     "smpl_24": [
         (1, 4), (1, 0), (2, 5), (2, 0), (3, 6), (3, 0), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12),
@@ -95,8 +95,8 @@ class ShowSkeleton:
         self._skeleton_pub1 = rospy.Publisher("/visualization/skeleton_1", MarkerArray, queue_size=5)
 
         self._image_pub = rospy.Publisher("/image/channel_0_yolo", Image, queue_size=5)
-        self._skeleton_scale = Vector3(0.05, 0.05, 0.05)
-        self._connection_scale = Vector3(0.02, 0.02, 0.02)
+        self._skeleton_scale = Vector3(0.02, 0.02, 0.02)
+        self._connection_scale = Vector3(0.01, 0.01, 0.01)
         self._scale = 2
         self._model = None
 
@@ -202,7 +202,7 @@ class ShowSkeleton:
             m_text.id = idx
             idx += 1
             m_text.type = 9
-            m_text.scale = Vector3(0.05, 0.05, 0.05)
+            m_text.scale = Vector3(0.02, 0.02, 0.02)
             m_text.text = f"\n   {i}"
             marker_array.markers.append(m_text)
             marker_array.markers.append(m)

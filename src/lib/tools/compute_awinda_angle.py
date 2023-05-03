@@ -23,9 +23,10 @@ def angle_between(v1, v2):
 def check_rotation_matrix( M, orth_thresh=1e-5, det_thresh=1e-5 ):
     if np.linalg.norm( M[:3,:3].T@M[:3,:3] - np.eye(3) ) > orth_thresh:
         print(M[:3,:3].T@M[:3,:3])
-        raise ValueError('Input matrix is not a pure rotation')
+        raise ValueError('Input matrix is not a pure rotation 1')
     if np.abs(np.linalg.det(M[:3,:3])-1.0) > det_thresh:
-        raise ValueError('Input matrix is not a pure rotation')
+        print(np.abs(np.linalg.det(M[:3,:3])-1.0))
+        raise ValueError('Input matrix is not a pure rotation 2')
 
 
 # Todo: Import this from lib
@@ -155,13 +156,19 @@ class AwindaParser:
 
     @staticmethod
     def calculate_knee_rotation(hip, knee, foot, toe):
+        # y_d_knee = knee - foot
+        # z_d_knee = np.cross(toe - foot, y_d_knee)
+        # x_d_knee = np.cross(y_d_knee, z_d_knee)
+        # y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
+        # x_d_knee = x_d_knee / np.linalg.norm(x_d_knee)
+        # z_d_knee = z_d_knee / np.linalg.norm(z_d_knee)
+
         y_d_knee = knee - foot
-        z_d_knee = np.cross(toe - foot, y_d_knee)
+        z_d_knee = np.cross(y_d_knee, hip - knee)
         x_d_knee = np.cross(y_d_knee, z_d_knee)
         y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
         x_d_knee = x_d_knee / np.linalg.norm(x_d_knee)
         z_d_knee = z_d_knee / np.linalg.norm(z_d_knee)
-
 
         z_d_hip = z_d_knee
         y_d_hip = hip - knee
@@ -182,9 +189,53 @@ class AwindaParser:
         return AwindaParser.inverse_rotation_zxy(basis_rotation)
 
 
+    @staticmethod
+    def calculate_ergo_pelvis_rotation(hip_left, pelvis, L5):
+        # y_d_knee = knee - foot
+        # z_d_knee = np.cross(toe - foot, y_d_knee)
+        # x_d_knee = np.cross(y_d_knee, z_d_knee)
+        # y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
+        # x_d_knee = x_d_knee / np.linalg.norm(x_d_knee)
+        # z_d_knee = z_d_knee / np.linalg.norm(z_d_knee)
+
+        y_d_pelvis = np.array([0.0, 0.0, 1.0])
+        z_d_pelvis = hip_left - pelvis
+        x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
+        z_d_pelvis = np.cross(x_d_pelvis, y_d_pelvis)
+        # y_d_pelvis = np.cross(z_d_pelvis, x_d_pelvis)
+        y_d_pelvis = y_d_pelvis / np.linalg.norm(y_d_pelvis)
+        x_d_pelvis = x_d_pelvis / np.linalg.norm(x_d_pelvis)
+        z_d_pelvis = z_d_pelvis / np.linalg.norm(z_d_pelvis)
+        # print(hip_left)
+        # print(pelvis)
+        # print(L5)
+        # print()
+        # print(x_d_pelvis)
+        # print(y_d_pelvis)
+        # print(z_d_pelvis)
+        # assert False
+        z_d_l5 = z_d_pelvis
+        y_d_l5 = L5 - pelvis
+        x_d_l5 = np.cross(y_d_l5, z_d_l5)
+        # y_d_l5 = np.cross(z_d_l5, x_d_l5)
+        z_d_l5 = np.cross(x_d_l5, y_d_l5)
+        z_d_l5 = z_d_l5 / np.linalg.norm(z_d_l5)
+        y_d_l5 = y_d_l5 / np.linalg.norm(y_d_l5)
+        x_d_l5 = x_d_l5 / np.linalg.norm(x_d_l5)
+
+        basis_pelvis = np.array([x_d_pelvis, y_d_pelvis, z_d_pelvis])
+        basis_l5 = np.array([x_d_l5, y_d_l5, z_d_l5])
+
+        check_rotation_matrix(basis_pelvis)
+        check_rotation_matrix(basis_l5)
+
+        basis_rotation = basis_pelvis @ np.transpose(basis_l5)
+        check_rotation_matrix(basis_rotation)
+        return AwindaParser.inverse_rotation_zxy(basis_rotation)
+
     def start(self, path: str):
         np.set_printoptions(suppress=True)
-        np.set_printoptions(precision=3)
+        np.set_printoptions(precision=2)
 
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
@@ -193,6 +244,7 @@ class AwindaParser:
         frames = root.find("{http://www.xsens.com/mvn/mvnx}subject").find("{http://www.xsens.com/mvn/mvnx}frames")
         start_time_ms = time.time() * 1000
 
+        diff_list = []
         for frame_counter, frame in enumerate(frames):
             if frame_counter <= 0:
                 continue
@@ -207,15 +259,19 @@ class AwindaParser:
             positions = positions.text.split()
             positions = list(map(lambda x: float(x), positions))
             joint_angle_zxy = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngle").text.split()
-            joint_angle_xzy = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleXZY").text.split()
-            # joint_angle_ergo = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleErgo").text.split()
+            #joint_angle_xzy = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleXZY").text.split()
+            joint_angle_ergo = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleErgo").text.split()
             # joint_angle_ergo_xzy = frame.find("{http://www.xsens.com/mvn/mvnx}jointAngleErgoXZY").text.split()
 
             angle_zxy_xsens = []
             angle_xzy_xsens = []
+            angle_ergo_zxy_xsens = []
             for i in range(22):
                 angle_zxy_xsens.append(joint_angle_zxy[i * 3:(i + 1) * 3])
-                angle_xzy_xsens.append(joint_angle_xzy[i * 3:(i + 1) * 3])
+                # angle_xzy_xsens.append(joint_angle_xzy[i * 3:(i + 1) * 3])
+
+            for i in range(6):
+                angle_ergo_zxy_xsens.append(joint_angle_ergo[i * 3:(i + 1) * 3])
 
             if len(positions) % 3 != 0:
                 print("[ERROR]: positions are not divisible by 3")
@@ -229,14 +285,39 @@ class AwindaParser:
             time_now_ms = time.time() * 1000
             time_diff_ms = time_now_ms - start_time_ms
             wait_time_s = max(frame_time_stamp_ms - time_diff_ms, 0) / 1000.
-            xzy_rot = self.calculate_knee_rotation(
+
+            ## Knee
+            xzy_rot_knee = self.calculate_knee_rotation(
                 np.array(point_posittions["RightUpperLeg"]),
                 np.array(point_posittions["RightLowerLeg"]),
                 np.array(point_posittions["RightFoot"]),
                 np.array(point_posittions["RightToe"])
             )
-            print("frame:", frame_counter, ", xsens:", angle_zxy_xsens[15], ", ours:", xzy_rot[0] * (180 / np.pi))
+            x_sense_knee = np.array(list(map(float, angle_zxy_xsens[15])))
+            ours_knee = xzy_rot_knee[0] * (180 / np.pi)
+            diff_knee = np.absolute(x_sense_knee - ours_knee)
+            # diff_list.append(diff_knee)
+
+            # Pelvis
+            xzy_rot_pelvis = self.calculate_ergo_pelvis_rotation(
+                np.array(point_posittions["RightUpperLeg"]),
+                np.array(point_posittions["Pelvis"]),
+                np.array(point_posittions["L5"]),
+            )
+            x_sense_pelvis = np.array(list(map(float, angle_ergo_zxy_xsens[4])))
+            ours_pelvis = xzy_rot_pelvis[0] * (180 / np.pi)
+            ours_pelvis[2] += 6.31
+            diff_pelvis = np.absolute(x_sense_knee - ours_knee)
+            diff_list.append(diff_pelvis)
+
+            print("frame:", frame_counter, ", xsens:", x_sense_knee, " pelvis:", x_sense_pelvis, " ours:", ours_pelvis, " diff", diff_pelvis) # ", ours:", ours, " diff:", diff)
             time.sleep(wait_time_s)
+            if frame_counter > 500:
+                break
+
+        diff_list = np.array(diff_list)
+        print("Average diff: ", np.average(diff_list, 0))
+        print("Median diff: ", np.median(diff_list, 0))
 
     def open_video(self, path: str):
         self._cap = cv2.VideoCapture(path)
@@ -252,7 +333,7 @@ def main():
 
     time.sleep(2)
     signal.signal(signal.SIGINT, signal_handler)
-    converter.start("data/awinda/kniebeugen_vorne/Kniebeuge_vorne.mvnx")
+    converter.start("data/awinda/hampelmann_vorne/Hampelmann_vorne.mvnx")
 
 
 if __name__ == "__main__":

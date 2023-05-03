@@ -146,12 +146,12 @@ class ShowSkeleton:
         # pelvis = positions[0]
         positions = np.array(list(map(lambda x: x * scale, positions)))
 
-        # mappings = MAPPINGS
-        # connections = CONNECTIONS[SKELETON]
-        f = open('mappings.json')
-        data = json.load(f)
-        mappings = data["mappings"]
-        connections = data["connections"]
+        mappings = MAPPINGS
+        connections = CONNECTIONS[SKELETON]
+        # f = open('mappings.json')
+        # data = json.load(f)
+        # mappings = data["mappings"]
+        # connections = data["connections"]
         # print(mappings, connections)
 
         awinda_refs = np.array([awinda_reference[x[0]] for x in mappings])
@@ -172,9 +172,9 @@ class ShowSkeleton:
 
         if COMPUTE_SKELETONS:
             indices = SKELETON_INDICES[SKELETON]
-            connections = list(map(lambda x: (x[0], x[1]), connections))
+            # connections = list(map(lambda x: (x[0], x[1]), connections))
             # print(connections)
-            # connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), connections))
+            connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), connections))
 
             self.send_ros_markers(positions, connections, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
         else:

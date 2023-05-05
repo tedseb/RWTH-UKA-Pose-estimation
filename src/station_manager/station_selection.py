@@ -438,7 +438,7 @@ class MyClientProtocol(WebSocketClientProtocol):
 class ClientController(WebSocketClientFactory):
 
     def __init__(self, uri, register_client_callback = None):
-        logy.debug("Init WebSocketClientFactory")
+        logy.info("Init WebSocketClientFactory")
         WebSocketClientFactory.__init__(self, uri)
         self._callbacks : Dict[int, Callable] = {}
         self._register_client_callback = register_client_callback

@@ -105,20 +105,24 @@ HOCKE_SIDE_SETS = {
     },
 }
 
+VIDEO_CONFIG_04_2023_KNIEBEUGEN = {
+    "data_path": "04_2023_kniebeeugen.pickle",
+    "mappings": {
+        0: (170, 578),
+        1: (198, 388),
+        2: (388, 578),
+        3: (1314, 1510),
+        4: (1510, 1682),
+        5: (1682, 1898),
+    },
+}
+
 EVALUATION_LIST = {
-    "Kniebeuge Vorne": KNIEBEUGE_FRONT_SETS,
-    "Kniebeuge Seite": KNIEBEUGE_SIDE_SETS,
-    "Stehen Vorne": STEHEN_FRONT_SETS,
-    "Stehen Seite": STEHEN_SIDE_SETS,
-    "Gehen Vorne": GEHEN_FRONT_SETS,
-    "Gehen Links": GEHEN_LEFT_FRONT_SETS,
-    "Gehen Rechts": GEHEN_RIGHT_FRONT_SETS,
-    "Hocke Vorne": HOCKE_FRONT_SETS,
-    "Hocke Seite": HOCKE_SIDE_SETS,
+    "Kniebeuge": VIDEO_CONFIG_04_2023_KNIEBEUGEN
 }
 
 
-def plot_graph(exercise, exercise_repetition, diff_angles, path_prefix="angle_diff", y_label="Knieflexion in Grad", use_title=True):
+def plot_graph(exercise, exercise_repetition, diff_angles, path_prefix="angle_diff", y_label="Flexion in Grad", use_title=True):
     y_values = [diff_angle[2] for diff_angle in diff_angles]
     x_values = [i / 30. for i in range(len(y_values))]
     plt.plot(x_values, y_values)
@@ -134,67 +138,69 @@ def plot_graph(exercise, exercise_repetition, diff_angles, path_prefix="angle_di
 
 
 def compute_and_print_repetition_evaluation(exercise, exercise_repetition, repetition_interval, exercise_data):
-    diff = exercise_data["diff"]
-    metrabs = exercise_data["metrabs"]
-    xsens = exercise_data["xsens"]
+    for angle_name in exercise_data["diff"]:
+        print(angle_name)
+        diff = exercise_data["diff"][angle_name]
+        metrabs = exercise_data["metrabs"][angle_name]
+        xsens = exercise_data["xsens"][angle_name]
 
-    diff_angles = []
-    metrabs_angles = []
-    xsens_angles = []
-    for i in range(repetition_interval[0], repetition_interval[1] + 1, 2):
-        if i in diff:
-            diff_angles.append([diff[i][0], diff[i][1], diff[i][2]])
-            metrabs_angles.append([metrabs[i][0], metrabs[i][1], metrabs[i][2]])
-            xsens_angles.append([xsens[i][0], xsens[i][1], xsens[i][2]])
+        diff_angles = []
+        metrabs_angles = []
+        xsens_angles = []
+        for i in range(repetition_interval[0], repetition_interval[1] + 1, 2):
+            if i in diff:
+                diff_angles.append([diff[i][0], diff[i][1], diff[i][2]])
+                metrabs_angles.append([metrabs[i][0], metrabs[i][1], metrabs[i][2]])
+                xsens_angles.append([xsens[i][0], xsens[i][1], xsens[i][2]])
 
-    average_angles = np.average(diff_angles, axis=0)
-    median_angles = np.median(diff_angles, axis=0)
-    min_angles = np.min(diff_angles, axis=0)
-    max_angles = np.max(diff_angles, axis=0)
+        average_angles = np.average(diff_angles, axis=0)
+        median_angles = np.median(diff_angles, axis=0)
+        min_angles = np.min(diff_angles, axis=0)
+        max_angles = np.max(diff_angles, axis=0)
 
-    plt.rcParams.update({'font.size': 12})
-    plot_graph(f"{exercise}_difference", exercise_repetition, diff_angles, y_label="Differenz in Grad", use_title=False)
-    plot_graph(f"{exercise} RehaPlus System", exercise_repetition, metrabs_angles, "metrabs")
-    plot_graph(f"{exercise} Xsens System", exercise_repetition, xsens_angles, "xsens")
+        plt.rcParams.update({'font.size': 12})
+        plot_graph(f"{exercise}-{angle_name}_difference", exercise_repetition, diff_angles, y_label="Differenz in Grad", use_title=False)
+        plot_graph(f"{exercise}-{angle_name} RehaPlus System", exercise_repetition, metrabs_angles, "metrabs")
+        plot_graph(f"{exercise}-{angle_name} Xsens System", exercise_repetition, xsens_angles, "xsens")
 
-    if exercise_repetition == 0:
-        print(f"  # Complete Set - ({repetition_interval}) #")
-    else:
-        print(f"  # Repetition {exercise_repetition} - Interval ({repetition_interval}) #")
+        if exercise_repetition == 0:
+            print(f"  # Complete Set - ({repetition_interval}) #")
+        else:
+            print(f"  # Repetition {exercise_repetition} - Interval ({repetition_interval}) #")
 
-    print("  Average:", f"X={average_angles[0]}", f"Y={average_angles[1]}", f"Z={average_angles[2]}")
-    print("  Median:", f"X={median_angles[0]}", f"Y={median_angles[1]}", f"Z={median_angles[2]}")
-    print("  Min:", f"X={min_angles[0]}", f"Y={min_angles[1]}", f"Z={min_angles[2]}")
-    print("  Max:", f"X={max_angles[0]}", f"Y={max_angles[1]}", f"Z={max_angles[2]}")
+        print("  Average:", f"X={average_angles[0]}", f"Y={average_angles[1]}", f"Z={average_angles[2]}")
+        print("  Median:", f"X={median_angles[0]}", f"Y={median_angles[1]}", f"Z={median_angles[2]}")
+        print("  Min:", f"X={min_angles[0]}", f"Y={min_angles[1]}", f"Z={min_angles[2]}")
+        print("  Max:", f"X={max_angles[0]}", f"Y={max_angles[1]}", f"Z={max_angles[2]}")
 
-    # TODO:: Ugly Code
-    for i, diff_rots in diff.items():
-        if diff_rots[2] == max_angles[2] and repetition_interval[0] <= i <= repetition_interval[1]:
-            print("  Max Z Frame", i)
-            return i
+        # # TODO:: Ugly Code
+        # for i, diff_rots in diff.items():
+        #     if diff_rots[2] == max_angles[2] and repetition_interval[0] <= i <= repetition_interval[1]:
+        #         print("  Max Z Frame", i)
+        #         return i
 
 
 def evaluate_exercise(exercise, exercise_repetitions):
     print(f"### Evaluation Exercise - {exercise}")
     exercise_data = pickle.load(open(exercise_repetitions["data_path"], "rb"))
     # print(exercise_data)
-    cap = cv2.VideoCapture(exercise_data["path_video"])
+    # cap = cv2.VideoCapture(exercise_data["path_video"])
     for exercise_repetition, repetition_interval in exercise_repetitions["mappings"].items():
         max_z_frame = compute_and_print_repetition_evaluation(
             exercise, exercise_repetition, repetition_interval, exercise_data)
 
-        video_frame = (max_z_frame - exercise_data["frame_video_diff"]) // 2
+        # video_frame = (max_z_frame - exercise_data["frame_video_diff"]) // 2
 
-        cap.set(cv2.CAP_PROP_POS_FRAMES, video_frame)
-        ret, cur_frame = cap.read()
-        if exercise_repetitions.get("rotate", False):
-            cur_frame = cv2.rotate(cur_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        if ret:
-            exercise_file_name = exercise.replace(" ", "_")
-            exercise_file_name = f"{exercise_file_name}_{exercise_repetition}"
-            cv2.imwrite(f"data/awinda/screenshots/evaluation/{exercise_file_name}.jpg", cur_frame)
-            # print(f"Save data/awinda/screenshots/evaluation/{exercise_file_name}.jpg")
-        print()
+        # cap.set(cv2.CAP_PROP_POS_FRAMES, video_frame)
+        # ret, cur_frame = cap.read()
+        # if exercise_repetitions.get("rotate", False):
+        #     cur_frame = cv2.rotate(cur_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # if ret:
+        #     exercise_file_name = exercise.replace(" ", "_")
+        #     exercise_file_name = f"{exercise_file_name}_{exercise_repetition}"
+        #     cv2.imwrite(f"data/awinda/screenshots/evaluation/{exercise_file_name}.jpg", cur_frame)
+        #     # print(f"Save data/awinda/screenshots/evaluation/{exercise_file_name}.jpg")
+        # print()
 
 
 def main():

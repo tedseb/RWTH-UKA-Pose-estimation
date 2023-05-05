@@ -38,3 +38,4 @@ src/AI/metrabs/cdf37_1-dist/
 /poseviz
 *.engine
 *.onnx
+*.pickle

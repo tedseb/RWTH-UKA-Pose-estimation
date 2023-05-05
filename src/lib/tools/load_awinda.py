@@ -15,7 +15,8 @@ from geometry_msgs.msg import Point, Vector3
 from sensor_msgs.msg import Image
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
-
+import awinda.angle_computation as angle_math
+from awinda.video_configs import VIDEO_CONFIGS
 # PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
 # PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
 # PATH_VIDEO = "data/double_squats_02.mp4"
@@ -85,16 +86,13 @@ VIDEO_CONFIG_GEHEN_SIDE_RIGHT = {
     "data_name": "gehen_right_front"
 }
 
-VIDEO_CONFIG = VIDEO_CONFIG_KNIEBEUGEN_VORN
+VIDEO_CONFIG = VIDEO_CONFIG_KNIEBEUGEN_VORN # VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_KNIEBEUGEN
 # METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
 METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 
 
-USE_METRABS = True
-COMPARE_ANGLES = [
-    [("LeftUpperLeg", 1), ("LeftLowerLeg", 4), ("LeftFoot", 7)],
-    [("RightUpperLeg", 2), ("RightLowerLeg", 5), ("RightFoot", 8)]
-]
+USE_METRABS = False
+
 
 SMPL_CONNECTIONS = [
     (1, 4), (1, 0), (2, 5), (2, 0), (3, 6), (3, 0), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (12, 13),
@@ -195,24 +193,6 @@ SKELETON_INDICES = {
 }
 
 
-def check_rotation_matrix(M, orth_thresh=1e-5, det_thresh=1e-5):
-    if np.linalg.norm(M[:3, :3].T @ M[:3, :3] - np.eye(3)) > orth_thresh:
-        print(M[:3, :3].T @ M[:3, :3])
-        raise ValueError('Input matrix is not a pure rotation')
-    if np.abs(np.linalg.det(M[:3, :3]) - 1.0) > det_thresh:
-        raise ValueError('Input matrix is not a pure rotation')
-
-
-def unit_vector(vector):
-    return vector / np.linalg.norm(vector)
-
-
-def angle_between(v1, v2):
-    v1_u = unit_vector(v1)
-    v2_u = unit_vector(v2)
-    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0)) * (180 / np.pi)
-
-
 # Todo: Import this from lib
 class TraceTime:
     def __init__(self, name):
@@ -274,7 +254,7 @@ class AwindaDataToRos:
     def init_metrabs(self):
         self._model = tf.saved_model.load(METRABS_PATH)
 
-    def send_metrabs(self, image, awinda_reference):
+    def compute_metrabs_mapping(self, image, awinda_reference):
         if self._model is None:
             return False
 
@@ -300,7 +280,7 @@ class AwindaDataToRos:
         c = tform['translation']
 
         positions = b * positions @ T + c
-        indices = SKELETON_INDICES["smpl_24"]
+        # indices = SKELETON_INDICES["smpl_24"]
         # connections = list(map(lambda x: (indices[x[0]], indices[x[1]]), TEST_CONNECTIONS))
         connections = list(map(lambda x: (x[0], x[1]), TEST_CONNECTIONS))
 
@@ -331,50 +311,6 @@ class AwindaDataToRos:
             connections.append(connection)
         return (points, connections)
 
-    @staticmethod
-    def compute_angles(p1, p2, p3):
-        a = p1 - p2
-        b = p3 - p2
-        xy = np.arctan2(a[0], a[1]) - np.arctan2(b[0], b[1])
-        xz = np.arctan2(a[0], a[2]) - np.arctan2(b[0], b[2])
-        yz = np.arctan2(a[1], a[2]) - np.arctan2(b[1], b[2])
-        xy = np.absolute(xy) * (180 / np.pi)
-        xz = np.absolute(xz) * (180 / np.pi)
-        yz = np.absolute(yz) * (180 / np.pi)
-        xy = 180 - abs(xy - 180)
-        yz = 180 - abs(yz - 180)
-        yz = 180 - abs(yz - 180)
-        angle = angle_between(a, b)
-        return (xy, xz, yz, angle)
-
-    def compute_angle_distance(self, point_positions1, point_positions2):
-        for angle in COMPARE_ANGLES:
-            # print(f" -- {angle} -- ")
-            p1_1 = np.array(point_positions1[angle[0][0]])
-            p1_2 = np.array(point_positions1[angle[1][0]])
-            p1_3 = np.array(point_positions1[angle[2][0]])
-            p2_1 = np.array(point_positions2[angle[0][1]])
-            p2_2 = np.array(point_positions2[angle[1][1]])
-            p2_3 = np.array(point_positions2[angle[2][1]])
-            xy1, xz1, yz1, angle1 = self.compute_angles(p1_1, p1_2, p1_3)
-            xy2, xz2, yz2, angle2 = self.compute_angles(p2_1, p2_2, p2_3)
-            xy_diff = abs(xy1 - xy2)
-            xz_diff = abs(xz1 - xz2)
-            yz_diff = abs(yz1 - yz2)
-            angle_diff = abs(angle1 - angle2)
-            print(xy_diff, xz_diff, yz_diff, angle_diff)
-
-    def compute_euclidean_distance(self, point_positions1, point_positions2):
-        distances = 0
-        for mapping in MAPPING:
-            pos1 = np.array(point_positions1[mapping[0]])
-            pos2 = np.array(point_positions2[mapping[1]])
-            distances += np.linalg.norm(pos1 - pos2)
-        self._euclidean_distance = distances / len(MAPPING)
-        self._euclidean_count += 1
-        print("### Average Distance Mapping ###")
-        print(self._euclidean_distance)
-
     def print_angle_result(self):
         for angle_name, angles in self._angle_diff.items():
             diff_angles = [[x[0], x[1], x[2]] for x in angles.values()]
@@ -390,20 +326,20 @@ class AwindaDataToRos:
             print("Min:", f"X={min_angles[0]}", f"Y={min_angles[1]}", f"Z={min_angles[2]}")
             print("Max:", f"X={max_angles[0]}", f"Y={max_angles[1]}", f"Z={max_angles[2]}")
 
-        # data = {
-        #     "diff": self._angle_diff,
-        #     "metrabs": self._angle_metrabs,
-        #     "xsens": self._angle_xsens,
-        #     "path_video": VIDEO_CONFIG["path_video"],
-        #     "frame_video_diff": self._frame_video_diff
-        # }
-        # print("Store", data["frame_video_diff"])
+        data = {
+            "diff": self._angle_diff,
+            "metrabs": self._angle_metrabs,
+            "xsens": self._angle_xsens,
+            "path_video": VIDEO_CONFIG["path_video"],
+            "frame_video_diff": self._frame_video_diff
+        }
+        print("Store", data["frame_video_diff"])
 
-        # data_name = VIDEO_CONFIG.get("data_name", 'angle_diff') + ".pickle"
-        # with open(data_name, 'wb') as f:
-        #     pickle.dump(data, f)
-        # # print("MEAN:", f"X={x_mean}", f"Y={y_mean}", f"Z={z_mean}")
-        # print("Count:", len(diff_angles))
+        data_name = VIDEO_CONFIG.get("data_name", 'angle_diff') + ".pickle"
+        with open(data_name, 'wb') as f:
+            pickle.dump(data, f)
+        # print("MEAN:", f"X={x_mean}", f"Y={y_mean}", f"Z={z_mean}")
+        print("Count:", len(diff_angles))
 
     def send_ros_markers(self, positions, connections, frame_id="dev0", color=ColorRGBA(0.98, 0.30, 0.30, 1.00)):
         idx = 0
@@ -456,89 +392,6 @@ class AwindaDataToRos:
         else:
             self._skeleton_pub1.publish(marker_array)
 
-    @staticmethod
-    def inverse_rotation_zxy(M, thresh=0.9999999):
-        check_rotation_matrix(M)
-        if np.abs(M[1, 2]) > thresh:
-            sx = np.sign(-M[1, 2])
-            x0 = sx * np.pi / 2
-
-            # arbitrarily set z=0
-            y0 = 0  # so sy=0, cy=1
-
-            # compute x = arctan2( M[0,1]/sy, M[02]/sy )
-            z0 = np.arctan2(M[2, 0] / sx, M[2, 1] / sx)
-            return np.array((x0, y0, z0)), np.array((x0, y0, z0))
-        else:
-            x0 = np.arcsin(-M[1, 2])
-            x1 = np.pi - x0
-            c0 = np.cos(x0)
-            c1 = np.cos(x1)
-
-            y0 = np.arctan2(M[0, 2] / c0, M[2, 2] / c0)
-            y1 = np.arctan2(M[0, 2] / c1, M[2, 2] / c1)
-            z0 = np.arctan2(M[1, 0] / c0, M[1, 1] / c0)
-            z1 = np.arctan2(M[1, 0] / c1, M[1, 1] / c1)
-            return np.array((x0, y0, z0)), np.array((x1, y1, z1))
-
-    @staticmethod
-    def calculate_knee_rotation(hip, knee, foot, toe):
-        y_d_knee = knee - foot
-        z_d_knee = np.cross(toe - foot, y_d_knee)
-        x_d_knee = np.cross(y_d_knee, z_d_knee)
-
-        y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
-        x_d_knee = x_d_knee / np.linalg.norm(x_d_knee)
-        z_d_knee = z_d_knee / np.linalg.norm(z_d_knee)
-
-        z_d_hip = z_d_knee
-        y_d_hip = hip - knee
-        x_d_hip = np.cross(y_d_hip, z_d_hip)
-        z_d_hip = np.cross(x_d_hip, y_d_hip)
-        z_d_hip = z_d_hip / np.linalg.norm(z_d_hip)
-        y_d_hip = y_d_hip / np.linalg.norm(y_d_hip)
-        x_d_hip = x_d_hip / np.linalg.norm(x_d_hip)
-
-        basis_knee = np.array([x_d_knee, y_d_knee, z_d_knee])
-        basis_hip = np.array([x_d_hip, y_d_hip, z_d_hip])
-
-        check_rotation_matrix(basis_knee)
-        check_rotation_matrix(basis_hip)
-
-        basis_rotation = basis_knee @ np.transpose(basis_hip)
-        check_rotation_matrix(basis_rotation)
-        return AwindaDataToRos.inverse_rotation_zxy(basis_rotation)
-
-    @staticmethod
-    def calculate_ergo_pelvis_rotation(hip_left, pelvis, L5):
-        y_d_pelvis = np.array([0.0, 0.0, 1.0])
-        z_d_pelvis = hip_left - pelvis
-        x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
-        z_d_pelvis = np.cross(x_d_pelvis, y_d_pelvis)
-
-        y_d_pelvis = y_d_pelvis / np.linalg.norm(y_d_pelvis)
-        x_d_pelvis = x_d_pelvis / np.linalg.norm(x_d_pelvis)
-        z_d_pelvis = z_d_pelvis / np.linalg.norm(z_d_pelvis)
-
-        z_d_l5 = z_d_pelvis
-        y_d_l5 = L5 - pelvis
-        x_d_l5 = np.cross(y_d_l5, z_d_l5)
-
-        z_d_l5 = np.cross(x_d_l5, y_d_l5)
-        z_d_l5 = z_d_l5 / np.linalg.norm(z_d_l5)
-        y_d_l5 = y_d_l5 / np.linalg.norm(y_d_l5)
-        x_d_l5 = x_d_l5 / np.linalg.norm(x_d_l5)
-
-        basis_pelvis = np.array([x_d_pelvis, y_d_pelvis, z_d_pelvis])
-        basis_l5 = np.array([x_d_l5, y_d_l5, z_d_l5])
-
-        check_rotation_matrix(basis_pelvis)
-        check_rotation_matrix(basis_l5)
-
-        basis_rotation = basis_pelvis @ np.transpose(basis_l5)
-        check_rotation_matrix(basis_rotation)
-        return AwindaDataToRos.inverse_rotation_zxy(basis_rotation)
-
     def store_euler_sequence(self, frame_counter, name, zxy_xsense, zxy_metrabs):
         xsense_knee = zxy_xsense[0] * (180 / np.pi)
         metrabs_knee = zxy_metrabs[0] * (180 / np.pi)
@@ -576,34 +429,50 @@ class AwindaDataToRos:
         return (positions, joint_angle, joint_angle_xzy)
 
     def compute_right_knee_angle(self, point_posittions, metrabs_pos):
-        zxy_xsense = self.calculate_knee_rotation(
+        zxy_xsense = angle_math.calculate_knee_rotation(
             np.array(point_posittions["RightUpperLeg"]),
             np.array(point_posittions["RightLowerLeg"]),
             np.array(point_posittions["RightFoot"]),
             np.array(point_posittions["RightToe"])
         )
 
-        zxy_metrabs = self.calculate_knee_rotation(
+        zxy_metrabs = angle_math.calculate_knee_rotation(
             np.array(metrabs_pos[97]),
             np.array(metrabs_pos[100]),
             np.array(metrabs_pos[79]),
             np.array(metrabs_pos[10])
         )
-        self.store_euler_sequence(self._frame_index, "right_knee", zxy_xsense, zxy_metrabs)
+        self.store_euler_sequence(self._frame_index, "Rechtes Knie", zxy_xsense, zxy_metrabs)
+
+    def compute_left_knee_angle(self, point_posittions, metrabs_pos):
+        zxy_xsense = angle_math.calculate_knee_rotation(
+            np.array(point_posittions["LeftUpperLeg"]),
+            np.array(point_posittions["LeftLowerLeg"]),
+            np.array(point_posittions["LeftFoot"]),
+            np.array(point_posittions["LeftToe"])
+        )
+
+        zxy_metrabs = angle_math.calculate_knee_rotation(
+            np.array(metrabs_pos[49]),
+            np.array(metrabs_pos[52]),
+            np.array(metrabs_pos[31]),
+            np.array(metrabs_pos[9])
+        )
+        self.store_euler_sequence(self._frame_index, "Linkes Knie", zxy_xsense, zxy_metrabs)
 
     def compute_pelvis_angle(self, point_posittions, metrabs_pos):
-        zxy_xsense = self.calculate_ergo_pelvis_rotation(
+        zxy_xsense = angle_math.calculate_ergo_pelvis_rotation(
             np.array(point_posittions["RightUpperLeg"]),
             np.array(point_posittions["Pelvis"]),
             np.array(point_posittions["L5"]),
         )
 
-        zxy_metrabs = self.calculate_ergo_pelvis_rotation(
+        zxy_metrabs = angle_math.calculate_ergo_pelvis_rotation(
             np.array(metrabs_pos[97]),
             np.array(metrabs_pos[75]),
             np.array(metrabs_pos[120]),  # or 120
         )
-        self.store_euler_sequence(self._frame_index, "pelvis", zxy_xsense, zxy_metrabs)
+        self.store_euler_sequence(self._frame_index, "Rücken", zxy_xsense, zxy_metrabs)
 
 
     def start(self, path: str):
@@ -633,8 +502,7 @@ class AwindaDataToRos:
                 self._frame_index += 1
                 continue
 
-
-            # print(self._frame_index)
+            print(self._frame_index)
             positions, joint_angle, joint_angle_xzy = self.extract_frame_data(frame)
 
             angle_xsens = []
@@ -655,15 +523,17 @@ class AwindaDataToRos:
             self.send_video()
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
-                metrabs_pos, tform = self.send_metrabs(self._cur_frame, awinda_pos)
+                metrabs_pos, tform = self.compute_metrabs_mapping(self._cur_frame, awinda_pos)
                 if np.any(metrabs_pos):
                     if VIDEO_CONFIG["measure_start"] <= self._frame_index <= VIDEO_CONFIG["measure_end"]:
 
                         self.compute_right_knee_angle(point_posittions, metrabs_pos)
                         self.compute_pelvis_angle(point_posittions, metrabs_pos)
+                        self.compute_left_knee_angle(point_posittions, metrabs_pos)
 
-                        self.print_diff(self._frame_index, "right_knee")
-                        self.print_diff(self._frame_index, "pelvis")
+                        self.print_diff(self._frame_index, "Rechtes Knie")
+                        self.print_diff(self._frame_index, "Linkes Knie")
+                        self.print_diff(self._frame_index, "Rücken")
                         print()
                         # print(f"### {frame_counter} ###")
                         # self.compute_angle_distance(point_posittions, metrabs_pos)
@@ -709,7 +579,6 @@ class AwindaDataToRos:
         if VIDEO_CONFIG.get("rotate", False):
             self._cur_frame = cv2.rotate(self._cur_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
         cv2.imshow('img', self._cur_frame)
-
 
         if self._frame_video_diff == -1:
             self._frame_video_diff = self._frame_index - self._frame_counter

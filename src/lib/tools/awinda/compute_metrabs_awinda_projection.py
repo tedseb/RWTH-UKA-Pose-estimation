@@ -94,8 +94,8 @@ VIDEO_CONFIGS = [
     VIDEO_CONFIG_KNIEBEUGEN_VORN,
     VIDEO_CONFIG_HAMPELMANN_VORN,
 ]
-# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 
 
 USE_METRABS = True
@@ -116,57 +116,40 @@ SMPL_CONNECTIONS = [
 #     [12, 15],
 #     [8, 16],
 #     [19, 49],
-#     [15, 97],
+#     [15, 96],
 #     [18, 10],
 #     [22, 9],
 #     [13, 39],
 #     [9, 87]
 # ]
 
+# Nacken, Knie, Ellenbogen
 MAPPING = [
-    [19, 49],
-    [0, 75],
-    [15, 97],
-    [1, 2],
-    [8, 16],
-    [12, 15]
+    [7, 82],
+    [11, 34],
+    [21, 32],
+    [17, 79],
 ]
 
-# TEST_CONNECTIONS = [
-#     [74, 48],
-#     [74, 96],
-#     [48, 52],
-#     [96, 100],
-#     [52, 31],
-#     [100, 79],
-#     [31, 9],
-#     [79, 10],
-#     [74, 2],
-#     [2, 120],
-#     [120, 68],
-#     [68, 11],
-#     [11, 25],
-#     [68, 82],
-#     [68, 34],
-#     [82, 16],
-#     [34, 15],
-#     [16, 87],
-#     [15, 39],
-#     [87, 22],
-#     [39, 21]
+# MAPPING = [
+#     [19, 49],
+#     [0, 75],
+#     [15, 97],
+#     [1, 2],
+#     [8, 16],
+#     [12, 15]
 # ]
 
-
 TEST_CONNECTIONS = [
-    [75, 49],
-    [75, 97],
-    [49, 52],
-    [97, 100],
+    [74, 48],
+    [74, 96],
+    [48, 52],
+    [96, 100],
     [52, 31],
     [100, 79],
     [31, 9],
     [79, 10],
-    [75, 2],
+    [74, 2],
     [2, 120],
     [120, 68],
     [68, 11],
@@ -180,6 +163,31 @@ TEST_CONNECTIONS = [
     [87, 22],
     [39, 21]
 ]
+
+
+# TEST_CONNECTIONS = [
+#     [75, 49],
+#     [75, 97],
+#     [49, 52],
+#     [97, 100],
+#     [52, 31],
+#     [100, 79],
+#     [31, 9],
+#     [79, 10],
+#     [75, 2],
+#     [2, 120],
+#     [120, 68],
+#     [68, 11],
+#     [11, 25],
+#     [68, 82],
+#     [68, 34],
+#     [82, 16],
+#     [34, 15],
+#     [16, 87],
+#     [15, 39],
+#     [87, 22],
+#     [39, 21]
+# ]
 
 METRABS_DEPENDENCIES = {
     0: [96, 74, 48, 2, 120, 68],
@@ -262,6 +270,21 @@ class AwindaDataToRos:
     def init_metrabs(self):
         self._model = tf.saved_model.load(METRABS_PATH)
 
+
+    def get_mapped_position(self, awinda_positions, metrabs_positions):
+        awinda_refs = np.array([awinda_positions[x[0]] for x in self._mappings])
+        metrabs_refs = np.array([metrabs_positions[x[1]] for x in self._mappings])
+
+        with TraceTime("Mapping"):
+            d, Z, tform = procrustes.procrustes(awinda_refs, metrabs_refs, True, False)
+        T = tform['rotation']
+        b = tform['scale']
+        c = tform['translation']
+        self._scales.append(b)
+
+        positions = b * metrabs_positions @ T + c
+        return positions
+
     def get_metrabs(self, image, awinda_reference):
         if self._model is None:
             return False
@@ -272,25 +295,13 @@ class AwindaDataToRos:
 
         positions = pred['poses3d'].numpy()
         if len(positions) == 0:
-            return False, ""
+            return False
 
         scale = 0.01  # * 0.09349153968073806
         positions = positions[0]
         positions = np.array(list(map(lambda x: x * scale, positions)))
 
-        awinda_refs = np.array([awinda_reference[x[0]] for x in self._mappings])
-        metrabs_refs = np.array([positions[x[1]] for x in self._mappings])
-
-        with TraceTime("Mapping"):
-            d, Z, tform = procrustes.procrustes(awinda_refs, metrabs_refs, True, False)
-        T = tform['rotation']
-        b = tform['scale']
-        c = tform['translation']
-        self._scales.append(b)
-
-        positions = b * positions @ T + c
-
-        return positions, tform
+        return self.get_mapped_position(awinda_reference, positions)
 
     @staticmethod
     def read_awinda_mvnx(file_name: str):
@@ -423,7 +434,8 @@ class AwindaDataToRos:
             frame = self.get_next_image(video_config)
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
-                metrabs_pos, tform = self.get_metrabs(frame, awinda_pos)
+                metrabs_pos = self.get_metrabs(frame, awinda_pos)
+                print(metrabs_pos)
                 if np.any(metrabs_pos):
                     self._snapshots.append({
                         "image": frame,
@@ -446,10 +458,13 @@ class AwindaDataToRos:
 
     def display_collected_data(self):
         data_index = 0
+        self._mappings = MAPPING
         while True:
             current_frame = self._snapshots[data_index]["image"]
             metrabs_pos = self._snapshots[data_index]["metrabs_pos"]
             awinda_pos = self._snapshots[data_index]["awinda_pos"]
+            metrabs_pos = self.get_mapped_position(awinda_pos, metrabs_pos)
+
             cv2.imshow('img', current_frame)
 
             # indices = SKELETON_INDICES["smpl_24"]

@@ -87,11 +87,11 @@ VIDEO_CONFIG_GEHEN_SIDE_RIGHT = {
 }
 
 VIDEO_CONFIG = VIDEO_CONFIG_KNIEBEUGEN_VORN # VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_KNIEBEUGEN
-# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 
 
-USE_METRABS = False
+USE_METRABS = True
 
 
 SMPL_CONNECTIONS = [

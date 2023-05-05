@@ -86,7 +86,7 @@ class AwindaParser:
 
     def start(self, path: str):
         np.set_printoptions(suppress=True)
-        np.set_printoptions(precision=2)
+        np.set_printoptions(precision=4)
 
         root = self.read_awinda_mvnx(path)
         point_names, connections = self.get_points_and_connections(root)
@@ -157,8 +157,9 @@ class AwindaParser:
             )
             x_sense_pelvis = np.array(list(map(float, angle_ergo_zxy_xsens[4])))
             ours_pelvis = xzy_rot_pelvis[0] * (180 / np.pi)
-            ours_pelvis[2] += 6.31
+            ours_pelvis[2] += 6.3545
             diff_pelvis = np.absolute(x_sense_pelvis - ours_pelvis)
+            # print(x_sense_pelvis, ours_pelvis, diff_pelvis)
             # diff_list.append(diff_pelvis)
 
             # Pelvis new
@@ -200,8 +201,8 @@ class AwindaParser:
             )
             ours_upper_arm = xzy_rot_upper_arm[0] * (180 / np.pi)
             diff_upper_arm = np.absolute(x_sense_left_shoulder_ergo - ours_upper_arm_ergo)
-            # diff_list.append(diff_upper_arm)
-            # print(x_sense_left_shoulder_ergo, ours_upper_arm_ergo, diff_upper_arm)
+            diff_list.append(diff_upper_arm)
+            print(x_sense_left_shoulder_ergo, ours_upper_arm_ergo, diff_upper_arm)
             # print("frame:", frame_counter, "knee:", x_sense_knee, ", hips:", x_sense_hips, " pelvis:", x_sense_pelvis, " ours:", ours_pelvis, " diff", diff_pelvis) # ", ours:", ours, " diff:", diff)
             time.sleep(wait_time_s)
             if frame_counter > 500:

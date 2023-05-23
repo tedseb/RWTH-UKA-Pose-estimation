@@ -1,4 +1,9 @@
 import numpy as np
+import math
+# help cross product
+# x = np.cross(y, z)
+# y = np.cross(z, x)
+# z = np.cross(x, y)
 
 
 COMPARE_ANGLES = [
@@ -26,7 +31,8 @@ def check_rotation_matrix(M, orth_thresh=1e-5, det_thresh=1e-5):
 
 
 def rotation_matrix_from_vectors(vec1, vec2):
-    """ Find the rotation matrix that aligns vec1 to vec2
+    """
+    Find the rotation matrix that aligns vec1 to vec2
     :param vec1: A 3d "source" vector
     :param vec2: A 3d "destination" vector
     :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
@@ -138,9 +144,30 @@ def inverse_rotation_xzy( M, thresh=0.9999999 ):
         return np.array((x0,y0,z0)), np.array((x1,y1,z1))
 
 
-def calculate_knee_rotation(hip, knee, foot, toe):
+def calculate_knee_rotation(hip, knee, foot, toe=None):
+    """
+    Computes the rotation from hip to knee in a rotation matrix and decompose it into an euler sequence
+    for that it computes The basis B_hip for the hip like:
+    x_hip = direction pointing to the left of a frontal person. cros product (knee->hip) with (knee->foot)
+    y_hip = direction pointing up the tigh. := (knee->hip)
+    z_hip  = direction to the front. cross product between x and y vector.
+
+    The base of the knee is similar to the base of the hip. But y is pointing from foot->knee instead of knee->hip
+
+    rotation M is the rotation matrix from a Point in the local coordinate system B_hip to the system in B_knee.
+    Let x bee a point in world coordinates:
+    # M * B_hip * x = B_knee * x
+    # M * B_hip = B_knee
+    # M * B_hip * B_hip^-1 = B_knee * B_hip^-1  | Rotation matrix properties: inverse =: transpose
+    # M = B_knee * B_hip^T
+
+    :param hip:     numpy array of  point hip
+    :param knee:    numpy array of  point knee
+    :param foot:    numpy array of  point foot
+    :return:        euler_sequence: numpy array zxy rotation from hip to knee
+    """
     y_d_knee = knee - foot
-    z_d_knee = np.cross(toe - foot, y_d_knee)
+    z_d_knee = np.cross(knee - hip, y_d_knee)
     x_d_knee = np.cross(y_d_knee, z_d_knee)
 
     y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
@@ -162,8 +189,57 @@ def calculate_knee_rotation(hip, knee, foot, toe):
     check_rotation_matrix(basis_hip)
 
     basis_rotation = basis_knee @ np.transpose(basis_hip)
+
     check_rotation_matrix(basis_rotation)
     return inverse_rotation_zxy(basis_rotation)
+
+
+def rotation_matrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+    """
+    axis = np.asarray(axis)
+    axis = axis / math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta / 2.0)
+    b, c, d = -axis * math.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+
+def calculate_ankle_rotation(hip, knee, foot, toes, default_deviation=0.41):
+    y_d_knee = knee - foot
+    z_d_knee = np.cross(knee - hip, y_d_knee)
+    x_d_knee = np.cross(y_d_knee, z_d_knee)
+
+    y_d_knee = y_d_knee / np.linalg.norm(y_d_knee)
+    x_d_knee = x_d_knee / np.linalg.norm(x_d_knee)
+    z_d_knee = z_d_knee / np.linalg.norm(z_d_knee)
+
+    x_d_foot = toes - foot
+    z_d_foot = np.cross(x_d_foot, y_d_knee)
+
+    x_d_foot = np.dot(rotation_matrix(z_d_foot, default_deviation), x_d_foot)
+    y_d_foot = np.cross(z_d_foot, x_d_foot)
+    # z_d_foot = np.cross(x_d_foot, y_d_foot)
+
+    z_d_foot = z_d_foot / np.linalg.norm(z_d_foot)
+    y_d_foot = y_d_foot / np.linalg.norm(y_d_foot)
+    x_d_foot = x_d_foot / np.linalg.norm(x_d_foot)
+
+    basis_knee = np.array([x_d_knee, y_d_knee, z_d_knee])
+    basis_foot = np.array([x_d_foot, y_d_foot, z_d_foot])
+
+    check_rotation_matrix(basis_knee)
+    check_rotation_matrix(basis_foot)
+
+    # basis_rotation = np.transpose(basis_foot) @ basis_foot
+    basis_rotation = basis_foot @ np.transpose(basis_knee)
+    check_rotation_matrix(basis_rotation)
+    return np.absolute(inverse_rotation_zxy(basis_rotation))
 
 
 def calculate_pelvis_rotation(knee, right_hip, pelvis, l5):
@@ -272,7 +348,7 @@ def calculate_upper_arm_rotation(t8, neck, shoulder_right, upper_arm_right, fore
     return inverse_rotation_zxy(basis_rotation)
 
 
-def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5):
+def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.0, 0.0, 1.0])):
     z_d_pelvis = hip_right - pelvis
     y_d_pelvis = L5 - pelvis
     x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
@@ -284,9 +360,33 @@ def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5):
 
     basis_pelvis = np.array([x_d_pelvis, y_d_pelvis, z_d_pelvis])
     check_rotation_matrix(basis_pelvis)
-    vec1 = basis_pelvis @ np.array([0.0, 0.0, 1.0])
+    vec1 = basis_pelvis @ up_vector
     vec2 = basis_pelvis @ y_d_pelvis
 
     basis_rotation = rotation_matrix_from_vectors(vec1, vec2)
     check_rotation_matrix(basis_rotation)
-    return inverse_rotation_zxy(basis_rotation)
+    rotation = inverse_rotation_zxy(basis_rotation)
+    rotation[0][2] += 6.3545 / (180 / np.pi)
+    return rotation
+
+
+def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.0, 0.0, 1.0])):
+    z_d_pelvis = hip_right - pelvis
+    y_d_pelvis = L5 - pelvis
+    x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
+    z_d_pelvis = np.cross(x_d_pelvis, y_d_pelvis)
+
+    x_d_pelvis = x_d_pelvis / np.linalg.norm(x_d_pelvis)
+    y_d_pelvis = y_d_pelvis / np.linalg.norm(y_d_pelvis)
+    z_d_pelvis = z_d_pelvis / np.linalg.norm(z_d_pelvis)
+
+    basis_pelvis = np.array([x_d_pelvis, y_d_pelvis, z_d_pelvis])
+    check_rotation_matrix(basis_pelvis)
+    vec1 = basis_pelvis @ up_vector
+    vec2 = basis_pelvis @ y_d_pelvis
+
+    basis_rotation = rotation_matrix_from_vectors(vec1, vec2)
+    check_rotation_matrix(basis_rotation)
+    rotation = inverse_rotation_zxy(basis_rotation)
+    rotation[0][2] += 6.3545 / (180 / np.pi)
+    return rotation

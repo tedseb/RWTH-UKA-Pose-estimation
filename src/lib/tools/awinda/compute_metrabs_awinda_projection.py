@@ -15,6 +15,7 @@ from geometry_msgs.msg import Point, Vector3
 from sensor_msgs.msg import Image
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
+from video_configs import VIDEO_CONFIGS
 
 # PATH_MVNX = "data/awinda/Test-007#Hannah2.mvnx"
 # PATH_VIDEO = "data/awinda/Test-007_drehen#Hannah2.mp4"
@@ -86,16 +87,12 @@ VIDEO_CONFIG_GEHEN_SIDE_RIGHT = {
 }
 
 VIDEO_CONFIGS = [
-    VIDEO_CONFIG_GEHEN_VORN,
-    VIDEO_CONFIG_GEHEN_SIDE_RIGHT,
-    VIDEO_CONFIG_GEHEN_SIDE_LEFT,
-    VIDEO_CONFIG_STEHEN_VORN,
-    VIDEO_CONFIG_KNIEBEUGEN_VORN_RECHTS,
-    VIDEO_CONFIG_KNIEBEUGEN_VORN,
-    VIDEO_CONFIG_HAMPELMANN_VORN,
+    VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_KNIEBEUGEN,
+    # VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_LIEGESTUTZEN,
+    # VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_SITUPS
 ]
-METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
-# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
+# METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
+METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 
 
 USE_METRABS = True
@@ -111,17 +108,18 @@ SMPL_CONNECTIONS = [
 
 # Hips, Knees
 
-# MAPPING = [
-#     [5, 11],
-#     [12, 15],
-#     [8, 16],
-#     [19, 49],
-#     [15, 96],
-#     [18, 10],
-#     [22, 9],
-#     [13, 39],
-#     [9, 87]
-# ]
+MAPPING = [
+    [5, 11],
+    [12, 15],
+    [8, 16],
+    [19, 49],
+    [15, 96],
+    [17, 78],
+    # [21, 30],
+    # [16, 103],
+    [20, 55],
+    [6, 25]
+]
 
 # Nacken, Knie, Ellenbogen
 # MAPPING = [
@@ -131,26 +129,25 @@ SMPL_CONNECTIONS = [
 #     [17, 79],
 # ]
 
-MAPPING = [
-    [19, 49],
-    [0, 75],
-    [15, 97],
-    [1, 2],
-    [8, 16],
-    [12, 15]
-]
+# MAPPING = [
+#     [19, 49],
+#     [0, 75],
+#     [15, 97],
+#     [1, 2],
+#     [8, 16],
+#     [12, 15]
+# ]
 
 TEST_CONNECTIONS = [
-    [74, 48],
-    [74, 96],
-    [48, 52],
-    [96, 100],
-    [52, 31],
-    [100, 79],
-    [31, 9],
-    [79, 10],
-    [74, 2],
-    [2, 120],
+    [77, 48],
+    [77, 96],
+    [48, 55],
+    [96, 103],
+    [55, 30],
+    [103, 78],
+    [30, 63],
+    [78, 111],
+    [77, 120],
     [120, 68],
     [68, 11],
     [11, 25],
@@ -160,8 +157,8 @@ TEST_CONNECTIONS = [
     [34, 15],
     [16, 87],
     [15, 39],
-    [87, 22],
-    [39, 21]
+    [87, 20],
+    [39, 19]
 ]
 
 
@@ -245,7 +242,7 @@ class AwindaDataToRos:
         self._max_frame = 0
         self._frame_counter = 0
         self._frame_index = 0
-        self._skip_frames = 30
+        self._skip_frames = 1
         self._awinda_connections = None
         self._snapshots = []  # Array of image, awinda_pos, metrabs_pos
         if use_metrab:
@@ -285,7 +282,7 @@ class AwindaDataToRos:
         positions = b * metrabs_positions @ T + c
         return positions
 
-    def get_metrabs(self, image, awinda_reference):
+    def get_metrabs(self, image, awinda_reference, mapped=False):
         if self._model is None:
             return False
 
@@ -297,11 +294,13 @@ class AwindaDataToRos:
         if len(positions) == 0:
             return False
 
-        scale = 0.01  # * 0.09349153968073806
+        scale = 0.01 * 0.09349153968073806
         positions = positions[0]
         positions = np.array(list(map(lambda x: x * scale, positions)))
 
-        return self.get_mapped_position(awinda_reference, positions)
+        if mapped:
+            positions = self.get_mapped_position(awinda_reference, positions)
+        return positions
 
     @staticmethod
     def read_awinda_mvnx(file_name: str):
@@ -417,11 +416,16 @@ class AwindaDataToRos:
                 self._frame_index += 1
                 continue
 
-            if self._frame_index % 2 == 1:
+            if self._frame_index % 2 == 0:
                 self._frame_index += 1
                 continue
 
-            positions, _, _ = self.extract_frame_data(frame)
+            if self._frame_index <= video_config["measure_start"]:
+                self._frame_counter += self._skip_frames
+                self._frame_index += self._skip_frames * 2
+                continue
+
+            positions, angles, _ = self.extract_frame_data(frame)
 
             if len(positions) % 3 != 0:
                 print("[ERROR]: positions are not divisible by 3")
@@ -435,12 +439,13 @@ class AwindaDataToRos:
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
                 metrabs_pos = self.get_metrabs(frame, awinda_pos)
-                print(metrabs_pos)
+                # print(metrabs_pos)
                 if np.any(metrabs_pos):
                     self._snapshots.append({
                         "image": frame,
                         "metrabs_pos": metrabs_pos,
-                        "awinda_pos": awinda_pos
+                        "awinda_pos": awinda_pos,
+                        "angles": angles,
                     })
 
             self._frame_counter += self._skip_frames
@@ -463,6 +468,17 @@ class AwindaDataToRos:
             current_frame = self._snapshots[data_index]["image"]
             metrabs_pos = self._snapshots[data_index]["metrabs_pos"]
             awinda_pos = self._snapshots[data_index]["awinda_pos"]
+
+            awinda_angles = self._snapshots[data_index]["angles"]
+
+            angle_xsens = []
+            for i in range(22):
+                angle_xsens.append(awinda_angles[i * 3:(i + 1) * 3])
+
+            # print(angle_xsens)
+            print("rücken", angle_xsens[0])
+            print("hüfte", angle_xsens[14])
+            print()
             metrabs_pos = self.get_mapped_position(awinda_pos, metrabs_pos)
 
             cv2.imshow('img', current_frame)
@@ -474,7 +490,7 @@ class AwindaDataToRos:
             self.send_ros_markers(awinda_pos, self._awinda_connections)
             self.send_ros_markers(metrabs_pos, metrabs_connections, "dev1", ColorRGBA(0.30, 0.98, 0.30, 1.00))
 
-            key = cv2.waitKey(100)
+            key = cv2.waitKey(500)
             if key == ord('a'):
                 data_index = max(data_index - 1, 0)
             if key == ord('d'):
@@ -497,7 +513,7 @@ class AwindaDataToRos:
 
 
 def main():
-    generate_data = False
+    generate_data = True
     converter = AwindaDataToRos(generate_data)
 
     def signal_handler(self, signal):
@@ -512,8 +528,9 @@ def main():
     path = "./metrabs_data.pickle"
     if generate_data:
         for config in VIDEO_CONFIGS:
+            print(config["path_mvnx"])
             converter.start_collecting(config["path_mvnx"], config)
-        print(sum(converter._scales) / len(converter._scales))
+        #print(sum(converter._scales) / len(converter._scales))
         converter.store(path)
     else:
         converter.load(path)

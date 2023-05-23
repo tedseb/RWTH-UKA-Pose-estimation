@@ -14,7 +14,8 @@ from awinda.angle_computation import (
     calculate_pelvis_rotation,
     calculate_ergo_upper_arm_rotation,
     calculate_ergo_upper_arm_rotation2,
-    calculate_upper_arm_rotation
+    calculate_upper_arm_rotation,
+    calculate_ankle_rotation
 )
 
 
@@ -148,19 +149,53 @@ class AwindaParser:
             ours_knee = xzy_rot_knee[0] * (180 / np.pi)
             diff_knee = np.absolute(x_sense_knee - ours_knee)
             # diff_list.append(diff_knee)
+            # print(x_sense_knee, ours_knee, diff_knee)
+
+            # Elbow
+            xzy_rot_elbow = calculate_knee_rotation(
+                np.array(point_posittions["RightUpperArm"]),
+                np.array(point_posittions["RightForeArm"]),
+                np.array(point_posittions["RightHand"]),
+            )
+            x_sense_elbow = np.array(list(map(float, angle_zxy_xsens[8])))  # Left = 12
+            x_sense_elbow = np.absolute(x_sense_elbow)
+            ours_elbow = xzy_rot_elbow[0] * (180 / np.pi)
+            diff_elbow = np.absolute(x_sense_elbow - ours_elbow)
+            # diff_list.append(diff_elbow)
+            # print(x_sense_elbow, ours_elbow, diff_elbow)
+
+            # ankle
+            xzy_rot_ankle = calculate_ankle_rotation(
+                np.array(point_posittions["RightUpperLeg"]),
+                np.array(point_posittions["RightLowerLeg"]),
+                np.array(point_posittions["RightFoot"]),
+                np.array(point_posittions["RightToe"]),
+            )
+            x_sense_ankle = np.array(list(map(float, angle_zxy_xsens[16])))  # Left = 12
+            x_sense_ankle = np.absolute(x_sense_ankle)
+            ours_ankle = xzy_rot_ankle[0] * (180 / np.pi)
+            # ours_ankle[2] -= 24.3225
+            diff_ankle = np.absolute(x_sense_ankle - ours_ankle)
+            # diff_list.append(diff_ankle)
+            # print(x_sense_ankle, ours_ankle, diff_ankle)
 
             # Pelvis
+            # xzy_rot_pelvis = calculate_ergo_pelvis_rotation(
+            #     np.array(point_posittions["RightUpperLeg"]),
+            #     np.array(point_posittions["Pelvis"]),
+            #     np.array(point_posittions["L5"]),
+            # )
             xzy_rot_pelvis = calculate_ergo_pelvis_rotation(
-                np.array(point_posittions["RightUpperLeg"]),
-                np.array(point_posittions["Pelvis"]),
-                np.array(point_posittions["L5"]),
+                np.array(point_posittions["RightShoulder"]),
+                np.array(point_posittions["T8"]),
+                np.array(point_posittions["Neck"]),
             )
-            x_sense_pelvis = np.array(list(map(float, angle_ergo_zxy_xsens[4])))
+            x_sense_pelvis = np.array(list(map(float, angle_ergo_zxy_xsens[5])))
             ours_pelvis = xzy_rot_pelvis[0] * (180 / np.pi)
-            ours_pelvis[2] += 6.3545
+
             diff_pelvis = np.absolute(x_sense_pelvis - ours_pelvis)
-            # print(x_sense_pelvis, ours_pelvis, diff_pelvis)
-            # diff_list.append(diff_pelvis)
+            print(x_sense_pelvis, ours_pelvis, diff_pelvis)
+            diff_list.append(diff_pelvis)
 
             # Pelvis new
             xzy_rot_pelvis = calculate_pelvis_rotation(
@@ -201,8 +236,8 @@ class AwindaParser:
             )
             ours_upper_arm = xzy_rot_upper_arm[0] * (180 / np.pi)
             diff_upper_arm = np.absolute(x_sense_left_shoulder_ergo - ours_upper_arm_ergo)
-            diff_list.append(diff_upper_arm)
-            print(x_sense_left_shoulder_ergo, ours_upper_arm_ergo, diff_upper_arm)
+            # diff_list.append(diff_upper_arm)
+            # print(x_sense_left_shoulder_ergo, ours_upper_arm_ergo, diff_upper_arm)
             # print("frame:", frame_counter, "knee:", x_sense_knee, ", hips:", x_sense_hips, " pelvis:", x_sense_pelvis, " ours:", ours_pelvis, " diff", diff_pelvis) # ", ours:", ours, " diff:", diff)
             time.sleep(wait_time_s)
             if frame_counter > 500:
@@ -226,7 +261,7 @@ def main():
 
     time.sleep(2)
     signal.signal(signal.SIGINT, signal_handler)
-    converter.start("data/awinda/kniebeugen_vorne/Kniebeuge_vorne.mvnx")
+    converter.start("data/awinda/04_2023_kniebeugen/Test-004.mvnx")
 
 
 if __name__ == "__main__":

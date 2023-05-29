@@ -87,7 +87,7 @@ VIDEO_CONFIG_GEHEN_SIDE_RIGHT = {
 }
 
 VIDEO_CONFIGS = [
-    VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_KNIEBEUGEN,
+    VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_SITUPS,
     # VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_LIEGESTUTZEN,
     # VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_SITUPS
 ]
@@ -242,7 +242,7 @@ class AwindaDataToRos:
         self._max_frame = 0
         self._frame_counter = 0
         self._frame_index = 0
-        self._skip_frames = 1
+        self._skip_frames = 30
         self._awinda_connections = None
         self._snapshots = []  # Array of image, awinda_pos, metrabs_pos
         if use_metrab:

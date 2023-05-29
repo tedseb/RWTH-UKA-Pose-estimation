@@ -21,7 +21,10 @@ METRAPS_POINT_CLOUD = {
     "RightHand": [20],  # [20, 108, 112, 113, 114, 115]
     "LeftUpperArm": [15],  # [15, 56, 57, 58, 59],
     "LeftForeArm": [39],  # [17, 37, 38, 39, 40],
-    "LeftHand": [19]  # [19, 49, 64, 65, 66, 67]
+    "LeftHand": [19],  # [19, 49, 64, 65, 66, 67]
+    "RightShoulder": [82],
+    "T8": [120],  # [68, 120],
+    "Neck": [11],  # [11, 69, 70],
 }
 
 # METRAPS_POINT_CLOUD = {
@@ -67,41 +70,41 @@ KNEE_LEFT = {
     ]
 }
 
-BACK = {
-    "name": "Back",
-    "function": angle_math.calculate_ergo_pelvis_rotation,
-    "positional_xsens_params": [
-        "RightUpperLeg",
-        "Pelvis",
-        "T12",
-    ],
-    "positional_metrabs_params": [
-        METRAPS_POINT_CLOUD["RightUpperLeg"],
-        METRAPS_POINT_CLOUD["Pelvis"],
-        METRAPS_POINT_CLOUD["L5"],
-    ],
-    "named_metrabs_params": {
-        "up_vector": [0.0, -1.0, 0.0]
-    }
-}
-
 # BACK = {
 #     "name": "Back",
 #     "function": angle_math.calculate_ergo_pelvis_rotation,
 #     "positional_xsens_params": [
-#         "RightShoulder",
-#         "T8",
-#         "Neck",
+#         "RightUpperLeg",
+#         "Pelvis",
+#         "T12",
 #     ],
 #     "positional_metrabs_params": [
-#         [82],
-#         [68],
-#         [11, 69, 70],
+#         METRAPS_POINT_CLOUD["RightUpperLeg"],
+#         METRAPS_POINT_CLOUD["Pelvis"],
+#         METRAPS_POINT_CLOUD["L5"],
 #     ],
 #     "named_metrabs_params": {
 #         "up_vector": [0.0, -1.0, 0.0]
 #     }
 # }
+
+BACK = {
+    "name": "Back",
+    "function": angle_math.calculate_ergo_pelvis_rotation,
+    "positional_xsens_params": [
+        "RightShoulder",
+        "T8",
+        "Neck",
+    ],
+    "positional_metrabs_params": [
+        [82],
+        [68, 120],
+        [11, 69, 70],
+    ],
+    "named_metrabs_params": {
+        "up_vector": [0.0, -1.0, 0.0]
+    }
+}
 
 ELLBOW_RIGHT = {
     "name": "Ellbow Right",

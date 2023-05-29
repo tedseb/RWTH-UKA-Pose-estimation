@@ -104,7 +104,7 @@ class AwindaParser:
             if frame.attrib["type"] != "normal":
                 continue
 
-            if frame_counter % 2 == 1:
+            if frame_counter % 2 == 0:
                 continue
 
             positions = frame.find("{http://www.xsens.com/mvn/mvnx}position")
@@ -172,12 +172,14 @@ class AwindaParser:
                 np.array(point_posittions["RightToe"]),
             )
             x_sense_ankle = np.array(list(map(float, angle_zxy_xsens[16])))  # Left = 12
-            x_sense_ankle = np.absolute(x_sense_ankle)
+            # x_sense_ankle = np.absolute(x_sense_ankle)
             ours_ankle = xzy_rot_ankle[0] * (180 / np.pi)
             # ours_ankle[2] -= 24.3225
             diff_ankle = np.absolute(x_sense_ankle - ours_ankle)
-            # diff_list.append(diff_ankle)
-            # print(x_sense_ankle, ours_ankle, diff_ankle)
+            diff_list.append(diff_ankle)
+            print(frame_counter)
+            print(x_sense_ankle)
+            #print(x_sense_ankle[2], ours_ankle[2], diff_ankle[2])
 
             # Pelvis
             # xzy_rot_pelvis = calculate_ergo_pelvis_rotation(
@@ -194,8 +196,8 @@ class AwindaParser:
             ours_pelvis = xzy_rot_pelvis[0] * (180 / np.pi)
 
             diff_pelvis = np.absolute(x_sense_pelvis - ours_pelvis)
-            print(x_sense_pelvis, ours_pelvis, diff_pelvis)
-            diff_list.append(diff_pelvis)
+            # print(x_sense_pelvis, ours_pelvis, diff_pelvis)
+            # diff_list.append(diff_pelvis)
 
             # Pelvis new
             xzy_rot_pelvis = calculate_pelvis_rotation(
@@ -246,6 +248,8 @@ class AwindaParser:
         diff_list = np.array(diff_list)
         print("Average diff: ", np.average(diff_list, 0))
         print("Median diff: ", np.median(diff_list, 0))
+        print("Median max: ", np.max(diff_list, 0))
+        print("Median min: ", np.min(diff_list, 0))
 
     def open_video(self, path: str):
         self._cap = cv2.VideoCapture(path)
@@ -261,7 +265,8 @@ def main():
 
     time.sleep(2)
     signal.signal(signal.SIGINT, signal_handler)
-    converter.start("data/awinda/04_2023_kniebeugen/Test-004.mvnx")
+    # converter.start("data/awinda/04_2023_kniebeugen/Test-004.mvnx")
+    converter.start("data/awinda/04_2023_situps/Test-006.mvnx")
 
 
 if __name__ == "__main__":

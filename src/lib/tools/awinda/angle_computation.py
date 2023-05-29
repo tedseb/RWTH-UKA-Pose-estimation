@@ -348,7 +348,30 @@ def calculate_upper_arm_rotation(t8, neck, shoulder_right, upper_arm_right, fore
     return inverse_rotation_zxy(basis_rotation)
 
 
-def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.0, 0.0, 1.0])):
+# def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.0, 0.0, 1.0]), rotate=None):
+#     z_d_pelvis = hip_right - pelvis
+#     y_d_pelvis = L5 - pelvis
+#     x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
+#     z_d_pelvis = np.cross(x_d_pelvis, y_d_pelvis)
+
+#     x_d_pelvis = x_d_pelvis / np.linalg.norm(x_d_pelvis)
+#     y_d_pelvis = y_d_pelvis / np.linalg.norm(y_d_pelvis)
+#     z_d_pelvis = z_d_pelvis / np.linalg.norm(z_d_pelvis)
+
+#     basis_pelvis = np.array([x_d_pelvis, y_d_pelvis, z_d_pelvis])
+#     check_rotation_matrix(basis_pelvis)
+#     vec1 = basis_pelvis @ up_vector
+#     vec2 = basis_pelvis @ y_d_pelvis
+
+#     basis_rotation = rotation_matrix_from_vectors(vec1, vec2)
+#     check_rotation_matrix(basis_rotation)
+#     rotation = inverse_rotation_zxy(basis_rotation)
+#     if rotate:
+#         rotation[0][2] += rotate / (180 / np.pi)
+#     return rotation
+
+
+def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.0, 0.0, 1.0]), rotate=None):
     z_d_pelvis = hip_right - pelvis
     y_d_pelvis = L5 - pelvis
     x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
@@ -366,27 +389,6 @@ def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.
     basis_rotation = rotation_matrix_from_vectors(vec1, vec2)
     check_rotation_matrix(basis_rotation)
     rotation = inverse_rotation_zxy(basis_rotation)
-    rotation[0][2] += 6.3545 / (180 / np.pi)
-    return rotation
-
-
-def calculate_ergo_pelvis_rotation(hip_right, pelvis, L5, up_vector=np.array([0.0, 0.0, 1.0])):
-    z_d_pelvis = hip_right - pelvis
-    y_d_pelvis = L5 - pelvis
-    x_d_pelvis = np.cross(z_d_pelvis, y_d_pelvis)
-    z_d_pelvis = np.cross(x_d_pelvis, y_d_pelvis)
-
-    x_d_pelvis = x_d_pelvis / np.linalg.norm(x_d_pelvis)
-    y_d_pelvis = y_d_pelvis / np.linalg.norm(y_d_pelvis)
-    z_d_pelvis = z_d_pelvis / np.linalg.norm(z_d_pelvis)
-
-    basis_pelvis = np.array([x_d_pelvis, y_d_pelvis, z_d_pelvis])
-    check_rotation_matrix(basis_pelvis)
-    vec1 = basis_pelvis @ up_vector
-    vec2 = basis_pelvis @ y_d_pelvis
-
-    basis_rotation = rotation_matrix_from_vectors(vec1, vec2)
-    check_rotation_matrix(basis_rotation)
-    rotation = inverse_rotation_zxy(basis_rotation)
-    rotation[0][2] += 6.3545 / (180 / np.pi)
+    if rotate:
+        rotation[0][2] += rotate / (180 / np.pi)
     return rotation

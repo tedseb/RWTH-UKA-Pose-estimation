@@ -85,8 +85,18 @@ VIDEO_CONFIG_GEHEN_SIDE_RIGHT = {
     "rotate": True,
     "data_name": "gehen_right_front"
 }
-
 VIDEO_CONFIG = VIDEO_CONFIGS.VIDEO_CONFIG_05_2023_KNIEBEUGEN_SCHWARZ
+# VIDEO_CONFIGS = [VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_SITUPS]
+
+VIDEO_CONFIGS = [
+    VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_KNIEBEUGEN,
+    VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_LIEGESTUTZEN,
+    VIDEO_CONFIGS.VIDEO_CONFIG_04_2023_SITUPS,
+    # VIDEO_CONFIGS.VIDEO_CONFIG_05_2023_KNIEBEUGEN_FARBIG,
+    # VIDEO_CONFIGS.VIDEO_CONFIG_05_2023_KNIEBEUGEN_SCHWARZ
+]
+
+
 # METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_rn34_y4"
 METRABS_PATH = "/home/trainerai/trainerai-core/src/AI/metrabs/models/metrabs_eff2m_y4"
 
@@ -137,8 +147,8 @@ METRAPS_POINT_CLOUD = {
     "LeftUpperLeg": [48],  # [0, 48, 49, 50, 51],
     "LeftLowerLeg": [55],  # [3, 52, 53, 54, 55],
     "LeftFoot": [30],  # [6, 30, 31, 32, 33]
-    "Pelvis": [74],  # [23, 74, 75, 76, 77],
-    "L5": [8],  # [5, 8, 118, 119, 120, 121]
+    "Pelvis": [77],
+    "L5": [120],  # [5, 8, 118, 119, 120, 121],
     "RightToe": [111],  # [10, 92, 93, 109, 110, 111],
     "LeftToe": [63],  # [9, 44, 45, 61, 62, 63]
     "RightUpperArm": [16],  # [16, 104, 105, 106, 107]
@@ -146,7 +156,10 @@ METRAPS_POINT_CLOUD = {
     "RightHand": [20],  # [20, 108, 112, 113, 114, 115]
     "LeftUpperArm": [15],  # [15, 56, 57, 58, 59],
     "LeftForeArm": [39],  # [17, 37, 38, 39, 40],
-    "LeftHand": [19]  # [19, 49, 64, 65, 66, 67]
+    "LeftHand": [19],  # [19, 49, 64, 65, 66, 67]
+    "RightShoulder": [82],
+    "T8": [120],  # [68, 120],
+    "Neck": [11],  # [11, 69, 70],
 }
 
 # TEST_CONNECTIONS = [
@@ -242,6 +255,11 @@ class AwindaDataToRos:
         self._cap = None
         self._model = None
         self._mappings = None
+        self.reset()
+        if USE_METRABS:
+            self.init_metrabs()
+
+    def reset(self):
         self._angle_diff = {}
         self._angle_xsens = {}
         self._angle_metrabs = {}
@@ -252,9 +270,7 @@ class AwindaDataToRos:
         self._frame_counter = 0
         self._frame_index = 0
         self._frame_video_diff = -1
-        if USE_METRABS:
-            self.init_metrabs()
-        self.open_video(VIDEO_CONFIG["path_video"])
+        self.open_video(VIDEO_CONFIG["path_video"], VIDEO_CONFIG.get("awinda_delay", 0))
 
     def __del__(self):
         self._transform1.terminate()
@@ -428,7 +444,7 @@ class AwindaDataToRos:
             self._angle_xsens[name] = {}
         self._angle_xsens[name][frame_counter] = xsense_knee
 
-        print(xsense_knee, xsens_angle)
+        # print(xsense_knee, xsens_angle)
         if name not in self._real_angle_xsens:
             self._real_angle_xsens[name] = {}
         self._real_angle_xsens[name][frame_counter] = xsens_angle
@@ -524,6 +540,7 @@ class AwindaDataToRos:
             np.array(point_posittions["RightUpperLeg"]),
             np.array(point_posittions["Pelvis"]),
             np.array(point_posittions["L5"]),
+            rotate=6.3545
         )
 
         zxy_metrabs = angle_math.calculate_ergo_pelvis_rotation(
@@ -531,8 +548,29 @@ class AwindaDataToRos:
             np.array(metrabs_pos[METRAPS_POINT_CLOUD["Pelvis"][0]]),
             np.array(metrabs_pos[METRAPS_POINT_CLOUD["L5"][0]]),
             np.array([0.0, -1.0, 0.0]),
+            rotate=6.3545
         )
-        self.store_euler_sequence(self._frame_index, "Rücken", zxy_xsense, zxy_metrabs, xsens_angle)
+        ours_ankle = zxy_xsense[0] * (180 / np.pi)
+        # print(xsens_angle)
+        diff = np.array(xsens_angle) - np.array(ours_ankle)
+        # print(ours_ankle, xsens_angle, diff)
+        print(xsens_angle[2], ours_ankle[2], diff[2])
+        self.store_euler_sequence(self._frame_index, "Rücken Pelvis", zxy_xsense, zxy_metrabs, xsens_angle)
+
+    def compute_t8_angle(self, point_posittions, metrabs_pos, xsens_angle):
+        zxy_xsense = angle_math.calculate_ergo_pelvis_rotation(
+            np.array(point_posittions["RightShoulder"]),
+            np.array(point_posittions["T8"]),
+            np.array(point_posittions["Neck"]),
+        )
+
+        zxy_metrabs = angle_math.calculate_ergo_pelvis_rotation(
+            np.array(metrabs_pos[METRAPS_POINT_CLOUD["RightShoulder"][0]]),
+            np.array(metrabs_pos[METRAPS_POINT_CLOUD["T8"][0]]),
+            np.array(metrabs_pos[METRAPS_POINT_CLOUD["Neck"][0]]),
+            np.array([0.0, -1.0, 0.0]),
+        )
+        self.store_euler_sequence(self._frame_index, "Rücken T8", zxy_xsense, zxy_metrabs, xsens_angle)
 
     def compute_right_shoulder_angle(self, point_posittions, metrabs_pos, xsens_angle):
         zxy_xsense = angle_math.calculate_ergo_upper_arm_rotation2(
@@ -584,6 +622,7 @@ class AwindaDataToRos:
             np.array(metrabs_pos[METRAPS_POINT_CLOUD["LeftFoot"][0]]),  # or 120
             np.array(metrabs_pos[METRAPS_POINT_CLOUD["LeftToe"][0]]),
         )
+        xsens_angle = np.absolute(xsens_angle)
         self.store_euler_sequence(self._frame_index, "Linker Knöchel", zxy_xsense, zxy_metrabs, xsens_angle)
 
     def compute_right_ankle_angle(self, point_posittions, metrabs_pos, xsens_angle):
@@ -600,7 +639,14 @@ class AwindaDataToRos:
             np.array(metrabs_pos[METRAPS_POINT_CLOUD["RightFoot"][0]]),  # or 120
             np.array(metrabs_pos[METRAPS_POINT_CLOUD["RightToe"][0]]),
         )
+        xsens_angle = np.absolute(xsens_angle)
+        # ours_ankle = zxy_xsense[0] * (180 / np.pi)
+        # # print(xsens_angle)
+        # diff = np.array(xsens_angle) - np.array(ours_ankle)
+        # # print(ours_ankle, xsens_angle, diff)
+        # print(xsens_angle[2], ours_ankle[2], diff[2])
         self.store_euler_sequence(self._frame_index, "Rechter Knöchel", zxy_xsense, zxy_metrabs, xsens_angle)
+
 
     def start(self, path: str):
         np.set_printoptions(suppress=True)
@@ -649,7 +695,6 @@ class AwindaDataToRos:
             for i in range(position_len):
                 point_posittions[point_names[i]] = positions[i * 3:(i + 1) * 3]
 
-
             self.send_video()
             if USE_METRABS:
                 awinda_pos = np.array(list(point_posittions.values()))
@@ -662,6 +707,7 @@ class AwindaDataToRos:
                         self.compute_right_ellbow_angle(point_posittions, metrabs_pos, list(map(float, angle_xsens[8])))
                         self.compute_left_ellbow_angle(point_posittions, metrabs_pos, list(map(float, angle_xsens[12])))
                         self.compute_pelvis_angle(point_posittions, metrabs_pos, list(map(float, angle_ergo_xsens[4])))
+                        self.compute_t8_angle(point_posittions, metrabs_pos, list(map(float, angle_ergo_xsens[5])))
                         self.compute_right_ankle_angle(point_posittions, metrabs_pos, list(map(float, angle_xsens[16])))
                         self.compute_left_ankle_angle(point_posittions, metrabs_pos, list(map(float, angle_xsens[20])))
                         self._xsens_skeleton[i] = point_posittions
@@ -679,21 +725,8 @@ class AwindaDataToRos:
 
                 if self._frame_index in (VIDEO_CONFIG["measure_end"], VIDEO_CONFIG["measure_end"] + 1):
                     self.print_angle_result()
+                    break
                     # self.print_euclidean_result()
-
-                if self._frame_index == 378:
-                    print("# save #")
-                    with open('awinda_data.pickle', 'wb') as f:
-                        data = {
-                            "awinda_pos": list(point_posittions.values()),
-                            "connections": connections,
-                            "image": self._cur_frame,
-                            "transformation": tform,
-                            "frame_id": self._frame_index,
-                            "angles": joint_angle,
-                            "angles_xzy": joint_angle_ergo,
-                        }
-                        pickle.dump(data, f)
 
             self.send_ros_markers(list(point_posittions.values()), connections)
 
@@ -708,8 +741,10 @@ class AwindaDataToRos:
             # if frame_counter > 500:
             #     break
 
-    def open_video(self, path: str):
+    def open_video(self, path: str, delay):
         self._cap = cv2.VideoCapture(path)
+        self._frame_counter = delay
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, delay)
 
     def send_video(self):
         ret, self._cur_frame = self._cap.read()
@@ -762,7 +797,12 @@ def main():
 
     time.sleep(2)
     signal.signal(signal.SIGINT, signal_handler)
-    converter.start(VIDEO_CONFIG["path_mvnx"])
+    global VIDEO_CONFIG
+    for config in VIDEO_CONFIGS:
+        print("#########")
+        VIDEO_CONFIG = config
+        converter.reset()
+        converter.start(VIDEO_CONFIG["path_mvnx"])
 
 
 if __name__ == "__main__":
